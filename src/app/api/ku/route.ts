@@ -5,14 +5,22 @@ import path from 'path';
 // Define the path to our JSON database
 const dbPath = path.join(process.cwd(), 'db.json');
 
-// Define the shape of our Knowledge Unit (from Phase 2.1)
-// We'll expand this later, for now, it's simple.
+// --- Updated KnowledgeUnit Schema (Phase 2.1) ---
 export interface KnowledgeUnit {
   id: string;
   type: 'Vocab' | 'Kanji' | 'Grammar' | 'Concept' | 'ExampleSentence';
-  content: string;
-  // We'll add 'data', 'relatedUnits', 'personalNotes' later
+  content: string; // The main "thing" (e.g., the word, the kanji, the grammar point)
+  
+  // 'data' holds type-specific info.
+  // For 'Vocab': { reading: '...', definition: '...' }
+  // For 'Kanji': { readings: 'on, kun', meaning: '...' }
+  // We'll keep it simple as string-to-string for now.
+  data: Record<string, string>; 
+  
+  personalNotes: string; // User's own context, mnemonics, etc.
+  relatedUnits: string[]; // Array of other KU IDs
 }
+// ---------------------------------------------------
 
 // Helper function to read the database
 async function readDB(): Promise<KnowledgeUnit[]> {
@@ -20,7 +28,6 @@ async function readDB(): Promise<KnowledgeUnit[]> {
     const data = await fs.readFile(dbPath, 'utf8');
     return JSON.parse(data) as KnowledgeUnit[];
   } catch (error) {
-    // If the file doesn't exist, return an empty array
     if (error.code === 'ENOENT') {
       return [];
     }
@@ -49,8 +56,8 @@ export async function GET() {
 // Adds a new Knowledge Unit
 export async function POST(request: Request) {
   try {
-    // We expect a partial KU, without the ID
-    const { type, content } = await request.json();
+    // We now expect the expanded fields
+    const { type, content, data, personalNotes } = await request.json();
 
     if (!type || !content) {
       return NextResponse.json({ message: 'Missing type or content' }, { status: 400 });
@@ -60,6 +67,10 @@ export async function POST(request: Request) {
       id: crypto.randomUUID(), // Generate a unique ID on the server
       type,
       content,
+      // Provide defaults for the new fields if they are missing
+      data: data || {},
+      personalNotes: personalNotes || '',
+      relatedUnits: [], // We'll handle adding related units in a future step
     };
 
     const kus = await readDB();
