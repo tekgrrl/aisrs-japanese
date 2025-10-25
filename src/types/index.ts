@@ -1,30 +1,60 @@
+/**
+ * A "Knowledge Unit" is the core atom of knowledge.
+ * It's the "thing" you are learning (e.g., a word, a grammar point).
+ */
 export interface KnowledgeUnit {
-  id: string;
-  type: 'Vocab' | 'Kanji' | 'Grammar' | 'Concept' | 'ExampleSentence';
-  content: string;
-  data: Record<string, string>;
+  id: string; // UUID
+  type:
+    | 'Vocab'
+    | 'Kanji'
+    | 'Grammar'
+    | 'Concept'
+    | 'ExampleSentence';
+  content: string; // The "front" of the card (e.g., "食べる", "家族", "Giving and Receiving")
+  data: Record<string, string>; // { reading: "たべる", definition: "To eat" }
   personalNotes: string;
-  relatedUnits: string[];
+  relatedUnits: string[]; // Array of other KnowledgeUnit IDs
 }
 
-// Phase 2.2: The Review Facet Schema
+/**
+ * A "Review Facet" is a specific "side" of a Knowledge Unit to be reviewed.
+ * One KU can have many facets.
+ */
+export type FacetType =
+  | 'Content-to-Definition'
+  | 'Definition-to-Content'
+  | 'Content-to-Reading'
+  | 'Reading-to-Content'
+  | 'AI-Generated-Question';
+
 export interface ReviewFacet {
-  id: string;
-  kuId: string; // The KnowledgeUnit it's testing
-  // The specific question type for this facet
-  facetType: 'Content-to-Definition' | 'Content-to-Reading' | 'Definition-to-Content' | 'Audio-to-Content' | 'AI-Context-Prompt';
-  srsStage: number; // 0 (new) -> 9 (burned)
+  id: string; // UUID
+  kuId: string; // Parent KnowledgeUnit ID
+  facetType: FacetType;
+  srsStage: number; // 0 (new) -> 8 (mastered)
   nextReviewAt: string; // ISO 8601 string
-  lastReviewAt: string | null;
-  // A record of performance
-  history: {
+
+  // --- NEWLY ADDED FIELDS ---
+  lastReviewAt?: string; // ISO 8601 string
+  history?: {
     timestamp: string;
     result: 'pass' | 'fail';
   }[];
 }
 
-// The new shape of our database
+/**
+ * The structure of our db.json file
+ */
 export interface Database {
   kus: KnowledgeUnit[];
   reviewFacets: ReviewFacet[];
 }
+
+/**
+ * A "joined" data structure for the review UI.
+ */
+export interface ReviewItem {
+  facet: ReviewFacet;
+  ku: KnowledgeUnit;
+}
+

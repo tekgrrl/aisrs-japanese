@@ -1,108 +1,388 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
-import { ReviewFacet } from '@/types'; // Import from shared types
+import React, { useState, useEffect, FormEvent } from 'react';
+import Link from 'next/link';
+import { ReviewItem, ReviewFacet } from '@/types';
 
-/**
- * Page for running a review session (Phase 4.1)
- */
+type AnswerState = 'unanswered' | 'evaluating' | 'correct' | 'incorrect';
+
 export default function ReviewPage() {
-  const [reviewQueue, setReviewQueue] = useState<ReviewFacet[]>([]);
+  const [reviewQueue, setReviewQueue] = useState<ReviewItem[]>([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const [userAnswer, setUserAnswer] = useState('');
+  const [answerState, setAnswerState] = useState<AnswerState>('unanswered');
+  const [aiExplanation, setAiExplanation] = useState('');
+
+  // --- State for AI-Generated Questions ---
+  const [isFetchingDynamicQuestion, setIsFetchingDynamicQuestion] =
+    useState(false);
+  const [dynamicQuestion, setDynamicQuestion] = useState<string | null>(
+    null
+  );
+  const [dynamicAnswer, setDynamicAnswer] = useState<string | null>(null);
+
+  const currentItem = reviewQueue[currentIndex];
+
+  // --- Fetch Dynamic Question Logic ---
+  const fetchDynamicQuestion = async (topic: string) => {
+    setIsFetchingDynamicQuestion(true);
+    setError(null);
+    try {
+      const response = await fetch(
+        `/api/generate-question?topic=${encodeURIComponent(topic)}`
+      );
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.error || 'Failed to generate question');
+      }
+      const { question, answer } = await response.json();
+      setDynamicQuestion(question);
+      setDynamicAnswer(answer);
+    } catch (err) {
+      if (err instanceof Error) setError(err.message);
+      else setError('An unknown error occurred');
+    } finally {
+      setIsFetchingDynamicQuestion(false);
+    }
+  };
+
+  // --- Data Fetching ---
   useEffect(() => {
-    // Fetches the review queue when the page loads
-    const fetchReviewQueue = async () => {
+    const fetchDueItems = async () => {
       try {
-        setError(null);
         setIsLoading(true);
-        // For now, we fetch ALL facets.
-        // Later, this will be `/api/review-facets?due=true`
-        const response = await fetch('/api/review-facets');
+        setError(null);
+        const response = await fetch('/api/review-facets?due=true');
         if (!response.ok) {
-          throw new Error('Failed to fetch review queue');
+          throw new Error('Failed to fetch due review items');
         }
-        const data: ReviewFacet[] = await response.json();
-        
-        // TODO: In a real app, we'd also fetch the associated KU data
-        // for each facet to be able to show the question (e.g., ku.content)
-        
+        const data: ReviewItem[] = await response.json();
         setReviewQueue(data);
       } catch (err) {
         if (err instanceof Error) setError(err.message);
-        else setError("An unknown error occurred");
+        else setError('An unknown error occurred');
       } finally {
         setIsLoading(false);
       }
     };
-
-    fetchReviewQueue();
+    fetchDueItems();
   }, []);
 
-  // Renders the main content of the review page
-  const renderReviewSession = () => {
-    if (isLoading) {
-      return <p className="text-center text-gray-400">Loading review queue...</p>;
+  // --- Effect to handle current item changes ---
+  useEffect(() => {
+    // Check if the current item exists before trying to access its properties
+    if (currentItem && currentItem.facet.facetType === 'AI-Generated-Question') {
+      // It's a dynamic question, fetch one
+      setDynamicQuestion(null);
+      setDynamicAnswer(null);
+      fetchDynamicQuestion(currentItem.ku.content);
+    } else {
+      // It's a static question, clear dynamic state
+      setDynamicQuestion(null);
+      setDynamicAnswer(null);
     }
-    if (error) {
-      return <p className="text-center text-red-400">Error: {error}</p>;
-    }
-    if (reviewQueue.length === 0) {
-      return (
-        <div className="text-center p-8">
-          <p className="text-2xl font-semibold text-gray-200">Review Queue Empty!</p>
-          <p className="text-gray-400 mt-2">
-            Go to the 'Manage' page to add Knowledge Units and generate their review facets.
-          </p>
-        </div>
+    //
+    // FIX: Add `currentIndex` to the dependency array.
+    // This ensures that when a failed item is re-queued, this
+    // effect re-runs and fetches a *new* question for it.
+    //
+  }, [currentItem, currentIndex]); // Re-run whenever the currentItem OR the index changes
+
+  // --- Core SRS Logic ---
+
+  const handleUpdateSrs = async (result: 'pass' | 'fail') => {
+    if (!currentItem) return;
+    try {
+      const response = await fetch(
+        `/api/review-facets/${currentItem.facet.id}`,
+        {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ result }),
+        }
       );
+      if (!response.ok) throw new Error('Failed to update SRS data');
+    } catch (err) {
+      if (err instanceof Error) setError(err.message);
+      else setError('An unknown error occurred');
+    }
+  };
+
+  const handleEvaluateAnswer = async (e: FormEvent) => {
+    e.preventDefault();
+    if (answerState !== 'unanswered' || !currentItem) return;
+
+    setAnswerState('evaluating');
+    setError(null);
+    setAiExplanation('');
+
+    const expectedAnswer = getExpectedAnswer(currentItem);
+    if (expectedAnswer === null) {
+      setError('Waiting for dynamic question to load.');
+      setAnswerState('unanswered');
+      return;
     }
 
-    // This is the placeholder for our actual review UI
+    try {
+      const response = await fetch('/api/evaluate-answer', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userAnswer,
+          expectedAnswer,
+        }),
+      });
+
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.error || 'Evaluation API failed');
+      }
+
+      const { result, explanation } = await response.json();
+      setAiExplanation(explanation);
+
+      //
+      // --- FIX: Re-ordered logic ---
+      // 1. Await the database update first.
+      // 2. Then, set all local state in one batch.
+      //
+      if (result === 'pass') {
+        await handleUpdateSrs('pass');
+        setAnswerState('correct');
+      } else {
+        await handleUpdateSrs('fail');
+        // This update will be seen by the "Next" button click
+        setReviewQueue((prevQueue) => [...prevQueue, currentItem]);
+        setAnswerState('incorrect');
+      }
+    } catch (err) {
+      if (err instanceof Error) setError(err.message);
+      else setError('An unknown error occurred');
+      // On error, just reset to unanswered
+      setAnswerState('unanswered');
+    }
+  };
+
+  const goToNextItem = () => {
+    setUserAnswer('');
+    setAnswerState('unanswered');
+    setAiExplanation('');
+    //
+    // FIX: Use functional update for `setCurrentIndex`.
+    // This ensures it increments the *latest* state value,
+    // not a stale value from when the function was rendered.
+    //
+    setCurrentIndex((prevIndex) => prevIndex + 1);
+  };
+
+  // --- Helper Functions (Updated) ---
+
+  const getQuestion = (item: ReviewItem): string | null => {
+    const { ku, facet } = item;
+    switch (facet.facetType) {
+      case 'AI-Generated-Question':
+        return dynamicQuestion; // Returns null if loading
+      case 'Content-to-Definition':
+      case 'Content-to-Reading':
+        return ku.content;
+      case 'Definition-to-Content':
+        return ku.data?.definition || '[No Definition]';
+      case 'Reading-to-Content':
+        return ku.data?.reading || '[No Reading]';
+      default:
+        return 'Unknown Facet';
+    }
+  };
+
+  const getQuestionType = (item: ReviewItem): string => {
+    switch (item.facet.facetType) {
+      case 'AI-Generated-Question':
+        return `Quiz: ${item.ku.content}`;
+      case 'Content-to-Definition':
+        return 'Definition';
+      case 'Content-to-Reading':
+        return 'Reading';
+      case 'Definition-to-Content':
+      case 'Reading-to-Content':
+        return 'Vocab/Kanji';
+      default:
+        return '...';
+    }
+  };
+
+  const getExpectedAnswer = (item: ReviewItem): string | null => {
+    const { ku, facet } = item;
+    switch (facet.facetType) {
+      case 'AI-Generated-Question':
+        return dynamicAnswer; // Returns null if loading
+      case 'Content-to-Definition':
+        return ku.data?.definition || '';
+      case 'Content-to-Reading':
+        return ku.data?.reading || '';
+      case 'Definition-to-Content':
+      case 'Reading-to-Content':
+        return ku.content;
+      default:
+        return '';
+    }
+  };
+
+  // --- Render Logic ---
+
+  if (isLoading) {
     return (
-      <div>
-        <h2 className="text-2xl font-semibold mb-4 text-white">
-          Review Items ({reviewQueue.length})
-        </h2>
-        <p className="text-gray-400 mb-6">
-          This is a placeholder list of all created review facets. The next step is to
-          build the interactive review UI here.
-        </p>
-        <ul className="space-y-2">
-          {reviewQueue.map(facet => (
-            <li key={facet.id} className="p-4 bg-gray-700 rounded-lg shadow">
-              <p className="font-semibold text-white">{facet.facetType}</p>
-              <p className="text-sm text-gray-300">KU ID: {facet.kuId}</p>
-              <p className="text-sm text-gray-400">
-                Next Review: {new Date(facet.nextReviewAt).toLocaleString()}
-              </p>
-              <span className="text-xs font-mono bg-gray-600 px-2 py-0.5 rounded mt-2 inline-block">
-                Stage: {facet.srsStage}
-              </span>
-            </li>
-          ))}
-        </ul>
-        <button 
-          disabled
-          className="mt-6 w-full px-4 py-3 bg-green-800 text-gray-400 font-semibold rounded-md shadow-md cursor-not-allowed"
-        >
-          Start Review (Not Implemented)
-        </button>
-      </div>
+      <main className="container mx-auto max-w-2xl p-8 text-center">
+        <p className="text-xl text-gray-400">Loading reviews...</p>
+      </main>
     );
   }
 
+  //
+  // This check is now robust. `goToNextItem` increments `currentIndex`,
+  // and this check will correctly catch that the queue is now finished.
+  //
+  if (currentIndex >= reviewQueue.length) {
+    return (
+      <main className="container mx-auto max-w-2xl p-8 text-center">
+        <h1 className="text-4xl font-bold text-white mb-4">
+          Session Complete!
+        </h1>
+        <p className="text-xl text-gray-400 mb-8">
+          You've finished all your due reviews.
+        </p>
+        <Link
+          href="/"
+          className="px-6 py-3 bg-blue-600 text-white font-semibold rounded-md shadow-md hover:bg-blue-700"
+        >
+          Back to Manage
+        </Link>
+      </main>
+    );
+  }
+
+  // This check is now safe
+  if (!currentItem) {
+    // This state should rarely be seen, but it's a good fallback.
+    return (
+       <main className="container mx-auto max-w-2xl p-8 text-center">
+        <h1 className="text-4xl font-bold text-white mb-4">
+          Session Complete!
+        </h1>
+        <p className="text-xl text-gray-400 mb-8">
+          You've finished all your due reviews.
+        </p>
+        <Link
+          href="/"
+          className="px-6 py-3 bg-blue-600 text-white font-semibold rounded-md shadow-md hover:bg-blue-700"
+        >
+          Back to Manage
+        </Link>
+      </main>
+    )
+  }
+
+  const questionText = getQuestion(currentItem);
+  const isDynamicLoading =
+    currentItem.facet.facetType === 'AI-Generated-Question' &&
+    (isFetchingDynamicQuestion || !questionText);
+
   return (
-    <main className="container mx-auto max-w-4xl p-8">
-      <header className="mb-8">
-        <h1 className="text-4xl font-bold text-white mb-2">Review Session</h1>
-        <p className="text-xl text-gray-400">Time to train your brain.</p>
+    <main className="container mx-auto max-w-2xl p-8">
+      <header className="mb-6">
+        <span className="text-lg text-gray-400">
+          {/* Show total items in queue, which can now grow */}
+          Item {currentIndex + 1} of {reviewQueue.length}
+        </span>
       </header>
-      
-      <div className="bg-gray-800 p-6 rounded-lg shadow-lg">
-        {renderReviewSession()}
+
+      {error && (
+        <div className="bg-red-800 border border-red-600 text-red-100 p-4 rounded-md mb-6">
+          {error}
+        </div>
+      )}
+
+      {/* --- Review Card --- */}
+      <div className="bg-gray-800 shadow-2xl rounded-lg p-8">
+        {/* Question Area */}
+        <div className="text-center mb-8 min-h-[160px] flex flex-col justify-center">
+          <p className="text-lg font-semibold text-blue-300 mb-3 truncate px-4">
+            {getQuestionType(currentItem)}
+          </p>
+          {isDynamicLoading ? (
+            <p className="text-3xl text-gray-400 animate-pulse">
+              Generating question...
+            </p>
+          ) : (
+            <p className="text-5xl font-bold text-white break-words">
+              {questionText || '[Question not loaded]'}
+            </p>
+          )}
+        </div>
+
+        {/* Answer Form */}
+        <form onSubmit={handleEvaluateAnswer}>
+          <input
+            type="text"
+            value={userAnswer}
+            onChange={(e) => setUserAnswer(e.target.value)}
+            placeholder="Type your answer..."
+            disabled={answerState !== 'unanswered' || isDynamicLoading}
+            className="w-full p-4 bg-gray-700 border-2 border-gray-600 text-white text-xl rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-800 disabled:text-gray-500"
+          />
+          <button
+            type="submit"
+            disabled={answerState !== 'unanswered' || isDynamicLoading}
+            className="w-full mt-4 px-6 py-4 bg-blue-600 text-white text-xl font-semibold rounded-md shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-800 disabled:bg-gray-500 disabled:cursor-wait"
+          >
+            {answerState === 'evaluating'
+              ? 'Evaluating...'
+              : 'Submit Answer'}
+          </button>
+        </form>
       </div>
+
+      {/* --- Answer Feedback Section --- */}
+      {answerState !== 'unanswered' && answerState !== 'evaluating' && (
+        <div
+          className={`mt-8 p-6 rounded-lg ${
+            answerState === 'correct'
+              ? 'bg-green-800 border-green-600'
+              : 'bg-red-800 border-red-600'
+          }`}
+        >
+          <h3 className="text-2xl font-semibold text-white mb-3">
+            {answerState === 'correct' ? 'Correct' : 'Incorrect'}
+          </h3>
+          <p className="text-lg text-gray-200 mb-2">
+            <span className="font-semibold">Your answer:</span> {userAnswer}
+          </p>
+          {answerState === 'incorrect' && (
+            <p className="text-lg text-gray-200 mb-4">
+              <span className="font-semibold">Correct answer:</span>{' '}
+              {getExpectedAnswer(currentItem)}
+            </p>
+          )}
+          <p className="text-lg text-gray-200 italic">
+            <span className="font-semibold">AI:</span> {aiExplanation}
+          </p>
+
+          {/* --- Manual "Next" button --- */}
+          <button
+            onClick={goToNextItem}
+            className="mt-6 w-full px-6 py-3 bg-gray-600 text-white font-semibold rounded-md shadow-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 focus:ring-offset-gray-800"
+          >
+            Next
+          </button>
+        </div>
+      )}
     </main>
   );
 }
+
