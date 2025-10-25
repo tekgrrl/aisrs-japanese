@@ -1,70 +1,79 @@
 import { NextResponse } from 'next/server';
-import fs from 'fs/promises';
-import path from 'path';
-// Import from the new shared types file
-import { Database, KnowledgeUnit } from '@/types';
+import { db, KNOWLEDGE_UNITS_COLLECTION } from '@/lib/firebase';
+import { KnowledgeUnit } from '@/types';
+import { Timestamp } from 'firebase-admin/firestore';
+import { logger } from '@/lib/logger';
 
-const dbPath = path.join(process.cwd(), 'db.json');
-
-// Helper function to read the DB with the new structure
-async function readDb(): Promise<Database> {
-  try {
-    const data = await fs.readFile(dbPath, 'utf8');
-    // Ensure both arrays exist even if the file is partially formed
-    const parsedData = JSON.parse(data);
-    const db: Database = {
-      kus: parsedData.kus || [],
-      reviewFacets: parsedData.reviewFacets || [],
-    };
-    return db;
-  } catch (error) {
-    if (error.code === 'ENOENT') {
-      // If file doesn't exist, return the correct empty structure
-      return { kus: [], reviewFacets: [] };
-    }
-    console.error('Failed to read db.json:', error);
-    throw error;
-  }
-}
-
-// Helper function to write to the DB
-async function writeDb(db: Database): Promise<void> {
-  try {
-    await fs.writeFile(dbPath, JSON.stringify(db, null, 2), 'utf8');
-  } catch (error) {
-    console.error('Failed to write db.json:', error);
-  }
-}
-
+// GET all Knowledge Units
 export async function GET() {
-  const db = await readDb();
-  // Return only the KUs from this endpoint
-  return NextResponse.json(db.kus);
+  logger.info('GET /api/ku - Fetching all units');
+  try {
+    const snapshot = await db
+      .collection(KNOWLEDGE_UNITS_COLLECTION)
+      .orderBy('createdAt', 'desc') // Order by creation time, newest first
+      .get();
+
+    if (snapshot.empty) {
+      logger.info('GET /api/ku - No units found.');
+      return NextResponse.json([]);
+    }
+
+    const kus: KnowledgeUnit[] = [];
+    snapshot.forEach((doc) => {
+      const data = doc.data();
+      kus.push({
+        id: doc.id,
+        ...data,
+        // Convert Firestore Timestamp to string for client-side
+        createdAt: (data.createdAt as Timestamp).toDate().toISOString(),
+      } as KnowledgeUnit);
+    });
+
+    logger.info(`GET /api/ku - Returning ${kus.length} units.`);
+    return NextResponse.json(kus);
+  } catch (error) {
+    logger.error('GET /api/ku - Error fetching units', error);
+    return NextResponse.json(
+      { error: 'Failed to fetch knowledge units' },
+      { status: 500 }
+    );
+  }
 }
 
+// POST a new Knowledge Unit
 export async function POST(request: Request) {
+  logger.info('POST /api/ku - Creating new unit');
   try {
     const body = await request.json();
-    const db = await readDb();
 
-    const newKu: KnowledgeUnit = {
-      id: crypto.randomUUID(),
-      type: body.type,
-      content: body.content,
-      data: body.data || {},
-      personalNotes: body.personalNotes || '',
-      relatedUnits: body.relatedUnits || [],
+    // Validate body (basic)
+    if (!body.type || !body.content) {
+      logger.warn('POST /api/ku - Validation failed', body);
+      return NextResponse.json(
+        { error: 'Type and Content are required' },
+        { status: 400 }
+      );
+    }
+
+    const newKuData = {
+      ...body,
+      relatedUnits: body.relatedUnits || [], // Ensure array exists
+      data: body.data || {}, // Ensure object exists
+      createdAt: Timestamp.now(), // Add Firestore timestamp
     };
 
-    // Make sure we're pushing to the 'kus' array
-    db.kus.push(newKu);
+    const newDocRef = await db
+      .collection(KNOWLEDGE_UNITS_COLLECTION)
+      .add(newKuData);
 
-    await writeDb(db);
-
-    return NextResponse.json(newKu, { status: 201 });
+    logger.info(`POST /api/ku - Created unit ${newDocRef.id}`);
+    return NextResponse.json({ id: newDocRef.id }, { status: 201 });
   } catch (error) {
-    console.error('Error in POST /api/ku:', error);
-    return NextResponse.json({ error: 'Failed to create KU' }, { status: 500 });
+    logger.error('POST /api/ku - Error creating unit', error);
+    return NextResponse.json(
+      { error: 'Failed to create knowledge unit' },
+      { status: 500 }
+    );
   }
 }
 

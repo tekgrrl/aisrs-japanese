@@ -26,6 +26,14 @@
       "data": {},
       "personalNotes": "",
       "relatedUnits": []
+    },
+    {
+      "id": "5d9e869e-6707-4f0a-821b-c7b0eb6caae8",
+      "type": "Grammar",
+      "content": "Meanings of the particle な at the end of sentences or spoken clauses",
+      "data": {},
+      "personalNotes": "",
+      "relatedUnits": []
     }
   ],
   "reviewFacets": [
@@ -109,9 +117,9 @@
       "id": "6dfe48c2-b199-4c72-8277-b7a130b76fd6",
       "kuId": "cca4c83a-2007-4fc2-92cc-56f3276e9552",
       "facetType": "AI-Generated-Question",
-      "srsStage": 0,
-      "nextReviewAt": "2025-10-25T15:24:43.219Z",
-      "lastReviewAt": "2025-10-25T15:14:43.219Z",
+      "srsStage": 1,
+      "nextReviewAt": "2025-10-26T02:56:48.966Z",
+      "lastReviewAt": "2025-10-25T18:56:48.966Z",
       "history": [
         {
           "timestamp": "2025-10-25T15:13:30.560Z",
@@ -120,8 +128,38 @@
         {
           "timestamp": "2025-10-25T15:14:43.219Z",
           "result": "fail"
+        },
+        {
+          "timestamp": "2025-10-25T18:38:31.198Z",
+          "result": "fail"
+        },
+        {
+          "timestamp": "2025-10-25T18:53:41.908Z",
+          "result": "fail"
+        },
+        {
+          "timestamp": "2025-10-25T18:56:48.966Z",
+          "result": "pass"
         }
       ]
+    },
+    {
+      "id": "56a2e323-6c1b-4f55-994d-6c0c65c2ed3c",
+      "kuId": "5d9e869e-6707-4f0a-821b-c7b0eb6caae8",
+      "facetType": "AI-Generated-Question",
+      "srsStage": 1,
+      "nextReviewAt": "2025-10-26T02:57:05.201Z",
+      "history": [
+        {
+          "timestamp": "2025-10-25T18:55:51.478Z",
+          "result": "fail"
+        },
+        {
+          "timestamp": "2025-10-25T18:57:05.201Z",
+          "result": "pass"
+        }
+      ],
+      "lastReviewAt": "2025-10-25T18:57:05.201Z"
     }
   ]
 }

@@ -1,126 +1,119 @@
 import { NextResponse } from 'next/server';
-import fs from 'fs/promises';
-import path from 'path';
-import { Database, ReviewFacet } from '@/types';
+import { db, REVIEW_FACETS_COLLECTION } from '@/lib/firebase';
+import { ReviewFacet } from '@/types';
+import { Timestamp, FieldValue } from 'firebase-admin/firestore';
+import { logger } from '@/lib/logger';
 
-const dbPath = path.join(process.cwd(), 'db.json');
+// SRS intervals in hours (maps to srsStage)
+const srsIntervals = {
+  0: 10 / 60, // 10 minutes
+  1: 8, // 8 hours
+  2: 24, // 1 day
+  3: 72, // 3 days
+  4: 168, // 1 week
+  5: 336, // 2 weeks
+  6: 730, // 1 month (approx)
+  7: 2920, // 4 months
+  8: 8760, // 1 year
+};
 
-// --- DB Helper Functions ---
-async function readDb(): Promise<Database> {
-  try {
-    const data = await fs.readFile(dbPath, 'utf8');
-    const parsedData = JSON.parse(data);
-    return {
-      kus: parsedData.kus || [],
-      reviewFacets: parsedData.reviewFacets || [],
-    };
-  } catch (error) {
-    if (error.code === 'ENOENT') {
-      return { kus: [], reviewFacets: [] };
-    }
-    throw error;
-  }
-}
+type SrsStage = keyof typeof srsIntervals;
 
-async function writeDb(db: Database): Promise<void> {
-  await fs.writeFile(dbPath, JSON.stringify(db, null, 2), 'utf8');
-}
-// --- End DB Helpers ---
-
-/**
- * PUT /api/review-facets/[id]
- * Updates the SRS data for a single review facet after an answer.
- * Expects: { result: 'pass' | 'fail' }
- */
+// PUT: Update an existing Review Facet's SRS data
 export async function PUT(
   request: Request,
-  { params }: { params: { id: string } } // Keep params for signature, but don't use it
+  { params }: { params: { id: string } }
 ) {
-  //
-  // FIX: The `params` object is async and causing issues.
-  // We will manually parse the ID from the request URL.
-  //
-  const url = new URL(request.url);
-  const pathnameParts = url.pathname.split('/');
-  const facetId = pathnameParts[pathnameParts.length - 1]; // Get the last part of the URL
+  let facetId: string;
 
-  const body = await request.json();
-  const { result } = body; // 'pass' or 'fail'
+  // Re-using the robust URL parsing from our previous fix
+  try {
+    const url = new URL(request.url);
+    const pathParts = url.pathname.split('/');
+    facetId = pathParts[pathParts.length - 1]; // Get the last part of the path (the ID)
 
-  if (!facetId) {
-    return NextResponse.json({ error: 'Facet ID is required' }, { status: 400 });
-  }
-  if (result !== 'pass' && result !== 'fail') {
+    if (!facetId) throw new Error('Facet ID not found in URL');
+  } catch (urlError) {
+    logger.error('PUT /api/review-facets/[id] - Error parsing URL', urlError);
     return NextResponse.json(
-      { error: "Result must be 'pass' or 'fail'" },
+      { error: 'Invalid request URL' },
       { status: 400 }
     );
   }
 
-  try {
-    const db = await readDb();
+  logger.info(`PUT /api/review-facets/${facetId} - Updating SRS data`);
 
-    const facetIndex = db.reviewFacets.findIndex((f) => f.id === facetId);
-    if (facetIndex === -1) {
+  try {
+    const body = await request.json();
+    const { result } = body; // 'pass' or 'fail'
+
+    if (!result || (result !== 'pass' && result !== 'fail')) {
+      logger.warn(
+        `PUT /api/review-facets/${facetId} - Invalid result: ${result}`
+      );
+      return NextResponse.json(
+        { error: "Invalid result: must be 'pass' or 'fail'" },
+        { status: 400 }
+      );
+    }
+
+    const facetRef = db.collection(REVIEW_FACETS_COLLECTION).doc(facetId);
+    const doc = await facetRef.get();
+
+    if (!doc.exists) {
+      logger.warn(`PUT /api/review-facets/${facetId} - Facet not found`);
       return NextResponse.json({ error: 'Facet not found' }, { status: 404 });
     }
 
-    const facet = db.reviewFacets[facetIndex];
+    const facet = doc.data() as ReviewFacet;
     const now = new Date();
+    const nowISO = now.toISOString();
 
-    // --- Phase 5.1: Simple SRS Logic ---
-    let newSrsStage = facet.srsStage;
+    // --- Calculate new SRS stage ---
+    let newStage = facet.srsStage;
     if (result === 'pass') {
-      newSrsStage = Math.min(9, newSrsStage + 1); // Max stage 9
+      newStage = Math.min(newStage + 1, 8); // Cap at stage 8
     } else {
-      // Demote 2 stages on fail, min stage 0
-      newSrsStage = Math.max(0, newSrsStage - 2);
+      // Demote: half the stages, rounded down, min stage 0
+      newStage = Math.max(Math.floor(newStage / 2), 0);
     }
 
-    // Simple exponential backoff for review times
-    const srsStageDurationsInHours: { [key: number]: number } = {
-      0: 10 / 60, // 10 minutes
-      1: 8,
-      2: 24,
-      3: 48,
-      4: 168, // 7 days
-      5: 336, // 14 days
-      6: 720, // 30 days
-      7: 2880, // 120 days
-      8: 5760, // 240 days
-      9: 876000, // 100 years
+    // --- Calculate new review date ---
+    const intervalHours = srsIntervals[newStage as SrsStage];
+    const newNextReviewDate = new Date(
+      now.getTime() + intervalHours * 60 * 60 * 1000
+    );
+    const newNextReviewAt = newNextReviewDate.toISOString();
+
+    // --- Prepare update data ---
+    const updateData = {
+      srsStage: newStage,
+      nextReviewAt: newNextReviewAt,
+      lastReviewAt: nowISO,
+      history: FieldValue.arrayUnion({
+        timestamp: nowISO,
+        result: result,
+        stage: newStage,
+      }),
     };
 
-    const hoursToAdd = srsStageDurationsInHours[newSrsStage];
-    const nextReviewDate = new Date(now.getTime() + hoursToAdd * 60 * 60 * 1000);
+    // Atomically update the document
+    await facetRef.update(updateData);
 
-    // --- FIX: Safely initialize history array ---
-    const currentHistory = Array.isArray(facet.history) ? facet.history : [];
-
-    // Update the facet
-    const updatedFacet: ReviewFacet = {
-      ...facet,
-      srsStage: newSrsStage,
-      lastReviewAt: now.toISOString(), // Now a valid field
-      nextReviewAt: nextReviewDate.toISOString(),
-      history: [ // Now a valid field
-        ...currentHistory,
-        { timestamp: now.toISOString(), result: result },
-      ],
-    };
-
-    // Save back to the database
-    db.reviewFacets[facetIndex] = updatedFacet;
-    await writeDb(db);
-
-    return NextResponse.json(updatedFacet);
+    logger.info(
+      `PUT /api/review-facets/${facetId} - Updated stage to ${newStage}`
+    );
+    return NextResponse.json({
+      success: true,
+      newStage: newStage,
+      nextReviewAt: newNextReviewAt,
+    });
   } catch (error) {
-    console.error('Error in PUT /api/review-facets/[id]:', error);
+    logger.error(`PUT /api/review-facets/${facetId} - Error`, error);
     return NextResponse.json(
-      { error: 'Failed to update facet' },
+      { error: 'Failed to update review facet' },
       { status: 500 }
     );
   }
 }
-
 

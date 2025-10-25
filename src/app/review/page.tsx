@@ -73,22 +73,14 @@ export default function ReviewPage() {
 
   // --- Effect to handle current item changes ---
   useEffect(() => {
-    // Check if the current item exists before trying to access its properties
     if (currentItem && currentItem.facet.facetType === 'AI-Generated-Question') {
-      // It's a dynamic question, fetch one
       setDynamicQuestion(null);
       setDynamicAnswer(null);
       fetchDynamicQuestion(currentItem.ku.content);
     } else {
-      // It's a static question, clear dynamic state
       setDynamicQuestion(null);
       setDynamicAnswer(null);
     }
-    //
-    // FIX: Add `currentIndex` to the dependency array.
-    // This ensures that when a failed item is re-queued, this
-    // effect re-runs and fetches a *new* question for it.
-    //
   }, [currentItem, currentIndex]); // Re-run whenever the currentItem OR the index changes
 
   // --- Core SRS Logic ---
@@ -148,24 +140,18 @@ export default function ReviewPage() {
       const { result, explanation } = await response.json();
       setAiExplanation(explanation);
 
-      //
-      // --- FIX: Re-ordered logic ---
-      // 1. Await the database update first.
-      // 2. Then, set all local state in one batch.
-      //
       if (result === 'pass') {
         await handleUpdateSrs('pass');
         setAnswerState('correct');
       } else {
         await handleUpdateSrs('fail');
-        // This update will be seen by the "Next" button click
+        // Re-queue failed item
         setReviewQueue((prevQueue) => [...prevQueue, currentItem]);
         setAnswerState('incorrect');
       }
     } catch (err) {
       if (err instanceof Error) setError(err.message);
       else setError('An unknown error occurred');
-      // On error, just reset to unanswered
       setAnswerState('unanswered');
     }
   };
@@ -174,11 +160,7 @@ export default function ReviewPage() {
     setUserAnswer('');
     setAnswerState('unanswered');
     setAiExplanation('');
-    //
-    // FIX: Use functional update for `setCurrentIndex`.
-    // This ensures it increments the *latest* state value,
-    // not a stale value from when the function was rendered.
-    //
+    // Use functional update to ensure we use the latest state
     setCurrentIndex((prevIndex) => prevIndex + 1);
   };
 
@@ -244,11 +226,8 @@ export default function ReviewPage() {
     );
   }
 
-  //
-  // This check is now robust. `goToNextItem` increments `currentIndex`,
-  // and this check will correctly catch that the queue is now finished.
-  //
-  if (currentIndex >= reviewQueue.length) {
+  // Handle both "no items" and "all items done"
+  if (!currentItem || currentIndex >= reviewQueue.length) {
     return (
       <main className="container mx-auto max-w-2xl p-8 text-center">
         <h1 className="text-4xl font-bold text-white mb-4">
@@ -267,27 +246,6 @@ export default function ReviewPage() {
     );
   }
 
-  // This check is now safe
-  if (!currentItem) {
-    // This state should rarely be seen, but it's a good fallback.
-    return (
-       <main className="container mx-auto max-w-2xl p-8 text-center">
-        <h1 className="text-4xl font-bold text-white mb-4">
-          Session Complete!
-        </h1>
-        <p className="text-xl text-gray-400 mb-8">
-          You've finished all your due reviews.
-        </p>
-        <Link
-          href="/"
-          className="px-6 py-3 bg-blue-600 text-white font-semibold rounded-md shadow-md hover:bg-blue-700"
-        >
-          Back to Manage
-        </Link>
-      </main>
-    )
-  }
-
   const questionText = getQuestion(currentItem);
   const isDynamicLoading =
     currentItem.facet.facetType === 'AI-Generated-Question' &&
@@ -297,7 +255,6 @@ export default function ReviewPage() {
     <main className="container mx-auto max-w-2xl p-8">
       <header className="mb-6">
         <span className="text-lg text-gray-400">
-          {/* Show total items in queue, which can now grow */}
           Item {currentIndex + 1} of {reviewQueue.length}
         </span>
       </header>
@@ -320,7 +277,9 @@ export default function ReviewPage() {
               Generating question...
             </p>
           ) : (
-            <p className="text-5xl font-bold text-white break-words">
+            // --- FONT SIZE FIX ---
+            // Changed from text-5xl to text-2xl
+            <p className="text-2xl font-bold text-white break-words">
               {questionText || '[Question not loaded]'}
             </p>
           )}
@@ -373,7 +332,6 @@ export default function ReviewPage() {
             <span className="font-semibold">AI:</span> {aiExplanation}
           </p>
 
-          {/* --- Manual "Next" button --- */}
           <button
             onClick={goToNextItem}
             className="mt-6 w-full px-6 py-3 bg-gray-600 text-white font-semibold rounded-md shadow-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 focus:ring-offset-gray-800"

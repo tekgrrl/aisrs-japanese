@@ -1,60 +1,60 @@
-/**
- * A "Knowledge Unit" is the core atom of knowledge.
- * It's the "thing" you are learning (e.g., a word, a grammar point).
- */
+import { Timestamp } from 'firebase-admin/firestore';
+
+export type KnowledgeUnitType =
+  | 'Vocab'
+  | 'Kanji'
+  | 'Grammar'
+  | 'Concept'
+  | 'ExampleSentence';
+
 export interface KnowledgeUnit {
-  id: string; // UUID
-  type:
-    | 'Vocab'
-    | 'Kanji'
-    | 'Grammar'
-    | 'Concept'
-    | 'ExampleSentence';
-  content: string; // The "front" of the card (e.g., "食べる", "家族", "Giving and Receiving")
-  data: Record<string, string>; // { reading: "たべる", definition: "To eat" }
+  id: string;
+  type: KnowledgeUnitType;
+  content: string; // The main "thing" (e.g., "食べる", "家族", "Giving/Receiving")
+  data: {
+    reading?: string;
+    definition?: string;
+    // We can add more specific fields here later
+    [key: string]: any;
+  };
   personalNotes: string;
   relatedUnits: string[]; // Array of other KnowledgeUnit IDs
+  createdAt: string | Timestamp; // Added for sorting
 }
 
-/**
- * A "Review Facet" is a specific "side" of a Knowledge Unit to be reviewed.
- * One KU can have many facets.
- */
-export type FacetType =
+export type ReviewFacetType =
   | 'Content-to-Definition'
   | 'Definition-to-Content'
   | 'Content-to-Reading'
-  | 'Reading-to-Content'
   | 'AI-Generated-Question';
 
 export interface ReviewFacet {
-  id: string; // UUID
-  kuId: string; // Parent KnowledgeUnit ID
-  facetType: FacetType;
-  srsStage: number; // 0 (new) -> 8 (mastered)
-  nextReviewAt: string; // ISO 8601 string
-
-  // --- NEWLY ADDED FIELDS ---
-  lastReviewAt?: string; // ISO 8601 string
-  history?: {
+  id: string;
+  kuId: string; // ID of the parent KnowledgeUnit
+  facetType: ReviewFacetType;
+  srsStage: number; // 0 (new) to 8 (mastered)
+  nextReviewAt: string; // ISO string
+  lastReviewAt?: string; // ISO string
+  history?: Array<{
     timestamp: string;
     result: 'pass' | 'fail';
-  }[];
+    stage: number;
+  }>;
 }
 
 /**
- * The structure of our db.json file
- */
-export interface Database {
-  kus: KnowledgeUnit[];
-  reviewFacets: ReviewFacet[];
-}
-
-/**
- * A "joined" data structure for the review UI.
+ * Represents a "joined" review item, combining the
+ * facet with its parent KU.
  */
 export interface ReviewItem {
   facet: ReviewFacet;
   ku: KnowledgeUnit;
+}
+
+// This represents the structure of our old db.json
+// We're keeping it for reference but not using it for Firestore.
+export interface Database {
+  kus: KnowledgeUnit[];
+  reviewFacets: ReviewFacet[];
 }
 
