@@ -3,31 +3,44 @@ import fs from 'fs/promises';
 import path from 'path';
 
 // Define the path to our JSON database
-// process.cwd() is the root of the Next.js project
 const dbPath = path.join(process.cwd(), 'db.json');
 
 // Define the shape of our Knowledge Unit (from Phase 2.1)
-// We will expand this later.
-interface KnowledgeUnit {
+// We'll expand this later, for now, it's simple.
+export interface KnowledgeUnit {
   id: string;
   type: 'Vocab' | 'Kanji' | 'Grammar' | 'Concept' | 'ExampleSentence';
   content: string;
-  // ... other fields from schema
+  // We'll add 'data', 'relatedUnits', 'personalNotes' later
+}
+
+// Helper function to read the database
+async function readDB(): Promise<KnowledgeUnit[]> {
+  try {
+    const data = await fs.readFile(dbPath, 'utf8');
+    return JSON.parse(data) as KnowledgeUnit[];
+  } catch (error) {
+    // If the file doesn't exist, return an empty array
+    if (error.code === 'ENOENT') {
+      return [];
+    }
+    throw error;
+  }
+}
+
+// Helper function to write to the database
+async function writeDB(data: KnowledgeUnit[]): Promise<void> {
+  await fs.writeFile(dbPath, JSON.stringify(data, null, 2));
 }
 
 // GET /api/ku
 // Fetches all Knowledge Units
 export async function GET() {
   try {
-    // Read the database file
-    const data = await fs.readFile(dbPath, 'utf8');
-    const kus = JSON.parse(data);
+    const kus = await readDB();
     return NextResponse.json(kus);
   } catch (error) {
-    // If the file doesn't exist, return an empty array
-    if (error.code === 'ENOENT') {
-      return NextResponse.json([]);
-    }
+    console.error('Error reading database:', error);
     return NextResponse.json({ message: 'Error reading database' }, { status: 500 });
   }
 }
@@ -36,29 +49,28 @@ export async function GET() {
 // Adds a new Knowledge Unit
 export async function POST(request: Request) {
   try {
-    const newKu: KnowledgeUnit = await request.json();
-    
-    let kus: KnowledgeUnit[] = [];
-    try {
-      // Read existing KUs
-      const data = await fs.readFile(dbPath, 'utf8');
-      kus = JSON.parse(data);
-    } catch (error) {
-      // File doesn't exist, start with an empty array
-      if (error.code !== 'ENOENT') {
-        throw error;
-      }
+    // We expect a partial KU, without the ID
+    const { type, content } = await request.json();
+
+    if (!type || !content) {
+      return NextResponse.json({ message: 'Missing type or content' }, { status: 400 });
     }
 
-    // Add new KU (in a real app, we'd add validation, UUIDs, etc.)
-    kus.push(newKu);
+    const newKu: KnowledgeUnit = {
+      id: crypto.randomUUID(), // Generate a unique ID on the server
+      type,
+      content,
+    };
 
-    // Write back to the file
-    await fs.writeFile(dbPath, JSON.stringify(kus, null, 2));
+    const kus = await readDB();
+    kus.push(newKu);
+    await writeDB(kus);
 
     return NextResponse.json(newKu, { status: 201 });
 
   } catch (error) {
+    console.error('Error writing to database:', error);
     return NextResponse.json({ message: 'Error writing to database' }, { status: 500 });
   }
 }
+
