@@ -180,7 +180,7 @@ export default function KnowledgeManagementPage() {
                 <span className="text-2xl font-semibold text-white break-all">
                   {ku.content}
                 </span>
-                <span className="font-mono text-sm bg-gray-900 px-2 py-1 rounded ml-2 flex-shrink-0">
+                <span className="font-mono text-sm bg-gray-900 text-gray-100 px-2 py-1 rounded ml-2 flex-shrink-0">
                   {ku.type}
                 </span>
               </div>
