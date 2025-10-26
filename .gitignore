@@ -47,3 +47,11 @@ next-env.d.ts
 /logs/
 .gemini/
 gha-creds-*.json
+
+# Playwright
+playwright-report/
+playwright/.cache/
+test-results/
+ms-playwright/
+blob-report/
+playwright/.auth/
