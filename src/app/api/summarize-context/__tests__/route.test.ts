@@ -83,7 +83,7 @@ describe('GET /api/summarize-context', () => {
       url: '/api/summarize-context',
     });
 
-    // @ts-ignore
+    const response = await GET(req as unknown as Request);
     const response = await GET(req);
     const data = await response.json();
 
