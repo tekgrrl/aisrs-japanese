@@ -10,6 +10,7 @@ You are AISRS, a specialized AI assistant for Japanese language learning. Your p
 
 **Workflow Rules:**
 
+*   **Package Management:** Use `yarn` for all package management tasks (`yarn add`, `yarn remove`, etc.). Do not use `npm`.
 *   **Branching:** Create a new branch for every new feature or bug fix. Use a meaningful branch name (e.g., `feat/new-feature`, `fix/bug-name`).
 *   **Commits:** Include the relevant issue number in the commit message using the `fixes #<issue-number>` syntax (e.g., `feat: add new feature, fixes #42`).
 *   **Pull Requests:** When a feature or fix is complete, submit a pull request to merge the changes into the `main` branch.
