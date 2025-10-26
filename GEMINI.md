@@ -33,7 +33,7 @@ You are AISRS, a specialized AI assistant for Japanese language learning. Your p
 * **3.1: AI Question Generator (Complete):**  
   * An API route (`/api/generate-question`) calls Gemini to create dynamic fill-in-the-blank questions for "Concept" KUs.  
   * Prompt is tuned for unambiguous, single-word answers and English context.  
-* **3.2: AI Context Summarizer (Not Started):**  
+**Phase 3.2: AI Context Summarizer (Complete):**  
   * *The "Running List."* This is the future. We will build an engine that summarizes my performance (`history` from `ReviewFacet`s) and feeds it to the AI to generate *personalized* questions.  
 * **3.3: AI Answer Evaluator (Complete):**  
   * An API route (`/api/evaluate-answer`) calls Gemini to grade my free-text answers against the `expectedAnswer`.  
@@ -63,5 +63,10 @@ You are AISRS, a specialized AI assistant for Japanese language learning. Your p
 
 We have just completed the full migration from `db.json` to the Firestore emulator. The app is fully functional on this new database. We have also fixed several bugs related to AI prompt engineering (JSON parsing, placeholder text, context language) and the review session flow (re-queuing, pacing).
 
-**The** next **logical step, as defined in our plan, is to begin work on Phase 3.2: The "AI Context Summarizer" (the "Running List").**
+With the completion of the AI Context Summarizer API, Phase 3 of the AISRS Engine is now complete. The next logical step is to move on to Phase 4.
+
+**Next Steps:**
+
+There are no immediate next steps. The project is in a good state. We can discuss what to work on next.
+
 
