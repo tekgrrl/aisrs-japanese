@@ -45,3 +45,5 @@ next-env.d.ts
 **/.history/
 .firebase-data/
 /logs/
+.gemini/
+gha-creds-*.json
