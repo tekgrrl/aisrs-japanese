@@ -1,10 +1,11 @@
 rules_version = '2';
-
-service cloud.firestore {match /databases/{database}/documents {
-    // By default, deny all access.
-    // We will add specific rules for authenticated users later.
-    // Our server-side admin SDK will bypass these rules.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // WARNING: TEMPORARY DIAGNOSTIC RULE
+    // This allows all reads and writes from the client.
+    // This is ONLY safe because we are on the local emulator.
     match /{document=**} {
-        allow read, write: if false;
+      allow read, write: if true;
     }
-}}
+  }
+}

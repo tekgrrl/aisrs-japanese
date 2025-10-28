@@ -60,6 +60,8 @@ export async function POST(request: Request) {
       relatedUnits: body.relatedUnits || [], // Ensure array exists
       data: body.data || {}, // Ensure object exists
       createdAt: Timestamp.now(), // Add Firestore timestamp
+      status: 'learning',
+      facet_count: 0,
     };
 
     const newDocRef = await db

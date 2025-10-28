@@ -15,6 +15,9 @@ export default function ReviewPage() {
   const [userAnswer, setUserAnswer] = useState('');
   const [answerState, setAnswerState] = useState<AnswerState>('unanswered');
   const [aiExplanation, setAiExplanation] = useState('');
+  const [sessionFailureCounts, setSessionFailureCounts] = useState<
+    Record<string, number>
+  >({});
 
   // --- State for AI-Generated Questions ---
   const [isFetchingDynamicQuestion, setIsFetchingDynamicQuestion] =
@@ -145,9 +148,20 @@ export default function ReviewPage() {
         setAnswerState('correct');
       } else {
         await handleUpdateSrs('fail');
-        // Re-queue failed item
-        setReviewQueue((prevQueue) => [...prevQueue, currentItem]);
         setAnswerState('incorrect');
+
+        const facetId = currentItem.facet.id;
+        const newFailureCount = (sessionFailureCounts[facetId] || 0) + 1;
+
+        setSessionFailureCounts((prevCounts) => ({
+          ...prevCounts,
+          [facetId]: newFailureCount,
+        }));
+
+        // Only re-queue if failed less than 2 times in this session
+        if (newFailureCount < 2) {
+          setReviewQueue((prevQueue) => [...prevQueue, currentItem]);
+        }
       }
     } catch (err) {
       if (err instanceof Error) setError(err.message);

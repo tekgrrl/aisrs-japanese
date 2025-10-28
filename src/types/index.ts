@@ -20,6 +20,8 @@ export interface KnowledgeUnit {
   personalNotes: string;
   relatedUnits: string[]; // Array of other KnowledgeUnit IDs
   createdAt: string | Timestamp; // Added for sorting
+  status: 'learning' | 'reviewing';
+  facet_count: number;
 }
 
 export type ReviewFacetType =

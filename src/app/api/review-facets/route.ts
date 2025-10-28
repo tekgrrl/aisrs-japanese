@@ -198,6 +198,13 @@ export async function POST(request: Request) {
 
     await batch.commit();
 
+    // Update the parent KU
+    const kuRefToUpdate = db.collection(KNOWLEDGE_UNITS_COLLECTION).doc(kuId);
+    await kuRefToUpdate.update({
+      status: 'reviewing',
+      facet_count: newFacetsData.length,
+    });
+
     logger.info(
       `POST /api/review-facets - Successfully created ${newFacetsData.length} facets for KU ${kuId}`
     );
