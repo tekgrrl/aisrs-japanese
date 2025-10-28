@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { KnowledgeUnit } from '@/types';
 import { db } from '@/lib/firebase-client';
+import { useRouter } from 'next/navigation';
 import {
   query,
   collection,
@@ -26,11 +27,63 @@ interface Lesson {
   }[];
 }
 
+
+
 export default function LearnPage() {
   const [ku, setKu] = useState<KnowledgeUnit | null>(null);
   const [lesson, setLesson] = useState<Lesson | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const router = useRouter();
+  const [selectedFacets, setSelectedFacets] = useState<Record<string, boolean>>({});  const [isSubmitting, setIsSubmitting] = useState(false);
+
+    
+
+  const handleCheckboxChange = (facetKey: string) => {
+  setSelectedFacets((prev) => ({
+    ...prev,
+    [facetKey]: !prev[facetKey],
+  }));
+};
+
+const handleSubmitFacets = async () => {
+  if (!ku) return;
+  setIsSubmitting(true);
+
+  // Filter selectedFacets to get an array of keys where value is true
+  const selectedFacetKeys = Object.keys(selectedFacets).filter(
+    (key) => selectedFacets[key]
+  );
+
+  if (selectedFacetKeys.length === 0) {
+    setError('Please select at least one facet to learn.');
+    setIsSubmitting(false);
+    return;
+  }
+
+  try {
+    const response = await fetch('/api/review-facets', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        kuId: ku.id,
+        facetsToCreate: selectedFacetKeys,
+      }),
+    });
+
+    if (!response.ok) {
+      const err = await response.json();
+      throw new Error(err.error || 'Failed to create facets');
+    }
+
+    // Success, route back to manage page
+    router.push('/');
+  } catch (err: any) {
+    setError(err.message);
+    setIsSubmitting(false);
+  }
+};
 
   useEffect(() => {
     const fetchLesson = async () => {
@@ -170,6 +223,71 @@ export default function LearnPage() {
           ))}
         </div>
       </div>
+
+      {lesson && (
+  <div className="mt-8 bg-gray-800 p-6 rounded-lg shadow-lg">
+    <h2 className="text-2xl font-semibold mb-4 text-white">Choose What to Learn</h2>
+    <div className="space-y-4">
+
+      {/* Simple Facets */}
+      {lesson.meaning_explanation && (
+        <label className="flex items-center p-4 bg-gray-700 rounded-md hover:bg-gray-600 cursor-pointer">
+          <input
+            type="checkbox"
+            className="h-5 w-5 rounded bg-gray-900 border-gray-600 text-blue-600 focus:ring-blue-500"
+            checked={!!selectedFacets['Content-to-Definition']}
+            onChange={() => handleCheckboxChange('Content-to-Definition')}
+          />
+          <span className="ml-3 text-lg text-white">Meaning</span>
+        </label>
+      )}
+      {lesson.reading_explanation && (
+        <label className="flex items-center p-4 bg-gray-700 rounded-md hover:bg-gray-600 cursor-pointer">
+          <input
+            type="checkbox"
+            className="h-5 w-5 rounded bg-gray-900 border-gray-600 text-blue-600 focus:ring-blue-500"
+            checked={!!selectedFacets['Content-to-Reading']}
+            onChange={() => handleCheckboxChange('Content-to-Reading')}
+          />
+          <span className="ml-3 text-lg text-white">Reading</span>
+        </label>
+      )}
+
+      {/* Complex Kanji Facets */}
+      {lesson.component_kanji?.map((kanji) => (
+        <div key={kanji.kanji} className="p-4 bg-gray-750 rounded-md">
+          <h3 className="text-xl font-semibold text-gray-300 mb-2">Kanji: {kanji.kanji}</h3>
+          <label className="flex items-center p-2 rounded-md hover:bg-gray-600 cursor-pointer">
+            <input
+              type="checkbox"
+              className="h-5 w-5 rounded bg-gray-900 border-gray-600 text-blue-600 focus:ring-blue-500"
+              checked={!!selectedFacets[`Kanji-Component-Meaning-${kanji.kanji}`]}
+              onChange={() => handleCheckboxChange(`Kanji-Component-Meaning-${kanji.kanji}`)}
+            />
+            <span className="ml-3 text-lg text-white">Learn Meaning ({kanji.meaning})</span>
+          </label>
+          <label className="flex items-center p-2 rounded-md hover:bg-gray-600 cursor-pointer">
+            <input
+              type="checkbox"
+              className="h-5 w-5 rounded bg-gray-900 border-gray-600 text-blue-600 focus:ring-blue-500"
+              checked={!!selectedFacets[`Kanji-Component-Reading-${kanji.kanji}`]}
+              onChange={() => handleCheckboxChange(`Kanji-Component-Reading-${kanji.kanji}`)}
+            />
+            <span className="ml-3 text-lg text-white">Learn Reading ({kanji.reading})</span>
+          </label>
+        </div>
+      ))}
+    </div>
+
+    <button
+      onClick={handleSubmitFacets}
+      disabled={isSubmitting}
+      className="mt-6 w-full px-4 py-3 bg-blue-600 text-white font-semibold rounded-md shadow-md hover:bg-blue-700 disabled:bg-gray-500 disabled:cursor-wait"
+    >
+      {isSubmitting ? 'Saving...' : 'Start Learning Selected Facets'}
+    </button>
+  </div>
+)}
     </main>
   );
 }

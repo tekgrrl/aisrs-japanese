@@ -24,16 +24,18 @@ export interface KnowledgeUnit {
   facet_count: number;
 }
 
-export type ReviewFacetType =
+export type FacetType =
   | 'Content-to-Definition'
   | 'Definition-to-Content'
   | 'Content-to-Reading'
-  | 'AI-Generated-Question';
+  | 'AI-Generated-Question'
+  | 'Kanji-Component-Meaning' // e.g., "食" -> "eat"
+  | 'Kanji-Component-Reading'; // e.g., "食" -> "ショク"
 
 export interface ReviewFacet {
   id: string;
   kuId: string; // ID of the parent KnowledgeUnit
-  facetType: ReviewFacetType;
+  facetType: FacetType;
   srsStage: number; // 0 (new) to 8 (mastered)
   nextReviewAt: string; // ISO string
   lastReviewAt?: string; // ISO string
