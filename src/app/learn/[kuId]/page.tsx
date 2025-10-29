@@ -56,6 +56,9 @@ export default function LearnItemPage() {
         }
 
         const lessonData = await lessonResponse.json();
+
+        console.log("Received lesson data:", lessonData);
+        
         setLesson(lessonData as Lesson); // Cast as our new union type
       } catch (err: any) {
         setError(err.message || "An unknown error occurred");
@@ -320,13 +323,22 @@ export default function LearnItemPage() {
     </div>
   );
 
+  if (!isLoading && lesson) {
+    console.log("Rendering lesson, lesson object:", JSON.stringify(lesson, null, 2));
+    if (lesson.type === 'Kanji') {
+      console.log("Is Kanji, lesson.kanji value:", (lesson as KanjiLesson).kanji); 
+    }
+  }
 
   // --- Main Render ---
   return (
     <main className="container mx-auto max-w-4xl p-8">
       <header className="mb-8">
         <h1 className="text-6xl font-bold text-white mb-2 break-all">
-          {lesson ? (lesson.type === 'Kanji' ? lesson.kanji : lesson.vocab) : (ku ? ku.content : '...')}
+          {isLoading ? '...' 
+           : lesson?.type === 'Kanji' && (lesson as KanjiLesson).kanji ? (lesson as KanjiLesson).kanji // Use lesson.kanji if it exists
+           : ku?.content || '...' // Fallback to ku.content
+          }
         </h1>
         <p className="text-2xl text-gray-400 capitalize">
           {ku ? ku.type : '...'}
@@ -341,7 +353,13 @@ export default function LearnItemPage() {
       {lesson && lesson.type === 'Kanji' && renderKanjiLesson(lesson as KanjiLesson)}
       
       {/* --- Render checklist (only after lesson is loaded) --- */}
-      {!isLoading && !error && lesson && renderFacetChecklist()}
+      
+      {!isLoading && !error && lesson && (
+        <>
+          {console.log("Render conditions met, lesson object:", lesson)}
+          {renderFacetChecklist()}
+        </>
+      )}
       
     </main>
   );

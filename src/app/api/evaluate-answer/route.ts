@@ -19,7 +19,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const { userAnswer, expectedAnswer } = await request.json();
+    const { userAnswer, expectedAnswer, question, topic } = await request.json();
 
     if (userAnswer === undefined || expectedAnswer === undefined) {
       return NextResponse.json(
@@ -29,32 +29,24 @@ export async function POST(request: Request) {
     }
 
     // Phase 3.3: AI Answer Evaluator
-    const systemPrompt = `You are an AI grading assistant for a Japanese language quiz.
-You will be given an "expected answer" and a "user answer".
-Your task is to determine if the user's answer is correct. Be lenient with kana vs kanji if the meaning is identical.
-First, provide a brief, one-sentence explanation for *why* the answer is correct or incorrect.
-Then, on a new line, provide the final verdict: the single word "pass" or "fail".
+    const systemPrompt = `You are an AISRS evaluator. A user is being quizzed.
+- The question was: "${question || 'N/A'}"
+- The topic was: "${topic || 'N/A'}"
+- The expected answer(s) are: "${expectedAnswer}"
+- The user's answer is: "${userAnswer}"
 
-Example 1:
-Expected: "食べられます"
-User: "たべられます"
-Response:
-Your answer is correct, as "たべられます" is the hiragana spelling of "食べられます".
-pass
-
-Example 2:
-Expected: "くれました"
-User: "あげました"
-Response:
-Your answer is incorrect, as "あげました" (I gave) is the wrong direction; "くれました" (someone gave me) is correct here.
-fail
-
-Example 3:
-Expected: "Cat"
-User: "cat"
-Response:
-Your answer is correct.
-pass
+Your task is to evaluate if the user's answer is correct.
+1.  Read the "expected answer(s)". This may be a single answer (e.g., "Family") or a comma-separated list of possible correct answers (e.g., "ドク, トク, よむ").
+2.  Compare the user's answer to the list. The user is correct if their answer is *any one* of the items in the list.
+3.  Be lenient with hiragana vs katakana (e.g., if expected is "ドク" and user typed "どく", it's a pass).
+4.  Be lenient with extra punctuation or whitespace.
+5.  Provide your evaluation ONLY as a valid JSON object with the following schema:
+{
+  "result": "pass" | "fail",
+  "explanation": "A brief, one-sentence explanation for *why* the user passed or failed, referencing their answer."
+}
+Example for a pass: {"result": "pass", "explanation": "Correct! よむ is one of the kun'yomi readings."}
+Example for a fail: {"result": "fail", "explanation": "Incorrect. The expected readings were ドク, トク, or よむ."}
 `;
     const userQuery = `Expected: "${expectedAnswer}"\nUser: "${userAnswer}"`;
 
@@ -102,8 +94,25 @@ pass
     });
   } catch (error) {
     console.error('Error in /api/evaluate-answer:', error);
+    // --- FIX: Type-safe error handling ---
+    let errorMessage = 'An unknown error occurred';
+
+    if (error instanceof Error) {
+      // Now TypeScript knows 'error' is an Error object
+      errorMessage = error.message;
+    } else if (typeof error === 'string') {
+      errorMessage = error;
+    } else {
+      // Handle other cases, e.g., plain objects
+      try {
+        errorMessage = JSON.stringify(error);
+      } catch {
+        errorMessage = 'An un-stringifiable error object was caught.';
+      }
+    }
+    // --- END FIX ---
     return NextResponse.json(
-      { error: error.message || 'An unknown error occurred' },
+      { error: errorMessage || 'An unknown error occurred' },
       { status: 500 }
     );
   }

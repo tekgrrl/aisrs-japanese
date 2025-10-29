@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect, FormEvent } from 'react';
 import Link from 'next/link';
-import { ReviewItem, ReviewFacet } from '@/types';
+import { ReviewItem, ReviewFacet, VocabLesson, KanjiLesson } from '@/types';
+import { logger } from '@/lib/logger';
 
 type AnswerState = 'unanswered' | 'evaluating' | 'correct' | 'incorrect';
 
@@ -58,9 +59,7 @@ export default function ReviewPage() {
       try {
         setIsLoading(true);
         setError(null);
-        const response = await fetch('/api/review-facets?due=true', {
-          cache: 'no-store'
-        });
+        const response = await fetch('/api/review-facets?due=true');
         if (!response.ok) {
           throw new Error('Failed to fetch due review items');
         }
@@ -119,6 +118,9 @@ export default function ReviewPage() {
     setAiExplanation('');
 
     const expectedAnswer = getExpectedAnswer(currentItem);
+    const question = getQuestion(currentItem);
+    const topic = currentItem.ku.content; // The "topic" is the KU content
+
     if (expectedAnswer === null) {
       setError('Waiting for dynamic question to load.');
       setAnswerState('unanswered');
@@ -134,6 +136,8 @@ export default function ReviewPage() {
         body: JSON.stringify({
           userAnswer,
           expectedAnswer,
+          question,
+          topic
         }),
       });
 
@@ -217,19 +221,54 @@ export default function ReviewPage() {
 
   const getExpectedAnswer = (item: ReviewItem): string | null => {
     const { ku, facet } = item;
-    switch (facet.facetType) {
-      case 'AI-Generated-Question':
-        return dynamicAnswer; // Returns null if loading
-      case 'Content-to-Definition':
-        return ku.data?.definition || '';
-      case 'Content-to-Reading':
-        return ku.data?.reading || '';
-      case 'Definition-to-Content':
-      case 'Reading-to-Content':
-        return ku.content;
-      default:
-        return '';
+
+    // 1. Handle AI-Generated questions first
+    if (facet.facetType === 'AI-Generated-Question') {
+      return dynamicAnswer; // This remains as-is
     }
+
+    // 2. Handle "reverse" quizzes
+    if (facet.facetType === 'Definition-to-Content' || facet.facetType === 'Reading-to-Content') {
+      return ku.content;
+    }
+
+    // 3. Handle "forward" quizzes (Content-to-...)
+    if (ku.type === 'Vocab') {
+      // --- VOCAB LOGIC ---
+      const lesson = ku.lessonCache as VocabLesson | undefined;
+      if (facet.facetType === 'Content-to-Definition') {
+        // Use lesson cache first, fallback to older ku.data
+        return lesson?.meaning_explanation || ku.data?.definition || '';
+      }
+      if (facet.facetType === 'Content-to-Reading') {
+        // Use lesson cache first, fallback to older ku.data
+        return lesson?.reading_explanation || ku.data?.reading || '';
+      }
+    } 
+    else if (ku.type === 'Kanji') {
+      // --- KANJI LOGIC (THE FIX) ---
+      const lesson = ku.lessonCache as KanjiLesson | undefined;
+      if (facet.facetType === 'Content-to-Definition') {
+        // Kanji "definition" is the 'meaning' field from the lesson
+        return lesson?.meaning || ku.data?.meaning || '';
+      }
+      if (facet.facetType === 'Content-to-Reading') {
+        // Kanji "reading" is a combination of all onyomi and kunyomi
+        const onyomi = lesson?.reading_onyomi?.map(r => r.reading) || [];
+        const kunyomi = lesson?.reading_kunyomi?.map(r => r.reading) || [];
+        const allReadings = [...onyomi, ...kunyomi];
+        
+        if (allReadings.length > 0) {
+          return allReadings.join(', '); // e.g., "ドク, トク, よむ"
+        }
+        // Fallback just in case lessonCache is old/missing
+        return ku.data?.onyomi || ku.data?.kunyomi || '';
+      }
+    }
+
+    // Fallback for any other combo
+    logger.warn(`getExpectedAnswer: No answer path for ${ku.type} / ${facet.facetType}`);
+    return '';
   };
 
   // --- Render Logic ---

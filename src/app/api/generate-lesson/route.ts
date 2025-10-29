@@ -149,26 +149,33 @@ export async function POST(request: Request) {
     logger.error('--- UNHANDLED ERROR IN generate-lesson POST ---');
     
     let errorDetails: any = {};
+    let errorMessage = 'An unknown error occurred';
 
     if (error instanceof Error) {
+      errorMessage = error.message;
       errorDetails = { 
         message: error.message, 
+        name: error.name,
         stack: error.stack 
       };
+      // Check if it looks like a fetch error
+      if (error.message.includes('fetch') || error.message.includes('network')) {
+         errorMessage = `Network error during AI call: ${error.message}`;
+      }
     } else {
       try {
-        errorDetails = {
-          rawError: JSON.stringify(error, null, 2)
-        };
+        errorDetails = { rawError: JSON.stringify(error, null, 2) };
+        errorMessage = `Non-Error exception: ${errorDetails.rawError}`;
       } catch (e) {
         errorDetails = { rawError: "Failed to stringify error object" };
+        errorMessage = 'An un-stringifiable error object was caught.';
       }
     }
     
     logger.error('Failed to generate lesson', errorDetails);
 
     return NextResponse.json(
-      { error: 'An unknown error occurred', details: errorDetails.rawError || errorDetails.message },
+      { error: errorMessage, details: errorDetails }, // Return more details
       { status: 500 }
     );
   }
