@@ -3,8 +3,7 @@ import { getFirestore, Firestore, Timestamp } from 'firebase-admin/firestore';
 import { logger } from './logger';
 
 // --- Define collection names ---
-export const KNOWLEDGE_UNITS_COLLECTION = 'knowledge-units';
-export const REVIEW_FACETS_COLLECTION = 'review-facets';
+import { KNOWLEDGE_UNITS_COLLECTION, REVIEW_FACETS_COLLECTION } from './firebase-config';
 
 let app: App;
 let db: Firestore;

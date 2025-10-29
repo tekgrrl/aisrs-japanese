@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { db, REVIEW_FACETS_COLLECTION } from '@/lib/firebase';
+import { db } from '@/lib/firebase';
+import { REVIEW_FACETS_COLLECTION } from '@/lib/firebase-config';
 import { ReviewFacet } from '@/types';
 import { Timestamp, FieldValue } from 'firebase-admin/firestore';
 import { logger } from '@/lib/logger';

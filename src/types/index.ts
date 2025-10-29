@@ -1,5 +1,27 @@
 import { Timestamp } from 'firebase-admin/firestore';
 
+export interface VocabLesson {
+  type: 'Vocab';
+  vocab: string;
+  meaning_explanation: string;
+  reading_explanation: string;
+  context_examples?: { sentence: string; translation: string }[];
+  component_kanji?: { kanji: string; reading: string; meaning: string }[];
+}
+
+export interface KanjiLesson {
+  type: 'Kanji';
+  kanji: string;
+  meaning: string;
+  reading_onyomi?: { reading: string; example: string }[];
+  reading_kunyomi?: { reading: string; example: string }[];
+  radicals?: { radical: string; meaning: string }[];
+  mnemonic_meaning: string;
+  mnemonic_reading: string;
+}
+
+export type Lesson = VocabLesson | KanjiLesson;
+
 export type KnowledgeUnitType =
   | 'Vocab'
   | 'Kanji'
@@ -22,6 +44,8 @@ export interface KnowledgeUnit {
   createdAt: string | Timestamp; // Added for sorting
   status: 'learning' | 'reviewing';
   facet_count: number;
+  history?: any[]; // Or define a proper history type
+  lessonCache?: Lesson; // <-- ADD THIS CACHE FIELD
 }
 
 export type FacetType =
@@ -29,6 +53,7 @@ export type FacetType =
   | 'Definition-to-Content'
   | 'Content-to-Reading'
   | 'AI-Generated-Question'
+  | 'Reading-to-Content'
   | 'Kanji-Component-Meaning' // e.g., "食" -> "eat"
   | 'Kanji-Component-Reading'; // e.g., "食" -> "ショク"
 

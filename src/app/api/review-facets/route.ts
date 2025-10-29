@@ -1,26 +1,33 @@
+export const dynamic = 'force-dynamic'; // <-- ADD THIS LINE
+
+
 import { NextResponse } from 'next/server';
-import {
-  db,
-  KNOWLEDGE_UNITS_COLLECTION,
-  REVIEW_FACETS_COLLECTION,
-} from '@/lib/firebase';
+import { db } from '@/lib/firebase';
+import { KNOWLEDGE_UNITS_COLLECTION, REVIEW_FACETS_COLLECTION } from '@/lib/firebase-config';
 import { KnowledgeUnit, ReviewFacet, ReviewItem } from '@/types';
 import { Timestamp, FieldPath } from 'firebase-admin/firestore';
 import { logger } from '@/lib/logger';
 import { FacetType } from '@/types';
-import { GoogleGenAI } from '@google/genai'; // TODO this module is deprecated
+import { GoogleGenAI } from '@google/genai'; 
 
 
 // GET Review Facets
+// --- GET Handler ---
 export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const dueOnly = searchParams.get('due') === 'true';
+  logger.info('--- GET /api/review-facets ---');
+  try {
+    const { searchParams } = new URL(request.url);
+    const dueOnly = searchParams.get('due') === 'true';
 
-  if (dueOnly) {
-    // --- Get DUE items for Review Session ---
-    logger.info('GET /api/review-facets?due=true - Fetching due items');
-    try {
-      const now = new Date().toISOString();
+    if (dueOnly) {
+      // Logic for /review page (due facets + joined KU data)
+      
+      // --- FIX: Use new Date() instead of Timestamp.now() ---
+      // This is more robust against potential clock-skew issues.
+      const now = new Date(); 
+      logger.info(`Querying for facets due at or before: ${now.toISOString()}`);
+      // --- END FIX ---
+
       const dueFacetsSnapshot = await db
         .collection(REVIEW_FACETS_COLLECTION)
         .where('nextReviewAt', '<=', now)
@@ -31,88 +38,66 @@ export async function GET(request: Request) {
         return NextResponse.json([]);
       }
 
-      const dueFacets: ReviewFacet[] = [];
-      dueFacetsSnapshot.forEach((doc) => {
-        dueFacets.push({
-          id: doc.id,
-          ...doc.data(),
-        } as ReviewFacet);
-      });
+      const facets = dueFacetsSnapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      })) as ReviewFacet[];
 
-      // --- Batch fetch parent KUs to avoid N+1 queries ---
-      const kuIds = [...new Set(dueFacets.map((facet) => facet.kuId))];
+      logger.info(`Found ${facets.length} due facet documents.`);
+
+      // Get unique KU IDs to fetch in a batch
+      const kuIds = [...new Set(facets.map((f) => f.kuId))];
       if (kuIds.length === 0) {
-        logger.info('GET /api/review-facets?due=true - No KUs to fetch.');
+        logger.warn('Facets found but no kuIds. Returning empty.');
         return NextResponse.json([]);
       }
 
+      // --- FIX: Use FieldPath.documentId() for the 'in' query ---
       const kusSnapshot = await db
         .collection(KNOWLEDGE_UNITS_COLLECTION)
         .where(FieldPath.documentId(), 'in', kuIds)
         .get();
+      // --- END FIX ---
 
-      const kuMap = new Map<string, KnowledgeUnit>();
-      kusSnapshot.forEach((doc) => {
-        const data = doc.data();
-        kuMap.set(doc.id, {
-          id: doc.id,
-          ...data,
-          // Convert Timestamp for client
-          createdAt: (data.createdAt as Timestamp).toDate().toISOString(),
-        } as KnowledgeUnit);
-      });
-
-      // --- Join facets and KUs ---
-      const reviewItems: ReviewItem[] = dueFacets
-        .map((facet) => {
-          const ku = kuMap.get(facet.kuId);
-          if (!ku) {
-            logger.warn(
-              `GET /api/review-facets?due=true - Orphan facet found: ${facet.id} (KU ID: ${facet.kuId})`
-            );
-            return null; // Handle orphan facets
-          }
-          return { facet, ku };
-        })
-        .filter((item): item is ReviewItem => item !== null); // Filter out orphans
-
-      logger.info(
-        `GET /api/review-facets?due=true - Returning ${reviewItems.length} due items.`
-      );
-      return NextResponse.json(reviewItems);
-    } catch (error) {
-      logger.error('GET /api/review-facets?due=true - Error', error);
-      return NextResponse.json(
-        { error: 'Failed to fetch due review items' },
-        { status: 500 }
-      );
-    }
-  } else {
-    // --- Get ALL items for Manage Page ---
-    logger.info('GET /api/review-facets - Fetching all facets');
-    try {
-      const snapshot = await db.collection(REVIEW_FACETS_COLLECTION).get();
-      if (snapshot.empty) {
+      if (kusSnapshot.empty) {
+        logger.warn(`No parent KUs found for ${kuIds.length} IDs.`);
         return NextResponse.json([]);
       }
-      const facets: ReviewFacet[] = [];
-      snapshot.forEach((doc) => {
-        facets.push({
-          id: doc.id,
-          ...doc.data(),
-        } as ReviewFacet);
-      });
-      logger.info(
-        `GET /api/review-facets - Returning ${facets.length} total facets.`
-      );
+
+      const kus = kusSnapshot.docs.reduce((acc, doc) => {
+        acc[doc.id] = { id: doc.id, ...doc.data() } as KnowledgeUnit;
+        return acc;
+      }, {} as Record<string, KnowledgeUnit>);
+
+      const reviewItems: ReviewItem[] = facets
+        .map((facet) => ({
+          facet: facet,
+          ku: kus[facet.kuId], // Join KU data
+        }))
+        .filter((item) => item.ku); // Filter out any facets with missing KUs
+
+      logger.info(`Returning ${reviewItems.length} joined review items.`);
+      return NextResponse.json(reviewItems);
+
+    } else {
+      // Logic for /manage page (all facets)
+      logger.info('GET /api/review-facets - Fetching all facets for manage page.');
+      const querySnapshot = await db
+        .collection(REVIEW_FACETS_COLLECTION)
+        .get();
+      const facets = querySnapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+      logger.info(`Returning ${facets.length} total review facets.`);
       return NextResponse.json(facets);
-    } catch (error) {
-      logger.error('GET /api/review-facets - Error', error);
-      return NextResponse.json(
-        { error: 'Failed to fetch review facets' },
-        { status: 500 }
-      );
     }
+  } catch (error) {
+    logger.error('Failed to GET review facets', { error });
+    if (error instanceof Error) {
+        return NextResponse.json({ error: error.message }, { status: 500 });
+      }
+    return NextResponse.json({ error: 'Failed to fetch review facets' }, { status: 500 });
   }
 }
 
@@ -173,7 +158,7 @@ export async function POST(request: Request) {
         }
 
         const facetType = ('Kanji-Component-' + parts[2]) as FacetType; 
-        const kanjiChar = parts[3]; 
+        const kanjiChar = parts[3];   
 
         let kanjiKuId: string;
 

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { db, KNOWLEDGE_UNITS_COLLECTION } from '@/lib/firebase';
+import { db } from '@/lib/firebase';
+import { KNOWLEDGE_UNITS_COLLECTION } from '@/lib/firebase-config';
 import { KnowledgeUnit } from '@/types';
 import { Timestamp } from 'firebase-admin/firestore';
 import { logger } from '@/lib/logger';

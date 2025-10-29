@@ -58,7 +58,9 @@ export default function ReviewPage() {
       try {
         setIsLoading(true);
         setError(null);
-        const response = await fetch('/api/review-facets?due=true');
+        const response = await fetch('/api/review-facets?due=true', {
+          cache: 'no-store'
+        });
         if (!response.ok) {
           throw new Error('Failed to fetch due review items');
         }

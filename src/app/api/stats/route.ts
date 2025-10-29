@@ -1,10 +1,6 @@
 import { NextResponse } from 'next/server';
-import {
-  db,
-  Timestamp,
-  KNOWLEDGE_UNITS_COLLECTION,
-  REVIEW_FACETS_COLLECTION,
-} from '@/lib/firebase';
+import { db, Timestamp } from '@/lib/firebase';
+import { KNOWLEDGE_UNITS_COLLECTION, REVIEW_FACETS_COLLECTION } from '@/lib/firebase-config';
 
 export async function GET() {
   try {
