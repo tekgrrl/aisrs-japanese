@@ -199,6 +199,9 @@ export default function ReviewPage() {
       case 'Content-to-Definition':
       case 'Content-to-Reading':
         return ku.content;
+      case 'Kanji-Component-Meaning':
+      case 'Kanji-Component-Reading':
+        return ku.content;
       case 'Definition-to-Content':
         return ku.data?.definition || '[No Definition]';
       case 'Reading-to-Content':
@@ -216,6 +219,10 @@ export default function ReviewPage() {
         return 'Definition';
       case 'Content-to-Reading':
         return 'Reading';
+      case 'Kanji-Component-Meaning':
+        return 'Kanji Component Meaning';
+      case 'Kanji-Component-Reading':
+        return 'Kanji Component Reading';
       case 'Definition-to-Content':
       case 'Reading-to-Content':
         return 'Vocab/Kanji';
@@ -269,6 +276,14 @@ export default function ReviewPage() {
         // Fallback just in case lessonCache is old/missing
         return ku.data?.onyomi || ku.data?.kunyomi || '';
       }
+    }
+    
+    // --- KANJI COMPONENT LOGIC ---
+    if (facet.facetType === 'Kanji-Component-Meaning') {
+      return ku.data?.definition || '';
+    }
+    if (facet.facetType === 'Kanji-Component-Reading') {
+      return ku.data?.onyomi || '';
     }
 
     // Fallback for any other combo
