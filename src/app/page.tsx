@@ -122,6 +122,9 @@ export default function KnowledgeManagementPage() {
       setNewKuNotes('');
 
       await fetchData(); // Refetch all data
+
+      // Dispatch a custom event to tell the Header to refresh its stats
+      window.dispatchEvent(new CustomEvent('refreshStats'));
     } catch (err) {
       if (err instanceof Error) setError(err.message);
       else setError('An unknown error occurred');
