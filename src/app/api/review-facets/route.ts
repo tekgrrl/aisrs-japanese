@@ -1,32 +1,30 @@
-export const dynamic = 'force-dynamic'; // <-- ADD THIS LINE
-
+// This line should be at the top of the file
+export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
-import { db } from '@/lib/firebase';
-import { KNOWLEDGE_UNITS_COLLECTION, REVIEW_FACETS_COLLECTION } from '@/lib/firebase-config';
-import { KnowledgeUnit, ReviewFacet, ReviewItem } from '@/types';
-import { Timestamp, FieldPath } from 'firebase-admin/firestore';
+import { db,  Timestamp } from '@/lib/firebase'; // Added Timestamp
+import { FieldPath } from 'firebase-admin/firestore'; // Make sure FieldPath is imported
 import { logger } from '@/lib/logger';
-import { FacetType } from '@/types';
-import { GoogleGenAI } from '@google/genai'; 
+import { ReviewFacet, KnowledgeUnit, ReviewItem, FacetType, ApiLog } from '@/types'; // Added ApiLog
+import { GoogleGenAI } from '@google/genai'; // Correct SDK
+import { KNOWLEDGE_UNITS_COLLECTION, REVIEW_FACETS_COLLECTION, API_LOGS_COLLECTION } from '@/lib/firebase-config'; // Added log collection name
+import { performance } from 'perf_hooks'; // Added for timing
 
+// --- Define model name centrally ---
+const MODEL_NAME = process.env.MODEL_GEMINI_PRO || 'gemini-2.5-flash'
+logger.info(`Using ${MODEL_NAME}`);
 
-// GET Review Facets
-// --- GET Handler ---
+// --- GET Handler (Unchanged from previous fix) ---
 export async function GET(request: Request) {
   logger.info('--- GET /api/review-facets ---');
+
   try {
     const { searchParams } = new URL(request.url);
     const dueOnly = searchParams.get('due') === 'true';
 
     if (dueOnly) {
-      // Logic for /review page (due facets + joined KU data)
-      
-      // --- FIX: Use new Date() instead of Timestamp.now() ---
-      // This is more robust against potential clock-skew issues.
-      const now = new Date(); 
+      const now = new Date();
       logger.info(`Querying for facets due at or before: ${now.toISOString()}`);
-      // --- END FIX ---
 
       const dueFacetsSnapshot = await db
         .collection(REVIEW_FACETS_COLLECTION)
@@ -45,19 +43,16 @@ export async function GET(request: Request) {
 
       logger.info(`Found ${facets.length} due facet documents.`);
 
-      // Get unique KU IDs to fetch in a batch
       const kuIds = [...new Set(facets.map((f) => f.kuId))];
       if (kuIds.length === 0) {
         logger.warn('Facets found but no kuIds. Returning empty.');
         return NextResponse.json([]);
       }
 
-      // --- FIX: Use FieldPath.documentId() for the 'in' query ---
       const kusSnapshot = await db
         .collection(KNOWLEDGE_UNITS_COLLECTION)
         .where(FieldPath.documentId(), 'in', kuIds)
         .get();
-      // --- END FIX ---
 
       if (kusSnapshot.empty) {
         logger.warn(`No parent KUs found for ${kuIds.length} IDs.`);
@@ -72,15 +67,14 @@ export async function GET(request: Request) {
       const reviewItems: ReviewItem[] = facets
         .map((facet) => ({
           facet: facet,
-          ku: kus[facet.kuId], // Join KU data
+          ku: kus[facet.kuId],
         }))
-        .filter((item) => item.ku); // Filter out any facets with missing KUs
+        .filter((item) => item.ku);
 
       logger.info(`Returning ${reviewItems.length} joined review items.`);
       return NextResponse.json(reviewItems);
 
     } else {
-      // Logic for /manage page (all facets)
       logger.info('GET /api/review-facets - Fetching all facets for manage page.');
       const querySnapshot = await db
         .collection(REVIEW_FACETS_COLLECTION)
@@ -102,16 +96,26 @@ export async function GET(request: Request) {
 }
 
 
-          // --- POST Handler (Refactored) ---
 export async function POST(request: Request) {
   logger.info('--- POST /api/review-facets ---');
   let genAI: GoogleGenAI | undefined; // Lazily initialize Gemini
+  let apiLogRef; // Log ref specifically for the *conditional* AI call
+  let apiStartTime = 0;
+  let apiErrorOccurred = false;
+  let apiCapturedError: any = null;
+  let apiAiJsonText: string | undefined;
+  let apiKanjiData: any | undefined;
+
 
   try {
-    const { kuId, facetsToCreate } = (await request.json()) as {
+    const body = await request.json();
+    const { kuId, facetsToCreate } = body as {
       kuId: string;
       facetsToCreate: string[];
     };
+
+    logger.warn('Parsed request body:', { body });
+
 
     if (!kuId || !facetsToCreate || facetsToCreate.length === 0) {
       logger.warn('Missing kuId or facetsToCreate', { kuId, facetsToCreate });
@@ -125,10 +129,19 @@ export async function POST(request: Request) {
     const now = Timestamp.now();
     const newFacetCount = facetsToCreate.length;
 
-    logger.debug(`Starting batch for ${newFacetCount} facets for KU ${kuId}`);
+    // --- DEBUG: Log the input facets ---
+    logger.debug(`Starting batch for ${newFacetCount} facets for KU ${kuId}`, { facetsToCreate });
+    // --- END DEBUG ---
+
 
     for (const facetKey of facetsToCreate) {
       logger.debug(`Processing facetKey: ${facetKey}`);
+      apiErrorOccurred = false; // Reset API error flag for each potential AI call
+      apiCapturedError = null;
+      apiAiJsonText = undefined;
+      apiKanjiData = undefined;
+      apiLogRef = undefined; // Reset log ref
+
 
       // --- Simple & AI Facets ---
       if (
@@ -137,28 +150,32 @@ export async function POST(request: Request) {
         facetKey === 'Definition-to-Content' ||
         facetKey === 'AI-Generated-Question'
       ) {
-        const newFacetRef = db.collection(REVIEW_FACETS_COLLECTION).doc();
+        const newFacetRef = db.collection(REVIEW_FACETS_COLLECTION).doc(); // Auto-generates ID
         batch.set(newFacetRef, {
-          kuId: kuId, 
+          kuId: kuId,
           facetType: facetKey as FacetType,
           srsStage: 0,
           nextReviewAt: now,
           createdAt: now,
           history: [],
         });
-        logger.debug(`Batch-set simple facet: ${facetKey}`);
+        logger.debug(`Batch-set simple/AI facet: ${facetKey}`);
       }
-      
+
       // --- Complex Kanji Facets ---
       else if (facetKey.startsWith('Kanji-Component-')) {
-        const parts = facetKey.split('-'); 
+        const parts = facetKey.split('-');
         if (parts.length !== 4) {
           logger.warn(`Invalid kanji facet key: ${facetKey}`);
-          continue; 
+          continue;
         }
 
-        const facetType = ('Kanji-Component-' + parts[2]) as FacetType; 
-        const kanjiChar = parts[3];   
+        const facetType = ('Kanji-Component-' + parts[2]) as FacetType;
+        const kanjiChar = parts[3];
+        // --- DEBUG: Log extracted Kanji ---
+        logger.debug(`Extracted Kanji Component: char='${kanjiChar}', type='${facetType}' from key='${facetKey}'`);
+        // --- END DEBUG ---
+
 
         let kanjiKuId: string;
 
@@ -169,85 +186,136 @@ export async function POST(request: Request) {
           .limit(1);
 
         const kanjiSnapshot = await kanjiQuery.get();
+        // --- DEBUG: Log query result ---
+        logger.debug(`Kanji find query result for '${kanjiChar}': empty=${kanjiSnapshot.empty}, size=${kanjiSnapshot.size}`);
+        // --- END DEBUG ---
+
 
         if (kanjiSnapshot.empty) {
+          // --- DEBUG ---
+          logger.info(`Kanji KU not found (snapshot empty), proceeding to CREATE new one for: ${kanjiChar}`);
+          // --- END DEBUG ---
+
           // 2. Create new Kanji KU if not found
-          logger.info(`Kanji KU not found, creating new one for: ${kanjiChar}`);
+          // logger.info(`Kanji KU not found, creating new one for: ${kanjiChar}`); // Redundant now
 
-          if (!genAI) {
-            const apiKey = process.env.GEMINI_API_KEY;
-            if (!apiKey) {
-              throw new Error('GEMINI_API_KEY is not defined for Kanji creation');
-            }
-            genAI = new GoogleGenAI({apiKey: apiKey}); // <-- CORRECT CLASS
-          }
-          
-          const prompt = `Generate onyomi, kunyomi, and meaning for the Kanji: ${kanjiChar}. Return ONLY a valid JSON object: {"onyomi": "...", "kunyomi": "...", "meaning": "..."}`;
-          
-          // --- CORRECT "ONE-SHOT" PATTERN ---
-          const response = await genAI.models.generateContent({
-            model: 'gemini-2.5-flash-preview-09-2025', // Or your preferred model
-            contents: [{ parts: [{ text: prompt }] }],
-            config: {
-              responseMimeType: 'application/json',
-              responseSchema: {
-                type: 'OBJECT',
-                properties: {
-                  onyomi: { type: 'STRING' },
-                  kunyomi: { type: 'STRING' },
-                  meaning: { type: 'STRING' },
-                },
-                required: ['onyomi', 'kunyomi', 'meaning'],
-              },
-            },
-          });
-
-          // --- END CORRECT PATTERN ---          
-          const text = response.text;
-
-          let kanjiData: { onyomi: string; kunyomi: string; meaning: string; };
+          // -- Start Conditional AI Call & Logging --
+          apiStartTime = performance.now(); // Start timer just before API call
           try {
-            // Because we set responseMimeType, text *is* the JSON string
-            if (!text) {
-              logger.error('AI response was empty or undefined', { response });
-              throw new Error("AI response was empty or undefined.");
+            if (!genAI) {
+              const apiKey = process.env.GEMINI_API_KEY;
+              if (!apiKey) {
+                throw new Error('GEMINI_API_KEY is not defined for Kanji creation');
+              }
+              genAI = new GoogleGenAI({apiKey: apiKey});
             }
-            kanjiData = JSON.parse(text); 
-          } catch (e) {
-            logger.error('Failed to parse AI JSON for new Kanji', { text, error: e });
-            throw new Error('Failed to parse AI response for new Kanji KU');
-          }
 
-          const newKanjiKuRef = db.collection(KNOWLEDGE_UNITS_COLLECTION).doc();
-          
+            const prompt = `Generate onyomi, kunyomi, and meaning for the Kanji: ${kanjiChar}. Return ONLY a valid JSON object: {"onyomi": "...", "kunyomi": "...", "meaning": "..."}`;
+
+             // --- Create Initial Log Entry for *this* AI call ---
+             const initialApiLogData: ApiLog = {
+                timestamp: Timestamp.now(),
+                route: '/api/review-facets (Kanji Gen)', // Specific sub-route
+                status: 'pending',
+                modelUsed: MODEL_NAME,
+                requestData: { userMessage: prompt },
+              };
+             apiLogRef = await db.collection(API_LOGS_COLLECTION).add(initialApiLogData);
+             logger.debug(`Created initial Kanji Gen log entry: ${apiLogRef.id}`);
+             // --- End Log ---
+
+            const response = await genAI.models.generateContent({
+              model: MODEL_NAME,
+              contents: [{ parts: [{ text: prompt }] }],
+              config: {
+                responseMimeType: 'application/json',
+                responseSchema: {
+                  type: 'OBJECT',
+                  properties: {
+                    onyomi: { type: 'STRING' },
+                    kunyomi: { type: 'STRING' },
+                    meaning: { type: 'STRING' },
+                  },
+                  required: ['onyomi', 'kunyomi', 'meaning'],
+                },
+              },
+            });
+
+            apiAiJsonText = response.text; // Assign raw text for logging
+
+            if (!apiAiJsonText) {
+              throw new Error("AI response for Kanji was empty.");
+            }
+
+            try {
+              apiKanjiData = JSON.parse(apiAiJsonText); // Assign parsed result for logging
+            } catch (parseError) {
+              logger.error('Failed to parse AI JSON for new Kanji', { text: apiAiJsonText, parseError });
+              throw new Error('Failed to parse AI response for new Kanji KU');
+            }
+
+          } catch(aiError) {
+             apiErrorOccurred = true;
+             apiCapturedError = aiError;
+             throw aiError; // Re-throw to be caught by the main try/catch
+          } finally {
+            // --- Update *API* Log Entry ---
+             if (apiLogRef) {
+               const apiEndTime = performance.now();
+               const apiDurationMs = apiEndTime - apiStartTime;
+               const apiUpdateData: Partial<ApiLog> = { durationMs: apiDurationMs };
+
+               if (apiErrorOccurred) {
+                 apiUpdateData.status = 'error';
+                 let errorDetails: any = {};
+                 if (apiCapturedError instanceof Error) { errorDetails = { message: apiCapturedError.message, stack: apiCapturedError.stack }; }
+                 else { try { errorDetails = { rawError: JSON.stringify(apiCapturedError, null, 2) }; } catch { errorDetails = { rawError: "Unstringifiable error" }; } }
+                 apiUpdateData.errorData = errorDetails;
+               } else {
+                 apiUpdateData.status = 'success';
+                 apiUpdateData.responseData = { rawText: apiAiJsonText, parsedJson: apiKanjiData };
+               }
+               try { await apiLogRef.update(apiUpdateData); logger.debug(`Updated Kanji Gen log entry: ${apiLogRef.id}`); }
+               catch (logUpdateError) { logger.error(`Failed to update Kanji Gen log entry ${apiLogRef.id}`, { logUpdateError }); }
+             }
+             // --- End API Log Update ---
+          }
+           // -- End Conditional AI Call & Logging --
+
+
+          const newKanjiKuRef = db.collection(KNOWLEDGE_UNITS_COLLECTION).doc(); // Auto-ID
+
           batch.set(newKanjiKuRef, {
             content: kanjiChar,
             type: 'Kanji',
             data: {
-              onyomi: kanjiData.onyomi || '',
-              kunyomi: kanjiData.kunyomi || '',
-              meaning: kanjiData.meaning || '',
+              onyomi: apiKanjiData.onyomi || '',
+              kunyomi: apiKanjiData.kunyomi || '',
+              meaning: apiKanjiData.meaning || '',
             },
-            status: 'learning', 
+            status: 'learning',
             facet_count: 0,
             createdAt: now,
             relatedUnits: [],
             personalNotes: `Auto-generated as component for KU ${kuId}`,
-            id: newKanjiKuRef.id, // Add id to document
+            // id: newKanjiKuRef.id // Don't add id field
           });
-          
-          kanjiKuId = newKanjiKuRef.id;
-          logger.debug(`Batch-set new Kanji KU: ${kanjiChar} (ID: ${kanjiKuId})`);
 
+          kanjiKuId = newKanjiKuRef.id;
+          // --- DEBUG ---
+          logger.debug(`BATCH SET new Kanji KU: '${kanjiChar}' (ID: ${kanjiKuId})`);
+          // --- END DEBUG ---
 
         } else {
           // 2. Use existing Kanji KU
           kanjiKuId = kanjiSnapshot.docs[0].id;
-          logger.debug(`Found existing Kanji KU: ${kanjiChar} (ID: ${kanjiKuId})`);
+           // --- DEBUG ---
+          logger.debug(`FOUND existing Kanji KU: '${kanjiChar}' (ID: ${kanjiKuId})`);
+           // --- END DEBUG ---
         }
 
         // 3. Create the facet pointing to the Kanji KU
-        const newFacetRef = db.collection(REVIEW_FACETS_COLLECTION).doc();
+        const newFacetRef = db.collection(REVIEW_FACETS_COLLECTION).doc(); // Auto-ID
         batch.set(newFacetRef, {
           kuId: kanjiKuId, // <-- Links to the KANJI KU
           facetType: facetType,
@@ -255,9 +323,12 @@ export async function POST(request: Request) {
           nextReviewAt: now,
           createdAt: now,
           history: [],
-          id: newFacetRef.id, // Add id to document
         });
-        logger.debug(`Batch-set complex facet: ${facetType} for Kanji KU ${kanjiKuId}`);
+        // --- DEBUG ---
+        logger.debug(`BATCH SET complex facet: '${facetType}' for Kanji KU ${kanjiKuId}`);
+        // --- END DEBUG ---
+      } else {
+        logger.warn(`Unknown facet key pattern: ${facetKey}`);
       }
     } // --- End of for-loop ---
 
@@ -270,7 +341,7 @@ export async function POST(request: Request) {
       status: 'reviewing',
       facet_count: newFacetCount,
     });
-    logger.debug(`Batch-update parent KU ${kuId}: status to reviewing, facet_count to ${newFacetCount}`);
+    logger.debug(`BATCH UPDATE parent KU ${kuId}: status to reviewing, facet_count to ${newFacetCount}`);
 
     // --- Commit ---
     await batch.commit();
@@ -279,31 +350,23 @@ export async function POST(request: Request) {
     return NextResponse.json({ message: 'Facets created successfully' }, { status: 201 });
 
   } catch (error) {
+    // --- Robust Error Logging for the *entire* POST handler ---
     logger.error('--- UNHANDLED ERROR IN review-facets POST ---');
-    
     let errorDetails: any = {};
-
+    let errorMessage = 'An unknown error occurred';
     if (error instanceof Error) {
-      errorDetails = { 
-        message: error.message, 
-        stack: error.stack 
-      };
+        errorMessage = error.message;
+        errorDetails = { message: error.message, name: error.name, stack: error.stack };
     } else {
-      try {
-        errorDetails = {
-          rawError: JSON.stringify(error, null, 2)
-        };
-      } catch (e) {
-        errorDetails = { rawError: "Failed to stringify error object" };
-      }
+        try { errorDetails = { rawError: JSON.stringify(error, null, 2) }; errorMessage = `Non-Error exception: ${errorDetails.rawError}`; }
+        catch (e) { errorDetails = { rawError: "Failed to stringify non-Error object" }; errorMessage = 'An un-stringifiable error object was caught.'; }
     }
-    
-    logger.error('Failed to create facets', errorDetails);
+    logger.error('Failed in /api/review-facets POST', errorDetails);
 
     return NextResponse.json(
-      { error: 'An unknown error occurred', details: errorDetails.rawError || errorDetails.message },
+      { error: errorMessage, details: errorDetails },
       { status: 500 }
     );
+    // --- End Robust Error Logging ---
   }
 }
-

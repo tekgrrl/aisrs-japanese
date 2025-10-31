@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, FormEvent } from 'react';
 // Import from shared types file
+// Assuming '@/types' is a valid path alias in your project
 import { KnowledgeUnit, ReviewFacet } from '@/types';
 
 const kuTypes: KnowledgeUnit['type'][] = [
@@ -14,7 +15,6 @@ const kuTypes: KnowledgeUnit['type'][] = [
 
 export default function KnowledgeManagementPage() {
   const [kus, setKus] = useState<KnowledgeUnit[]>([]);
-  // We'll also fetch and store facets to display them
   const [facets, setFacets] = useState<ReviewFacet[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -26,10 +26,24 @@ export default function KnowledgeManagementPage() {
   const [newKuReading, setNewKuReading] = useState('');
   const [newKuDefinition, setNewKuDefinition] = useState('');
   const [newKuNotes, setNewKuNotes] = useState('');
-  // State to track which KU is generating facets
   const [generatingFacetKuId, setGeneratingFacetKuId] = useState<
     string | null
   >(null);
+
+  // --- VALIDATION ---
+  // Derived state to determine if the form is valid.
+  // This is recalculated on every render.
+  const isContentValid = newKuContent.trim() !== '';
+  let isFormValid = isContentValid; // Base requirement
+
+  if (newKuType === 'Vocab') {
+    // If type is Vocab, all three fields are required
+    const isReadingValid = newKuReading.trim() !== '';
+    const isDefinitionValid = newKuDefinition.trim() !== '';
+    isFormValid = isContentValid && isReadingValid && isDefinitionValid;
+  }
+  // For other types, only 'Content' is required.
+  // --- END VALIDATION ---
 
   // --- Data Fetching ---
   const fetchData = async () => {
@@ -37,7 +51,6 @@ export default function KnowledgeManagementPage() {
       setError(null);
       setIsLoading(true);
 
-      // Fetch both KUs and Facets in parallel
       const [kuResponse, facetResponse] = await Promise.all([
         fetch('/api/ku'),
         fetch('/api/review-facets'),
@@ -60,19 +73,22 @@ export default function KnowledgeManagementPage() {
     }
   };
 
-  // Load data on initial mount
   useEffect(() => {
     fetchData();
   }, []);
 
   // --- Form Handling ---
-
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!newKuContent.trim()) {
-      setError('Content cannot be empty');
+    setError(null); // Clear previous errors
+
+    // --- VALIDATION ---
+    // Double-check validation on submit
+    if (!isFormValid) {
+      setError('Please fill out all required fields.');
       return;
     }
+    // --- END VALIDATION ---
 
     let kuData: Record<string, string> = {};
     if (newKuType === 'Vocab') {
@@ -113,8 +129,8 @@ export default function KnowledgeManagementPage() {
   };
 
   // --- New Facet Generation Handling ---
-  const handleGenerateFacets = async (kuId: string) => {
-    setGeneratingFacetKuId(kuId); // Set loading state for this button
+ /*  const handleGenerateFacets = async (kuId: string) => {
+    setGeneratingFacetKuId(kuId);
     setError(null);
     try {
       const response = await fetch('/api/review-facets', {
@@ -130,22 +146,20 @@ export default function KnowledgeManagementPage() {
         throw new Error(errData.error || 'Failed to generate facets');
       }
 
-      await fetchData(); // Refetch all data to show new facets
+      await fetchData();
     } catch (err) {
       if (err instanceof Error) setError(err.message);
       else setError('An unknown error occurred');
     } finally {
-      setGeneratingFacetKuId(null); // Clear loading state
+      setGeneratingFacetKuId(null);
     }
-  };
+  }; */
 
   // --- Render Logic ---
-
   const renderKuList = () => {
     if (isLoading) {
       return <p className="text-center text-gray-400">Loading units...</p>;
     }
-    // Only show top-level error here
     if (error && kus.length === 0) {
       return <p className="text-center text-red-400">Error: {error}</p>;
     }
@@ -160,16 +174,13 @@ export default function KnowledgeManagementPage() {
     return (
       <ul className="space-y-4">
         {kus.map((ku) => {
-          // Find facets for this specific KU
           const kuFacets = facets.filter((f) => f.kuId === ku.id);
-          const isGenerating = generatingFacetKuId === ku.id;
+          /* const isGenerating = generatingFacetKuId === ku.id;
 
-          // --- UPDATED BUTTON TEXT LOGIC ---
           let generateButtonText = 'Generate Default Facets';
           if (ku.type === 'Grammar' || ku.type === 'Concept') {
             generateButtonText = 'Generate AI Quiz Facet';
-          }
-          // --- END UPDATED LOGIC ---
+          } */
 
           return (
             <li
@@ -185,7 +196,6 @@ export default function KnowledgeManagementPage() {
                 </span>
               </div>
 
-              {/* Conditionally show data based on what exists */}
               {ku.data && ku.data.reading && (
                 <p className="text-lg text-gray-300 break-all">
                   <span className="font-semibold">Reading:</span>{' '}
@@ -204,7 +214,6 @@ export default function KnowledgeManagementPage() {
                 </p>
               )}
 
-              {/* --- Display existing facets --- */}
               <div className="mt-4 pt-4 border-t border-gray-600">
                 <h4 className="text-sm font-semibold text-gray-400 mb-2">
                   Review Facets
@@ -227,17 +236,6 @@ export default function KnowledgeManagementPage() {
                   <p className="text-sm text-gray-500 italic">
                     No facets generated.
                   </p>
-                )}
-
-                {/* --- Generate Facets Button --- */}
-                {kuFacets.length === 0 && (
-                  <button
-                    onClick={() => handleGenerateFacets(ku.id)}
-                    disabled={isGenerating}
-                    className="mt-3 w-full px-3 py-2 bg-green-700 text-white text-sm font-semibold rounded-md shadow-md hover:bg-green-800 disabled:bg-gray-500 disabled:cursor-wait"
-                  >
-                    {isGenerating ? 'Generating...' : generateButtonText}
-                  </button>
                 )}
               </div>
 
@@ -313,6 +311,7 @@ export default function KnowledgeManagementPage() {
               onChange={(e) => setNewKuContent(e.target.value)}
               placeholder="e.g., 食べる, 家族, 〜なければならない"
               className="w-full p-3 bg-gray-700 border-gray-600 text-white rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+              required // --- VALIDATION ---
             />
           </div>
 
@@ -333,6 +332,7 @@ export default function KnowledgeManagementPage() {
                   onChange={(e) => setNewKuReading(e.target.value)}
                   placeholder="e.g., たべる, かぞく"
                   className="w-full p-3 bg-gray-700 border-gray-600 text-white rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                  required // --- VALIDATION ---
                 />
               </div>
               <div>
@@ -349,6 +349,7 @@ export default function KnowledgeManagementPage() {
                   onChange={(e) => setNewKuDefinition(e.target.value)}
                   placeholder="e.g., To eat, Family"
                   className="w-full p-3 bg-gray-700 border-gray-600 text-white rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                  required // --- VALIDATION ---
                 />
               </div>
             </>
@@ -374,7 +375,9 @@ export default function KnowledgeManagementPage() {
 
           <button
             type="submit"
-            className="w-full px-4 py-3 bg-blue-600 text-white font-semibold rounded-md shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-800"
+            // --- VALIDATION ---
+            disabled={!isFormValid}
+            className="w-full px-4 py-3 bg-blue-600 text-white font-semibold rounded-md shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-800 disabled:bg-gray-500 disabled:cursor-not-allowed" // --- VALIDATION ---
           >
             Add Unit
           </button>

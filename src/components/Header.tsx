@@ -1,29 +1,49 @@
 'use client';
 
 import Link from 'next/link';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 
 /**
  * A simple navigation header that displays stats.
+ * Now with a listener to refresh stats dynamically.
  */
 export default function Header() {
   const [stats, setStats] = useState({ learnCount: 0, reviewCount: 0 });
 
-  useEffect(() => {
-    const fetchStats = async () => {
-      try {
-        const response = await fetch('/api/stats');
-        if (response.ok) {
-          const data = await response.json();
-          setStats(data);
-        }
-      } catch (error) {
-        console.error('Failed to fetch stats:', error);
+  // Wrap fetchStats in useCallback so it's a stable function
+  // and can be safely used in useEffect dependency arrays.
+  const fetchStats = useCallback(async () => {
+    try {
+      const response = await fetch('/api/stats');
+      if (response.ok) {
+        const data = await response.json();
+        setStats(data);
       }
+    } catch (error) {
+      console.error('Failed to fetch stats:', error);
+    }
+  }, []); // Empty dependency array, this function never needs to change.
+
+  // Effect to fetch stats on initial mount
+  useEffect(() => {
+    fetchStats();
+  }, [fetchStats]);
+
+  // Effect to listen for our custom 'refreshStats' event
+  useEffect(() => {
+    // We define a handler function to be clear
+    const handleRefreshStats = () => {
+      console.log('Header: Heard refreshStats event, refetching...');
+      fetchStats();
     };
 
-    fetchStats();
-  }, []);
+    window.addEventListener('refreshStats', handleRefreshStats);
+
+    // Clean up the listener when the component unmounts
+    return () => {
+      window.removeEventListener('refreshStats', handleRefreshStats);
+    };
+  }, [fetchStats]); // Depend on fetchStats
 
   return (
     <header className="bg-gray-800 shadow-md sticky top-0 z-10">

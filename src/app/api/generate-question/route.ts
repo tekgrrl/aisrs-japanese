@@ -1,203 +1,212 @@
 import { NextResponse } from 'next/server';
-import { logger } from '@/lib/logger'; // Import the new logger
+import { logger } from '@/lib/logger';
+import { db, Timestamp } from '@/lib/firebase'; // Added Timestamp
+import { API_LOGS_COLLECTION } from '@/lib/firebase-config'; // Added log collection name
+import { ApiLog } from '@/types'; // Added ApiLog
+import { performance } from 'perf_hooks'; // Added for timing
+
+// --- Define model name centrally ---
+const MODEL_NAME = process.env.MODEL_GEMINI_PRO || 'gemini-2.5-flash'
+
+// --- System Prompt ---
+const SYSTEM_PROMPT = `You are an expert Japanese tutor and quiz generator. Your task is to create a single, context-based, fill-in-the-blank style question to test the user's understanding of a specific Japanese vocabulary word or grammar concept (the 'topic'). You MUST return ONLY a valid JSON object with the following schema:
+{
+  "question": "A Japanese sentence with exactly one blank represented by '[____]'. Include brief English context if necessary.",
+  "answer": "The single Japanese word or particle that correctly fills the blank."
+}
+Rules:
+1.  The question must directly test the provided 'topic'.
+2.  Use '[____]' for the blank, exactly once.
+3.  The answer must be the single word/particle that fits the blank.
+4.  Include English context only if the Japanese sentence alone is ambiguous. Keep context brief (1 sentence max).
+5.  Ensure the generated question makes grammatical sense in Japanese.
+6.  Vary the question format. Sometimes ask for a particle, sometimes a verb conjugation, sometimes the vocab word itself.
+7.  If context is provided, it MUST be in English.
+8.  Do NOT use literal newlines inside the JSON string values. Use spaces instead.
+9.  The combination of context and question MUST lead to a single, unambiguous correct answer. Avoid questions that could plausibly be answered by two different words from the topic.
+10. Use the provided 'Running List' of the user's weak points to generate a question that specifically targets one of these weaknesses, if it's relevant to the current topic.
+Do not add any text before or after the JSON object.`;
+
 
 export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const topic = searchParams.get('topic');
-  logger.info(`Generating question for topic: ${topic}`); // LOG: Start
+  logger.info('--- GET /api/generate-question ---');
+  logger.info(`Using ${MODEL_NAME}`);
 
-  if (!topic) {
-    logger.error('Topic parameter is required'); // LOG: Error
-    return NextResponse.json(
-      { error: 'Topic parameter is required' },
-      { status: 400 }
-    );
-  }
-
-  // Read the API key from the environment variable
-  const apiKey = process.env.GEMINI_API_KEY || '';
-  if (!apiKey) {
-    logger.error('API key not configured'); // LOG: Error
-    return NextResponse.json(
-      { error: 'API key not configured' },
-      { status: 500 }
-    );
-  }
-
-  const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
-
-  // Updated prompt with new rules
-  const systemPrompt = `You are an expert Japanese tutor.
-Your task is to generate a single fill-in-the-blank quiz question based on a user's learning topic.
-The user is learning about: "${topic}"
-
-RULES:
-1.  Generate a single, complete Japanese sentence for the question.
-2.  The blank must be represented by exactly this string: [____]
-3.  The blank should test the core of the user's topic.
-4.  Provide the single, most correct word or phrase that fills the blank as the "answer".
-5.  If context is needed, provide a *brief* (1-2 lines) explanation of the situation.
-6.  All context *must* be in English.
-7.  Your entire response *must* be a single, valid JSON object, with only two keys: "question" and "answer".
-8.  IMPORTANT: Do not include any literal newline characters (\\n) inside the "question" or "answer" string values.
-9.  NEW: The combination of context and question MUST lead to a single, unambiguous correct answer. Avoid questions that could plausibly be answered by two different words from the topic.
-
-Example 1:
-User topic: "Using 'kore', 'sore', 'are'"
-{
-  "question": "Context: Pointing to a map far away from both speaker and listener.\n[____] は日本の地図です。",
-  "answer": "あれ"
-}
-
-Example 2:
-User topic: "Giving and Receiving (ageru, kureru, morau)"
-{
-  "question": "Context: Your friend gave you a gift.\n山田さんは私にプレゼントを [____]。",
-  "answer": "くれました"
-}
-
-Example 3:
-User topic: "Particle 'de' for location of action"
-{
-  "question": "私は図書館 [____] 勉強します。",
-  "answer": "で"
-}`;
-
-  const payload = {
-    contents: [{ parts: [{ text: 'Generate a new question.' }] }],
-    systemInstruction: {
-      parts: [{ text: systemPrompt }],
-    },
-    generationConfig: {
-      responseMimeType: 'application/json',
-      temperature: 0.8, // Add some variability
-    },
-  };
+  let logRef; // Firestore DocumentReference for the log entry
+  let startTime = performance.now(); // Start timing
+  let errorOccurred = false;
+  let capturedError: any = null;
+  let aiJsonText: string | undefined; // Capture raw text for logging
+  let parsedJson: { question: string; answer: string } | undefined; // Capture parsed result
 
   try {
-    // --- Exponential Backoff ---
-    let response: Response;
-    let attempts = 0;
-    const maxAttempts = 5;
-    let delay = 1000; // start with 1 second
-
-    while (attempts < maxAttempts) {
-      logger.debug(`API Call Attempt ${attempts + 1}`); // LOG: Debug
-      // @ts-ignore
-      response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
-      });
-
-      if (response.ok) {
-        break; // Success
-      }
-
-      if (response.status === 429 || response.status >= 500) {
-        // Throttling or server error
-        attempts++;
-        logger.warn(`API failed with status ${response.status}. Retrying...`); // LOG: Warn
-        if (attempts >= maxAttempts) {
-          logger.error(`API failed after ${attempts} attempts`); // LOG: Error
-          return NextResponse.json(
-            { error: `API failed after ${attempts} attempts` },
-            { status: 500 }
-          );
-        }
-        await new Promise((resolve) => setTimeout(resolve, delay));
-        delay *= 2; // Double the delay
-      } else {
-        // Other client error
-        const errData = await response.json();
-        logger.error('API client error', errData); // LOG: Error
-        return NextResponse.json(
-          { error: errData.error?.message || 'API error' },
-          { status: response.status }
-        );
-      }
+    const { searchParams } = new URL(request.url);
+    const topic = searchParams.get('topic');
+    if (!topic) {
+      return NextResponse.json({ error: 'Topic parameter is required' }, { status: 400 });
     }
 
-    // @ts-ignore
+    // --- Fetch the Running List (Context Summarizer) ---
+    // Note: Using absolute URL for server-side fetch to self
+    const baseUrl = process.env.NODE_ENV === 'production'
+        ? process.env.NEXT_PUBLIC_BASE_URL || request.headers.get('host') || 'http://localhost:3000' // Adjust as needed
+        : 'http://localhost:3000'; // Assuming dev server runs on 3000
+    const contextResponse = await fetch(`${baseUrl}/api/summarize-context`, { cache: 'no-store' }); // Don't cache context
+    let runningListSummary = "No weak points identified yet.";
+    if (contextResponse.ok) {
+        const contextData = await contextResponse.json();
+        runningListSummary = contextData.summary || runningListSummary;
+    } else {
+        logger.warn('Failed to fetch running list context for question generation.');
+    }
+    logger.debug(`Using running list: ${runningListSummary}`);
+    // --- End Fetch Running List ---
+
+
+    const userMessage = `Topic: ${topic}\nRunning List: ${runningListSummary}`;
+
+    // --- Create Initial Log Entry ---
+    const initialLogData: ApiLog = {
+      timestamp: Timestamp.now(),
+      route: '/api/generate-question',
+      status: 'pending',
+      modelUsed: MODEL_NAME,
+      requestData: {
+        // systemPrompt, // Optional
+        userMessage: userMessage, // Log topic + running list
+      },
+    };
+    logRef = await db.collection(API_LOGS_COLLECTION).add(initialLogData);
+    logger.debug(`Created initial log entry: ${logRef.id}`);
+    // --- End Log ---
+
+    // 3. Call Gemini API (using fetch as before)
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) { throw new Error('GEMINI_API_KEY is not defined'); }
+
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${apiKey}`;
+
+    const payload = {
+      contents: [{ parts: [{ text: userMessage }] }],
+      systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+      generationConfig: {
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: 'OBJECT',
+          properties: {
+            question: { type: 'STRING' },
+            answer: { type: 'STRING' },
+          },
+          required: ['question', 'answer'],
+        },
+      },
+    };
+
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const errorBody = await response.text();
+      logger.error(`Gemini API error: ${response.status}`, { errorBody });
+      throw new Error(`Gemini API Error: ${response.status} ${response.statusText} - ${errorBody}`);
+    }
+
     const result = await response.json();
     const candidate = result.candidates?.[0];
 
     if (!candidate || !candidate.content?.parts?.[0]?.text) {
-      logger.error('Invalid API response structure', result); // LOG: Error
-      return NextResponse.json(
-        { error: 'Invalid API response structure' },
-        { status: 500 }
-      );
+      logger.error('Invalid response structure from Gemini', { result });
+      throw new Error('Invalid response structure from Gemini');
     }
 
-    const jsonText = candidate.content.parts[0].text;
+    aiJsonText = candidate.content.parts[0].text; // Assign raw text for logging
 
-    // --- START FIX: Clean the JSON response ---
-    logger.debug('Raw AI Response:', { text: jsonText }); // LOG: Debug
-
-    const startIndex = jsonText.indexOf('{');
-    const endIndex = jsonText.lastIndexOf('}');
-
-    if (startIndex === -1 || endIndex === -1 || endIndex < startIndex) {
-      logger.error('Failed to find valid JSON object in AI response', {
-        // LOG: Error
-        text: jsonText,
-      });
-      return NextResponse.json(
-        { error: 'AI response did not contain valid JSON' },
-        { status: 500 }
-      );
+    if (!aiJsonText) {
+        throw new Error("AI response text was empty.");
     }
 
-    let cleanedJsonText = jsonText.slice(startIndex, endIndex + 1);
-
-    // --- START NEW FIX: Sanitize control characters ---
-    // Remove literal newlines, tabs, and other control chars
-    // that are invalid inside a JSON string literal.
-    const sanitizedJsonText = cleanedJsonText
-      .replace(/[\n\r\t]/g, ' ') // Replace newlines, tabs, CR with a space
-      .replace(/[\u0000-\u001F\u007F-\u009F]/g, ''); // Remove other non-printable control chars
-
-    logger.debug('Sanitized JSON:', { text: sanitizedJsonText }); // LOG: Debug
-    // --- END NEW FIX ---
-
-    let parsedJson;
     try {
-      parsedJson = JSON.parse(sanitizedJsonText); // Parse the *sanitized* text
+      parsedJson = JSON.parse(aiJsonText); // Assign parsed result for logging
     } catch (parseError) {
-      logger.error(
-        // LOG: Error
-        'Failed to parse sanitized JSON:',
-        parseError,
-        { text: sanitizedJsonText }
-      );
-      return NextResponse.json(
-        { error: 'Failed to parse JSON from AI response' },
-        { status: 500 }
-      );
-    }
-    // --- END FIX ---
-
-    if (!parsedJson.question || !parsedJson.answer) {
-      logger.error('Generated JSON is missing keys', parsedJson); // LOG: Error
-      return NextResponse.json(
-        { error: 'Generated JSON is missing question or answer' },
-        { status: 500 }
-      );
+      logger.error('Failed to parse AI JSON response for question', { aiJsonText, parseError });
+      throw new Error('Failed to parse AI JSON response for question');
     }
 
-    logger.info('Successfully generated question', parsedJson); // LOG: Info
+    if (!parsedJson || !parsedJson.question || !parsedJson.answer) {
+        logger.error('Parsed JSON missing question or answer', { parsedJson });
+      throw new Error('Parsed JSON from AI was missing required fields.');
+    }
+
+    logger.info(`Successfully generated question for topic: ${topic}`);
     return NextResponse.json(parsedJson);
+
   } catch (error) {
-    logger.error('Unhandled exception in generate-question', error); // LOG: Error
-    // @ts-ignore
+    errorOccurred = true;
+    capturedError = error;
+
+    // --- Robust Error Logging ---
+    logger.error('--- UNHANDLED ERROR IN generate-question GET ---');
+    let errorDetails: any = {};
+    let errorMessage = 'An unknown error occurred';
+    if (error instanceof Error) {
+        errorMessage = error.message;
+        errorDetails = { message: error.message, name: error.name, stack: error.stack };
+        if (error.message.includes('fetch') || error.message.includes('network')) {
+             errorMessage = `Network error during AI call: ${error.message}`;
+        }
+    } else {
+        try {
+            errorDetails = { rawError: JSON.stringify(error, null, 2) };
+            errorMessage = `Non-Error exception: ${errorDetails.rawError}`;
+        } catch (e) {
+            errorDetails = { rawError: "Failed to stringify non-Error object" };
+            errorMessage = 'An un-stringifiable error object was caught.';
+        }
+    }
+    logger.error('Failed in /api/generate-question', errorDetails);
+
     return NextResponse.json(
-      // @ts-ignore
-      { error: error.message || 'An unknown error occurred' },
+      { error: errorMessage, details: errorDetails },
       { status: 500 }
     );
+    // --- End Robust Error Logging ---
+
+  } finally {
+    // --- Update Log Entry ---
+    if (logRef) {
+      const endTime = performance.now();
+      const durationMs = endTime - startTime;
+      const updateData: Partial<ApiLog> = { durationMs };
+
+      if (errorOccurred) {
+        updateData.status = 'error';
+        let errorDetails: any = {};
+         if (capturedError instanceof Error) {
+             errorDetails = { message: capturedError.message, stack: capturedError.stack };
+         } else {
+             try { errorDetails = { rawError: JSON.stringify(capturedError, null, 2) }; }
+             catch { errorDetails = { rawError: "Unstringifiable error" }; }
+         }
+        updateData.errorData = errorDetails;
+      } else {
+        updateData.status = 'success';
+        updateData.responseData = {
+          rawText: aiJsonText, // Log raw text on success
+          parsedJson: parsedJson, // Log parsed result on success
+        };
+      }
+
+      try {
+        await logRef.update(updateData);
+        logger.debug(`Updated log entry: ${logRef.id}`);
+      } catch (logUpdateError) {
+        logger.error(`Failed to update log entry ${logRef.id}`, { logUpdateError });
+      }
+    }
+    // --- End Log ---
   }
 }
 

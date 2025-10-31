@@ -1,5 +1,31 @@
 import { Timestamp } from 'firebase-admin/firestore';
 
+export interface ApiLog {
+  id?: string; // Firestore document ID
+  timestamp: any; // Firestore Timestamp
+  route: string; // e.g., '/api/generate-lesson'
+  status: 'pending' | 'success' | 'error';
+  durationMs?: number; // Time taken for the API call
+  modelUsed: string;
+  requestData: {
+    systemPrompt?: string; // Optional, might be long
+    userMessage: string; // Or the main input data
+    input_userAnswer?: string;
+    input_expectedAnswer?: string | null; // Allow null too
+    input_question?: string | null;
+    input_topic?: string | null;
+  };
+  responseData?: {
+    rawText?: string; // The raw text from the AI
+    parsedJson?: any; // The parsed JSON object (if applicable)
+  };
+  errorData?: {
+    message?: string;
+    stack?: string;
+    rawError?: string; // For non-Error objects
+  };
+}
+
 export interface VocabLesson {
   type: 'Vocab';
   vocab: string;

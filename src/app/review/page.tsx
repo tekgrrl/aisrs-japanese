@@ -103,6 +103,11 @@ export default function ReviewPage() {
         }
       );
       if (!response.ok) throw new Error('Failed to update SRS data');
+
+      // SUCCESS! The API call finished and was OK.
+      // *Now* we dispatch the event from the client.
+      window.dispatchEvent(new Event('refreshStats'));
+      
     } catch (err) {
       if (err instanceof Error) setError(err.message);
       else setError('An unknown error occurred');
