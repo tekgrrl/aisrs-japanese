@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from 'react'; // <-- Import useRef
-import { useRouter, useParams } from 'next/navigation';
+import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import { KnowledgeUnit, FacetType, Lesson, VocabLesson, KanjiLesson } from '@/types';
 import { db } from '@/lib/firebase-client';
 import { doc, getDoc } from 'firebase/firestore';
@@ -332,6 +332,9 @@ export default function LearnItemPage() {
   );
 
 
+  const searchParams = useSearchParams();
+  const source = searchParams.get('source');
+
   // --- Main Render ---
   return (
     <>
@@ -340,7 +343,8 @@ export default function LearnItemPage() {
         isLoading, 
         hasError: !!error, 
         lessonType: lesson?.type,
-        hasLesson: !!lesson 
+        hasLesson: !!lesson,
+        source: source
       })}
     <main className="container mx-auto max-w-4xl p-8">
       <header className="mb-8">
@@ -361,7 +365,7 @@ export default function LearnItemPage() {
       {lesson && lesson.type === 'Vocab' && renderVocabLesson(lesson as VocabLesson)}
       {lesson && lesson.type === 'Kanji' && renderKanjiLesson(lesson as KanjiLesson)}
 
-      {!isLoading && !error && lesson && (
+      {!isLoading && !error && lesson && source !== 'review' && (
           <>
               {/* {console.log("Render conditions met, lesson object:", lesson)} */}
               {renderFacetChecklist()}
