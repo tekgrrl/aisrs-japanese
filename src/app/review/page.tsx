@@ -405,6 +405,17 @@ export default function ReviewPage() {
             <span className="font-semibold">AI:</span> {aiExplanation}
           </p>
 
+          {answerState === 'incorrect' && currentItem && (
+            <div className="mt-4">
+              <Link
+                href={`/learn/${currentItem.ku.id}?source=review`}
+                className="inline-block px-4 py-2 bg-blue-600 text-white font-semibold rounded-md hover:bg-blue-700"
+              >
+                Review lesson on {currentItem.ku.content}
+              </Link>
+            </div>
+          )}
+
           <button
             onClick={goToNextItem}
             className="mt-6 w-full px-6 py-3 bg-gray-600 text-white font-semibold rounded-md shadow-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 focus:ring-offset-gray-800"
