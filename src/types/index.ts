@@ -33,7 +33,13 @@ export interface VocabLesson {
   meaning_explanation: string;
   reading_explanation: string;
   context_examples?: { sentence: string; translation: string }[];
-  component_kanji?: { kanji: string; reading: string; meaning: string }[];
+  component_kanji?: {
+    kanji: string;
+    reading: string;
+    meaning: string;
+    onyomi?: string[];
+    kunyomi?: string[];
+  }[];
 }
 
 export interface KanjiLesson {

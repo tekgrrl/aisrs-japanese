@@ -269,26 +269,32 @@ export default function LearnItemPage() {
               <span className="ml-3 text-lg text-gray-900 dark:text-white">Reading</span>
             </label>
 
-            {/* --- FIX: Use a valid dark mode class (750 -> 800) --- */}
+            {/* --- REFACTOR: Single Component Kanji Checkbox --- */}
             {lesson.component_kanji && lesson.component_kanji.map((kanji, index) => (
               <div key={`${kanji.kanji}-${index}`} className="p-4 bg-gray-300 dark:bg-gray-800 rounded-md">
-                <h3 className="text-xl font-semibold text-gray-700 dark:text-gray-300 mb-2">Kanji: {kanji.kanji}</h3>
+                <h3 className="text-xl font-semibold text-gray-700 dark:text-gray-300 mb-2">Component Kanji</h3>
+                <p className="text-gray-600 dark:text-gray-400 mb-3">
+                  The kanji is <span className="font-bold text-lg">{kanji.kanji}</span>, which generally means "{kanji.meaning}".
+                  It has the readings:
+                </p>
+                <div className="ml-4 mb-3 text-gray-600 dark:text-gray-400">
+                  {kanji.kunyomi && kanji.kunyomi.length > 0 && (
+                    <p>kun'yomi: {kanji.kunyomi.join(', ')}</p>
+                  )}
+                  {kanji.onyomi && kanji.onyomi.length > 0 && (
+                    <p>on'yomi: {kanji.onyomi.join(', ')}</p>
+                  )}
+                </div>
                 <label className="flex items-center p-2 rounded-md hover:bg-gray-400 dark:hover:bg-gray-700 cursor-pointer">
                   <input type="checkbox" className="h-5 w-5 rounded bg-gray-400 dark:bg-gray-900 border-gray-500 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
-                    checked={!!selectedFacets[`Kanji-Component-Meaning-${kanji.kanji}`]}
-                    onChange={() => handleCheckboxChange(`Kanji-Component-Meaning-${kanji.kanji}`)}
+                    checked={!!selectedFacets[`Kanji-Component-${kanji.kanji}`]}
+                    onChange={() => handleCheckboxChange(`Kanji-Component-${kanji.kanji}`)}
                   />
-                  <span className="ml-3 text-lg text-gray-900 dark:text-white">Learn Meaning ({kanji.meaning})</span>
-                </label>
-                <label className="flex items-center p-2 rounded-md hover:bg-gray-400 dark:hover:bg-gray-700 cursor-pointer">
-                  <input type="checkbox" className="h-5 w-5 rounded bg-gray-400 dark:bg-gray-900 border-gray-500 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
-                    checked={!!selectedFacets[`Kanji-Component-Reading-${kanji.kanji}`]}
-                    onChange={() => handleCheckboxChange(`Kanji-Component-Reading-${kanji.kanji}`)}
-                  />
-                  <span className="ml-3 text-lg text-gray-900 dark:text-white">Learn Reading ({kanji.reading})</span>
+                  <span className="ml-3 text-lg text-gray-900 dark:text-white">Add {kanji.kanji}</span>
                 </label>
               </div>
             ))}
+            {/* --- END REFACTOR --- */}
           </>
         )}
 
