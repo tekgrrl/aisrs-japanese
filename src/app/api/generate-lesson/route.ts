@@ -3,7 +3,7 @@ import { db, Timestamp } from '@/lib/firebase'; // Added Timestamp
 import { logger } from '@/lib/logger';
 import { GoogleGenAI } from '@google/genai';
 import { KnowledgeUnit, Lesson, ApiLog } from '@/types'; // Added ApiLog
-import { API_LOGS_COLLECTION, KNOWLEDGE_UNITS_COLLECTION } from '@/lib/firebase-config'; // Added log collection name
+import { API_LOGS_COLLECTION, KNOWLEDGE_UNITS_COLLECTION, LESSONS_COLLECTION } from '@/lib/firebase-config'; // Added log collection name
 import { performance } from 'perf_hooks'; // Added for timing
 
 // --- (Keep the KANJI_SYSTEM_PROMPT and VOCAB_SYSTEM_PROMPT) ---
@@ -68,11 +68,14 @@ export async function POST(request: Request) {
     }
     const ku = kuDoc.data() as KnowledgeUnit;
 
-    // --- CACHE CHECK ---
-    if (ku.lessonCache) {
-      logger.info(`Returning cached lesson for KU ${kuId}`);
-      // No API call, so no API log needed here.
-      return NextResponse.json(ku.lessonCache);
+    // --- NEW: Define lessonRef once ---
+    const lessonRef = db.collection(LESSONS_COLLECTION).doc(kuId);
+
+    // Check for lesson in 'lessons' collection
+    const lessonDoc = await lessonRef.get();
+    if (lessonDoc.exists) {
+        logger.info(`Returning cached lesson for KU ${kuId} from lessons collection`);
+        return NextResponse.json(lessonDoc.data());
     }
     // --- END CACHE CHECK ---
 
@@ -202,6 +205,7 @@ export async function POST(request: Request) {
     let lessonJson: Lesson | undefined;
     try {
         lessonJson = JSON.parse(jsonString) as Lesson; // Assign parsed lesson for logging
+        lessonJson.kuId = kuId; // Add the kuId to the lesson object
         console.info(lessonJson);
     } catch (parseError) {
         logger.error('Failed to parse AI JSON response for lesson', { text, parseError });
@@ -211,10 +215,10 @@ export async function POST(request: Request) {
     logger.info("--- Formatted API Response ---");
     logger.info(JSON.stringify(lessonJson));
 
-    // --- SAVE TO CACHE ---
-    await kuRef.update({ lessonCache: lessonJson });
+    // --- SAVE TO 'lessons' collection ---
+    await lessonRef.set(lessonJson);
     logger.info(`Successfully generated and cached lesson for KU ${kuId}`);
-    // --- END SAVE TO CACHE ---
+    // --- END SAVE ---
     return NextResponse.json(lessonJson);
 
   } catch (error) {

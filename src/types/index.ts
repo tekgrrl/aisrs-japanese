@@ -27,6 +27,7 @@ export interface ApiLog {
 }
 
 export interface VocabLesson {
+  kuId?: string;
   type: 'Vocab';
   vocab: string;
   meaning_explanation: string;
@@ -36,6 +37,7 @@ export interface VocabLesson {
 }
 
 export interface KanjiLesson {
+  kuId?: string;
   type: 'Kanji';
   kanji: string;
   meaning: string;
@@ -71,7 +73,6 @@ export interface KnowledgeUnit {
   status: 'learning' | 'reviewing';
   facet_count: number;
   history?: any[]; // Or define a proper history type
-  lessonCache?: Lesson; // <-- ADD THIS CACHE FIELD
 }
 
 export type FacetType =
