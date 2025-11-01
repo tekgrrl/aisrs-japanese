@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
 import { db,  Timestamp } from '@/lib/firebase'; // Added Timestamp
-import { FieldPath } from 'firebase-admin/firestore'; // Make sure FieldPath is imported
+import { FieldValue, FieldPath } from 'firebase-admin/firestore'; // Make sure FieldPath is imported
 import { logger } from '@/lib/logger';
 import { ReviewFacet, KnowledgeUnit, ReviewItem, FacetType, ApiLog } from '@/types'; // Added ApiLog
 import { GoogleGenAI } from '@google/genai'; // Correct SDK
@@ -127,10 +127,10 @@ export async function POST(request: Request) {
 
     const batch = db.batch();
     const now = Timestamp.now();
-    let newFacetCount = facetsToCreate.length;
+    let parentFacetCount = 0; // Correctly track parent's direct facets
 
     // --- DEBUG: Log the input facets ---
-    logger.debug(`Starting batch for ${newFacetCount} facets for KU ${kuId}`, { facetsToCreate });
+    logger.debug(`Starting batch for ${facetsToCreate.length} facets for KU ${kuId}`, { facetsToCreate });
     // --- END DEBUG ---
 
 
@@ -159,6 +159,7 @@ export async function POST(request: Request) {
           createdAt: now,
           history: [],
         });
+        parentFacetCount++; // Increment parent's facet count
         logger.debug(`Batch-set simple/AI facet: ${facetKey}`);
       }
 
@@ -196,6 +197,8 @@ export async function POST(request: Request) {
           kanjiKuId = newKanjiKuRef.id;
         } else {
           kanjiKuId = kanjiSnapshot.docs[0].id;
+          const kanjiKuRef = db.collection(KNOWLEDGE_UNITS_COLLECTION).doc(kanjiKuId);
+          batch.update(kanjiKuRef, { facet_count: FieldValue.increment(2) });
         }
 
         // Create BOTH Meaning and Reading facets
@@ -220,7 +223,6 @@ export async function POST(request: Request) {
         });
         
         logger.debug(`Batch-set Meaning and Reading facets for Kanji KU ${kanjiKuId}`);
-        newFacetCount++; // We added one extra facet
       }
 
       // --- Complex Kanji Facets ---
@@ -394,15 +396,17 @@ export async function POST(request: Request) {
     } // --- End of for-loop ---
 
     // --- Update parent KU ---
-    const parentKuRef = db
-      .collection(KNOWLEDGE_UNITS_COLLECTION)
-      .doc(kuId);
+    if (parentFacetCount > 0) {
+      const parentKuRef = db
+        .collection(KNOWLEDGE_UNITS_COLLECTION)
+        .doc(kuId);
 
-    batch.update(parentKuRef, {
-      status: 'reviewing',
-      facet_count: newFacetCount,
-    });
-    logger.debug(`BATCH UPDATE parent KU ${kuId}: status to reviewing, facet_count to ${newFacetCount}`);
+      batch.update(parentKuRef, {
+        status: 'reviewing',
+        facet_count: parentFacetCount,
+      });
+      logger.debug(`BATCH UPDATE parent KU ${kuId}: status to reviewing, facet_count to ${parentFacetCount}`);
+    }
 
     // --- Commit ---
     await batch.commit();
