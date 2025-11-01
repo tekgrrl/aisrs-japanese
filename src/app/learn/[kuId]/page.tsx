@@ -64,10 +64,9 @@ export default function LearnItemPage() {
         }
 
         const lessonData = await lessonResponse.json();
-        // console.log("Received lesson data:", lessonData);
+        console.log("Received lesson data:", lessonData);
         setLesson(lessonData as Lesson); 
-      } catch (err: any)
- {
+      } catch (err: any) {
         setError(err.message || "An unknown error occurred");
       } finally {
         setIsLoading(false);
@@ -335,6 +334,14 @@ export default function LearnItemPage() {
 
   // --- Main Render ---
   return (
+    <>
+      {/* --- DEBUGGING LOG --- */}
+      {console.log('[Render Debug]', { 
+        isLoading, 
+        hasError: !!error, 
+        lessonType: lesson?.type,
+        hasLesson: !!lesson 
+      })}
     <main className="container mx-auto max-w-4xl p-8">
       <header className="mb-8">
         <h1 className="text-6xl font-bold text-gray-900 dark:text-white mb-2 break-all">
@@ -362,6 +369,6 @@ export default function LearnItemPage() {
       )}
 
     </main>
+    </>
   );
 }
-
