@@ -15,6 +15,7 @@ export async function POST(request: Request) {
   let startTime = performance.now(); // Start timing
   let errorOccurred = false; // Flag to track if error happens
   let capturedError: any = null; // Store error for finally block
+  let evaluationResult: { result: 'pass' | 'fail'; explanation: string } | undefined;
 
   try {
     const { userAnswer, expectedAnswer, question, topic } = await request.json();
@@ -112,13 +113,17 @@ Example for a fail: {"result": "fail", "explanation": "Incorrect. The expected r
     }
 
     const aiJsonText = candidate.content.parts[0].text;
-    let evaluationResult: { result: 'pass' | 'fail'; explanation: string };
 
     try {
       evaluationResult = JSON.parse(aiJsonText);
     } catch (parseError) {
       logger.error('Failed to parse AI JSON response', { aiJsonText, parseError });
       throw new Error('Failed to parse AI JSON response');
+    }
+
+    // This check satisfies TypeScript's compiler. In practice, if evaluationResult
+      throw new Error('Evaluation result is unexpectedly null or undefined after AI response parsing.');
+      throw new Error('Evaluation result is missing after AI response parsing.');
     }
 
     logger.info(`Evaluation result: ${evaluationResult.result}`);
@@ -193,7 +198,3 @@ Example for a fail: {"result": "fail", "explanation": "Incorrect. The expected r
     // --- End Log ---
   }
 }
-
-// Helper: Define evaluationResult outside try block if needed in finally
-let evaluationResult: { result: 'pass' | 'fail'; explanation: string } | undefined;
-
