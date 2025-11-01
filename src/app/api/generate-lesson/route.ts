@@ -79,7 +79,10 @@ export async function POST(request: Request) {
       // TODO this does things the weird way. It did work for Vocab but it shouldn't have
       userMessage = `Generate a lesson for this Kanji: ${JSON.stringify(ku)}`;
     } else if (ku.type === 'Vocab' || ku.type === 'Concept' || ku.type === 'Grammar') {
-      const VOCAB_USER_PROMPT = `You are an expert Japanese tutor. You will be asked to generate a lesson for the Japanese word: ${ku.content}.  The lesson should be in English. Where you want to use Japanese text for examples, explanations, meanings and readings do so but do not include Romaji. Don't over think things when determining readings. Your response MUST be a valid JSON object that adheres to this schema:
+      const VOCAB_USER_PROMPT = `You are an expert Japanese tutor. You will be asked to generate a lesson for the Japanese word: ${ku.content}.  
+      The lesson should be in English. Where you want to use Japanese text for examples, explanations, meanings and readings do so but do not include Romaji. 
+      For the Component Kanji, please include any kun'yomi and on'yomi readings you find.
+      Your response MUST be a valid JSON object that adheres to this schema:
         {
           "type": "Vocab",
           "vocab": "The vocab word",
@@ -89,7 +92,13 @@ export async function POST(request: Request) {
             { "sentence": "Example sentence in Japanese.", "translation": "English translation." }
           ],
           "component_kanji": [
-            { "kanji": "Single Kanji character", "reading": "Its readings", "meaning": "Its core meaning" }
+            { 
+              "kanji": "Single Kanji character", 
+              "reading": "The reading used in this vocab", 
+              "meaning": "Its core meaning",
+              "onyomi": ["onyomi reading 1", "onyomi reading 2"],
+              "kunyomi": ["kunyomi reading 1"]
+            }
           ]
         }`;
       userMessage = VOCAB_USER_PROMPT;
@@ -122,7 +131,13 @@ export async function POST(request: Request) {
               meaning_explanation: { type: 'STRING' },
               reading_explanation: { type: 'STRING' },
               context_examples: { type: 'ARRAY', items: { type: 'OBJECT', properties: { sentence: { type: 'STRING' }, translation: { type: 'STRING' } } } },
-              component_kanji: { type: 'ARRAY', items: { type: 'OBJECT', properties: { kanji: { type: 'STRING' }, reading: { type: 'STRING' }, meaning: { type: 'STRING' } } } },
+              component_kanji: { type: 'ARRAY', items: { type: 'OBJECT', properties: { 
+                kanji: { type: 'STRING' }, 
+                reading: { type: 'STRING' }, 
+                meaning: { type: 'STRING' },
+                onyomi: { type: 'ARRAY', items: { type: 'STRING' } },
+                kunyomi: { type: 'ARRAY', items: { type: 'STRING' } }
+              } } },
             },
             required: ["type", "vocab", "meaning_explanation", "reading_explanation", "context_examples", "component_kanji"],
           };
@@ -151,9 +166,9 @@ export async function POST(request: Request) {
     const apiCallParams = {
       model: MODEL_NAME,
       contents: [{ parts: [{ text: userMessage }] }],
-      config: { 
+      config: {
         responseMimeType: 'application/json',
-        responseSchema: jsonSchema,
+        temperature: 0.4,
       },
     };
 
