@@ -215,7 +215,6 @@ export async function POST(request: Request) {
     await kuRef.update({ lessonCache: lessonJson });
     logger.info(`Successfully generated and cached lesson for KU ${kuId}`);
     // --- END SAVE TO CACHE ---
-    debugger; // <-- ADD THIS LINE
     return NextResponse.json(lessonJson);
 
   } catch (error) {

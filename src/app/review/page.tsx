@@ -352,8 +352,6 @@ export default function ReviewPage() {
               Generating question...
             </p>
           ) : (
-            // --- FONT SIZE FIX ---
-            // Changed from text-5xl to text-2xl
             <p className="text-5xl font-bold text-white break-words">
               {questionText || '[Question not loaded]'}
             </p>
