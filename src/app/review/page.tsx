@@ -354,7 +354,7 @@ export default function ReviewPage() {
           ) : (
             // --- FONT SIZE FIX ---
             // Changed from text-5xl to text-2xl
-            <p className="text-2xl font-bold text-white break-words">
+            <p className="text-5xl font-bold text-white break-words">
               {questionText || '[Question not loaded]'}
             </p>
           )}
