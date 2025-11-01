@@ -56,7 +56,7 @@ export default function LearnListPage() {
             >
               <div className="flex justify-between items-center mb-2">
                 <span className="text-3xl font-bold text-white">{ku.content}</span>
-                <span className="font-mono text-sm bg-gray-900 px-2 py-1 rounded">
+                <span className="font-mono text-sm bg-gray-900 text-gray-100 px-2 py-1 rounded">
                   {ku.type}
                 </span>
               </div>

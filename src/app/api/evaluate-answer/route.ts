@@ -1,111 +1,199 @@
 import { NextResponse } from 'next/server';
+import { logger } from '@/lib/logger';
+import { db, Timestamp } from '@/lib/firebase'; // Import db and Timestamp
+import { API_LOGS_COLLECTION } from '@/lib/firebase-config'; // Import collection name
+import { ApiLog } from '@/types'; // Import the log type
+import { performance } from 'perf_hooks'; // For timing
 
-// Read the API key from the environment variable
-const apiKey = process.env.GEMINI_API_KEY || '';
-const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+const MODEL_NAME = process.env.MODEL_GEMINI_PRO || 'gemini-2.5-flash'
 
-/**
- * POST /api/evaluate-answer
- * Evaluates a user's answer against an expected answer.
- * Expects: { userAnswer: string, expectedAnswer: string }
- * Returns: { result: 'pass' | 'fail', explanation: string }
- */
 export async function POST(request: Request) {
-  if (!apiKey) {
-    return NextResponse.json(
-      { error: 'Server is missing GEMINI_API_KEY environment variable' },
-      { status: 500 }
-    );
-  }
+  logger.info('--- POST /api/evaluate-answer ---');
+  logger.info(`Using ${MODEL_NAME}`);
+  
+  let logRef; // Firestore DocumentReference for the log entry
+  let startTime = performance.now(); // Start timing
+  let errorOccurred = false; // Flag to track if error happens
+  let capturedError: any = null; // Store error for finally block
 
   try {
-    const { userAnswer, expectedAnswer } = await request.json();
+    const { userAnswer, expectedAnswer, question, topic } = await request.json();
 
-    if (userAnswer === undefined || expectedAnswer === undefined) {
+    if (userAnswer === undefined || userAnswer === null || expectedAnswer === null || expectedAnswer === undefined) {
+      logger.warn('Missing userAnswer or expectedAnswer', { userAnswer, expectedAnswer });
       return NextResponse.json(
-        { error: 'Missing "userAnswer" or "expectedAnswer" in body' },
-        { status: 400 }
+        { error: 'Missing userAnswer or expectedAnswer' },
+        { status: 400 },
       );
     }
 
-    // Phase 3.3: AI Answer Evaluator
-    const systemPrompt = `You are an AI grading assistant for a Japanese language quiz.
-You will be given an "expected answer" and a "user answer".
-Your task is to determine if the user's answer is correct. Be lenient with kana vs kanji if the meaning is identical.
-First, provide a brief, one-sentence explanation for *why* the answer is correct or incorrect.
-Then, on a new line, provide the final verdict: the single word "pass" or "fail".
+    const systemPrompt = `You are an AISRS evaluator. A user is being quizzed.
+- The question was: "${question || 'N/A'}"
+- The topic was: "${topic || 'N/A'}"
+- The expected answer(s) are: "${expectedAnswer}"
+- The user's answer is: "${userAnswer}"
 
-Example 1:
-Expected: "食べられます"
-User: "たべられます"
-Response:
-Your answer is correct, as "たべられます" is the hiragana spelling of "食べられます".
-pass
-
-Example 2:
-Expected: "くれました"
-User: "あげました"
-Response:
-Your answer is incorrect, as "あげました" (I gave) is the wrong direction; "くれました" (someone gave me) is correct here.
-fail
-
-Example 3:
-Expected: "Cat"
-User: "cat"
-Response:
-Your answer is correct.
-pass
+Your task is to evaluate if the user's answer is correct.
+1.  Read the "expected answer(s)". This may be a single answer (e.g., "Family") or a comma-separated list of possible correct answers (e.g., "ドク, トク, よむ").
+2.  Compare the user's answer to the list. The user is correct if their answer is *any one* of the items in the list.
+3.  Be lenient with hiragana vs katakana (e.g., if expected is "ドク" and user typed "どく", it's a pass).
+4.  Be lenient with extra punctuation or whitespace.
+5.  Provide your evaluation ONLY as a valid JSON object with the following schema:
+{
+  "result": "pass" | "fail",
+  "explanation": "A brief, one-sentence explanation for *why* the user passed or failed, referencing their answer."
+}
+Example for a pass: {"result": "pass", "explanation": "Correct! よむ is one of the kun'yomi readings."}
+Example for a fail: {"result": "fail", "explanation": "Incorrect. The expected readings were ドク, トク, or よむ."}
 `;
-    const userQuery = `Expected: "${expectedAnswer}"\nUser: "${userAnswer}"`;
+
+    const userMessage = `User Answer: ${userAnswer}\nExpected: ${expectedAnswer}`; // Simple message for logging
+
+    // --- Create Initial Log Entry ---
+    const initialLogData: ApiLog = {
+      timestamp: Timestamp.now(),
+      route: '/api/evaluate-answer',
+      status: 'pending',
+      modelUsed: MODEL_NAME,
+      requestData: {
+        // systemPrompt, // Optional: Log prompt if needed, can be large
+        userMessage: userMessage, // Log the core data
+        // Also log the inputs separately for clarity
+        input_userAnswer: userAnswer,
+        input_expectedAnswer: expectedAnswer,
+        input_question: question,
+        input_topic: topic,
+      },
+    };
+    logRef = await db.collection(API_LOGS_COLLECTION).add(initialLogData);
+    logger.debug(`Created initial log entry: ${logRef.id}`);
+    // --- End Log ---
+
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) { throw new Error('GEMINI_API_KEY is not defined'); }
+
+    // Using raw fetch as per current pattern in this file
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${apiKey}`;
 
     const payload = {
-      contents: [{ parts: [{ text: userQuery }] }],
-      systemInstruction: {
-        parts: [{ text: systemPrompt }],
+      contents: [{ parts: [{ text: `User Answer: ${userAnswer}\nExpected: ${expectedAnswer}` }] }], // Simple prompt
+      systemInstruction: { parts: [{ text: systemPrompt }] },
+      generationConfig: {
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: 'OBJECT',
+          properties: {
+            result: { type: 'STRING', enum: ['pass', 'fail'] },
+            explanation: { type: 'STRING' },
+          },
+          required: ['result', 'explanation'],
+        },
       },
     };
 
-    const apiResponse = await fetch(apiUrl, {
+    const response = await fetch(apiUrl, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
 
-    if (!apiResponse.ok) {
-      const errorBody = await apiResponse.text();
-      console.error('Gemini API Error:', errorBody);
-      throw new Error(`Gemini API failed with status ${apiResponse.status}`);
+    if (!response.ok) {
+      const errorBody = await response.text();
+      logger.error(`Gemini API error: ${response.status}`, { errorBody });
+      throw new Error(`Gemini API Error: ${response.status} ${response.statusText} - ${errorBody}`);
     }
 
-    const result = await apiResponse.json();
-    const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
+    const result = await response.json();
+    const candidate = result.candidates?.[0];
 
-    if (!text) {
-      throw new Error('Invalid response from Gemini API');
+    if (!candidate || !candidate.content?.parts?.[0]?.text) {
+      logger.error('Invalid response structure from Gemini', { result });
+      throw new Error('Invalid response structure from Gemini');
     }
 
-    // Parse the multi-line response
-    const lines = text.trim().split('\n');
-    const explanation = lines.slice(0, -1).join(' ').trim(); // All lines except the last
-    const verdict = lines[lines.length - 1].trim().toLowerCase(); // Just the last line
+    const aiJsonText = candidate.content.parts[0].text;
+    let evaluationResult: { result: 'pass' | 'fail'; explanation: string };
 
-    if (verdict !== 'pass' && verdict !== 'fail') {
-      console.error('Invalid verdict from AI:', verdict);
-      throw new Error('AI returned an invalid verdict.');
+    try {
+      evaluationResult = JSON.parse(aiJsonText);
+    } catch (parseError) {
+      logger.error('Failed to parse AI JSON response', { aiJsonText, parseError });
+      throw new Error('Failed to parse AI JSON response');
     }
 
-    return NextResponse.json({
-      result: verdict, // 'pass' or 'fail'
-      explanation: explanation || (verdict === 'pass' ? 'Correct.' : 'Incorrect.'),
-    });
+    logger.info(`Evaluation result: ${evaluationResult.result}`);
+    return NextResponse.json(evaluationResult);
+
   } catch (error) {
-    console.error('Error in /api/evaluate-answer:', error);
+    errorOccurred = true; // Set flag
+    capturedError = error; // Capture error for finally block
+
+    // Log the error using the robust logger from previous steps
+    logger.error('--- UNHANDLED ERROR IN evaluate-answer POST ---');
+    let errorDetails: any = {};
+    let errorMessage = 'An unknown error occurred';
+    if (error instanceof Error) {
+        errorMessage = error.message;
+        errorDetails = { message: error.message, name: error.name, stack: error.stack };
+        if (error.message.includes('fetch') || error.message.includes('network')) {
+             errorMessage = `Network error during API call: ${error.message}`;
+        }
+    } else {
+        try {
+            errorDetails = { rawError: JSON.stringify(error, null, 2) };
+            errorMessage = `Non-Error exception: ${errorDetails.rawError}`;
+        } catch (e) {
+            errorDetails = { rawError: "Failed to stringify non-Error object" };
+            errorMessage = 'An un-stringifiable error object was caught.';
+        }
+    }
+    logger.error('Failed in /api/evaluate-answer', errorDetails);
+
+    // Return error response to client
     return NextResponse.json(
-      { error: error.message || 'An unknown error occurred' },
+      { error: errorMessage, details: errorDetails },
       { status: 500 }
     );
+  } finally {
+    // --- Update Log Entry ---
+    if (logRef) {
+      const endTime = performance.now();
+      const durationMs = endTime - startTime;
+      const updateData: Partial<ApiLog> = {
+        durationMs,
+      };
+
+      if (errorOccurred) {
+        updateData.status = 'error';
+        let errorDetails: any = {};
+         if (capturedError instanceof Error) {
+             errorDetails = { message: capturedError.message, stack: capturedError.stack };
+         } else {
+             try { errorDetails = { rawError: JSON.stringify(capturedError, null, 2) }; }
+             catch { errorDetails = { rawError: "Unstringifiable error" }; }
+         }
+        updateData.errorData = errorDetails;
+      } else {
+        updateData.status = 'success';
+        // Assuming success means we got 'evaluationResult'
+        // We might want to add raw text logging here too if needed
+        updateData.responseData = {
+          // rawText: aiJsonText, // Uncomment if raw text needed
+          parsedJson: evaluationResult, // Log the parsed result
+        };
+      }
+
+      try {
+        await logRef.update(updateData);
+        logger.debug(`Updated log entry: ${logRef.id}`);
+      } catch (logUpdateError) {
+        logger.error(`Failed to update log entry ${logRef.id}`, { logUpdateError });
+      }
+    }
+    // --- End Log ---
   }
 }
+
+// Helper: Define evaluationResult outside try block if needed in finally
+let evaluationResult: { result: 'pass' | 'fail'; explanation: string } | undefined;
 
