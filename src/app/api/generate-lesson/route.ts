@@ -8,7 +8,7 @@ import { performance } from 'perf_hooks'; // Added for timing
 
 // This likely needs to be converted to a USER PROMPT and used similar to the VOCAB_USER_PROMPT
 const KANJI_SYSTEM_PROMPT = `You are an expert Japanese tutor. You will be asked to enerate a lesson for a given Kanji. The lesson should be in English. Where you want to use Japanese text for examples, explanations, meanings and readings do so but do not include Romaji. Don't over think things when determining readings. You MUST return ONLY a valid JSON object with this schema:
-{
+{ 
   "type": "Kanji",
   "kanji": "The kanji character",
   "meaning": "The core meaning(s), as a string.",

@@ -122,7 +122,8 @@ Example for a fail: {"result": "fail", "explanation": "Incorrect. The expected r
     }
 
     // This check satisfies TypeScript's compiler. In practice, if evaluationResult
-      throw new Error('Evaluation result is unexpectedly null or undefined after AI response parsing.');
+    // is undefined here, the JSON.parse above would have thrown an error.
+    if (!evaluationResult) {
       throw new Error('Evaluation result is missing after AI response parsing.');
     }
 
