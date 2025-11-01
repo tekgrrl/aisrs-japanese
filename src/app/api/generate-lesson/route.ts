@@ -6,7 +6,7 @@ import { KnowledgeUnit, Lesson, ApiLog } from '@/types'; // Added ApiLog
 import { API_LOGS_COLLECTION, KNOWLEDGE_UNITS_COLLECTION, LESSONS_COLLECTION } from '@/lib/firebase-config'; // Added log collection name
 import { performance } from 'perf_hooks'; // Added for timing
 
-// --- (Keep the KANJI_SYSTEM_PROMPT and VOCAB_SYSTEM_PROMPT) ---
+// This likely needs to be converted to a USER PROMPT and used similar to the VOCAB_USER_PROMPT
 const KANJI_SYSTEM_PROMPT = `You are an expert Japanese tutor. You will be asked to enerate a lesson for a given Kanji. The lesson should be in English. Where you want to use Japanese text for examples, explanations, meanings and readings do so but do not include Romaji. Don't over think things when determining readings. You MUST return ONLY a valid JSON object with this schema:
 {
   "type": "Kanji",
@@ -26,19 +26,7 @@ const KANJI_SYSTEM_PROMPT = `You are an expert Japanese tutor. You will be asked
 }
 Do not add any text before or after the JSON object.`;
 
-const VOCAB_SYSTEM_PROMPT = `You are an expert Japanese tutor. You will be asked to generate a lesson for a given Japanese vocab.  The lesson should be in English. Where you want to use Japanese text for examples, explanations, meanings and readings do so but do not include Romaji. Don't over think things when determining readings. Your response MUST b a valid JSON object that adheres to this schema:
-{
-  "type": "Vocab",
-  "vocab": "The vocab word",
-  "meaning_explanation": "A detailed explanation of the word's meaning and nuance.",
-  "reading_explanation": "An explanation of the reading (e.g., when to use it).",
-  "context_examples": [
-    { "sentence": "Example sentence in Japanese.", "translation": "English translation." }
-  ],
-  "component_kanji": [
-    { "kanji": "Single Kanji character", "reading": "The reading used with the given vocab", "meaning": "Its core meaning" }
-  ]
-}`;
+
 
 // --- Define model name centrally ---
 const MODEL_NAME = process.env.MODEL_GEMINI_PRO || 'gemini-2.5-flash'
@@ -88,11 +76,23 @@ export async function POST(request: Request) {
     if (ku.type === 'Kanji') {
       systemPrompt = KANJI_SYSTEM_PROMPT;
       jsonSchema = { /* ... Kanji schema ... */ };
+      // TODO this does things the weird way. It did work for Vocab but it shouldn't have
       userMessage = `Generate a lesson for this Kanji: ${JSON.stringify(ku)}`;
     } else if (ku.type === 'Vocab' || ku.type === 'Concept' || ku.type === 'Grammar') {
-      // systemPrompt = VOCAB_SYSTEM_PROMPT;
-      jsonSchema = { /* ... Vocab schema ... */ };
-      userMessage = `Generate a lesson for this Vocab: ${JSON.stringify(ku)}`;
+      const VOCAB_USER_PROMPT = `You are an expert Japanese tutor. You will be asked to generate a lesson for the Japanese word: ${ku.content}.  The lesson should be in English. Where you want to use Japanese text for examples, explanations, meanings and readings do so but do not include Romaji. Don't over think things when determining readings. Your response MUST be a valid JSON object that adheres to this schema:
+        {
+          "type": "Vocab",
+          "vocab": "The vocab word",
+          "meaning_explanation": "A detailed explanation of the word's meaning and nuance.",
+          "reading_explanation": "An explanation of the reading (e.g., when to use it).",
+          "context_examples": [
+            { "sentence": "Example sentence in Japanese.", "translation": "English translation." }
+          ],
+          "component_kanji": [
+            { "kanji": "Single Kanji character", "reading": "Its readings", "meaning": "Its core meaning" }
+          ]
+        }`;
+      userMessage = VOCAB_USER_PROMPT;
     } else {
       logger.warn(`No lesson generator for type: ${ku.type}`);
       return NextResponse.json({ error: `No lesson generator for type: ${ku.type}` }, { status: 400 });
@@ -128,20 +128,6 @@ export async function POST(request: Request) {
           };
     }
 
-    const VOCAB_SYSTEM_PROMPT = `You are an expert Japanese tutor. You will be asked to generate a lesson for the Japanese word: ${userMessage}.  The lesson should be in English. Where you want to use Japanese text for examples, explanations, meanings and readings do so but do not include Romaji. Don't over think things when determining readings. Your response MUST b a valid JSON object that adheres to this schema:
-    {
-      "type": "Vocab",
-      "vocab": "The vocab word",
-      "meaning_explanation": "A detailed explanation of the word's meaning and nuance.",
-      "reading_explanation": "An explanation of the reading (e.g., when to use it).",
-      "context_examples": [
-        { "sentence": "Example sentence in Japanese.", "translation": "English translation." }
-      ],
-      "component_kanji": [
-        { "kanji": "Single Kanji character", "reading": "The reading used with the given vocab", "meaning": "Its core meaning" }
-      ]
-    }`;
-
     // --- Create Initial Log Entry ---
     const initialLogData: ApiLog = {
       timestamp: Timestamp.now(),
@@ -165,7 +151,7 @@ export async function POST(request: Request) {
     const apiCallParams = {
       model: MODEL_NAME,
       contents: [{ parts: [{ text: userMessage }] }],
-      config: { // Corrected: generationConfig
+      config: { 
         responseMimeType: 'application/json',
         responseSchema: jsonSchema,
       },
