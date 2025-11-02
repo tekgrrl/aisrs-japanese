@@ -118,6 +118,25 @@ export default function ReviewPage() {
     e.preventDefault();
     if (answerState !== 'unanswered' || !currentItem) return;
 
+    // --- New: Short-circuit for empty answer ---
+    if (userAnswer.trim() === '') {
+      setAiExplanation('No answer provided.');
+      await handleUpdateSrs('fail');
+      setAnswerState('incorrect');
+
+      const facetId = currentItem.facet.id;
+      const newFailureCount = (sessionFailureCounts[facetId] || 0) + 1;
+      setSessionFailureCounts((prevCounts) => ({
+        ...prevCounts,
+        [facetId]: newFailureCount,
+      }));
+      if (newFailureCount < 2) {
+        setReviewQueue((prevQueue) => [...prevQueue, currentItem]);
+      }
+      return;
+    }
+    // --- End New ---
+
     setAnswerState('evaluating');
     setError(null);
     setAiExplanation('');
@@ -407,9 +426,15 @@ export default function ReviewPage() {
               {getExpectedAnswer(currentItem)}
             </p>
           )}
-          <p className="text-lg text-gray-200 italic">
-            <span className="font-semibold">AI:</span> {aiExplanation}
-          </p>
+          {aiExplanation === 'No answer provided.' ? (
+            <p className="text-lg text-gray-200 italic">
+              {aiExplanation}
+            </p>
+          ) : (
+            <p className="text-lg text-gray-200 italic">
+              <span className="font-semibold">AI:</span> {aiExplanation}
+            </p>
+          )}
 
           {answerState === 'incorrect' && currentItem && (
             <div className="mt-4">
