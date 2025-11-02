@@ -3,11 +3,10 @@ export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
 import { db,  Timestamp } from '@/lib/firebase'; // Added Timestamp
-import { FieldValue, FieldPath } from 'firebase-admin/firestore'; // Make sure FieldPath is imported
 import { logger } from '@/lib/logger';
-import { ReviewFacet, KnowledgeUnit, ReviewItem, FacetType, ApiLog } from '@/types'; // Added ApiLog
+import { ReviewFacet, KnowledgeUnit, ReviewItem, FacetType, ApiLog, Lesson } from '@/types'; // Added ApiLog
 import { GoogleGenAI } from '@google/genai'; // Correct SDK
-import { KNOWLEDGE_UNITS_COLLECTION, REVIEW_FACETS_COLLECTION, API_LOGS_COLLECTION } from '@/lib/firebase-config'; // Added log collection name
+import { KNOWLEDGE_UNITS_COLLECTION, REVIEW_FACETS_COLLECTION, API_LOGS_COLLECTION, LESSONS_COLLECTION } from '@/lib/firebase-config'; // Added log collection name
 import { performance } from 'perf_hooks'; // Added for timing
 
 // --- Define model name centrally ---
@@ -23,7 +22,7 @@ export async function GET(request: Request) {
     const dueOnly = searchParams.get('due') === 'true';
 
     if (dueOnly) {
-      const now = new Date();
+      const now = new Date(); // Revert to JS Date object
       logger.info(`Querying for facets due at or before: ${now.toISOString()}`);
 
       const dueFacetsSnapshot = await db
@@ -49,25 +48,39 @@ export async function GET(request: Request) {
         return NextResponse.json([]);
       }
 
-      const kusSnapshot = await db
-        .collection(KNOWLEDGE_UNITS_COLLECTION)
-        .where(FieldPath.documentId(), 'in', kuIds)
-        .get();
+      // --- FIX: Replace 'in' query with individual fetches ---
+      const kuPromises = kuIds.map(id => db.collection(KNOWLEDGE_UNITS_COLLECTION).doc(id).get());
+      const kuDocs = await Promise.all(kuPromises);
 
-      if (kusSnapshot.empty) {
+      const kus = kuDocs.reduce((acc, doc) => {
+        if (doc.exists) {
+          acc[doc.id] = { id: doc.id, ...doc.data() } as KnowledgeUnit;
+        }
+        return acc;
+      }, {} as Record<string, KnowledgeUnit>);
+
+      if (Object.keys(kus).length === 0) {
         logger.warn(`No parent KUs found for ${kuIds.length} IDs.`);
         return NextResponse.json([]);
       }
 
-      const kus = kusSnapshot.docs.reduce((acc, doc) => {
-        acc[doc.id] = { id: doc.id, ...doc.data() } as KnowledgeUnit;
+      // --- FIX: Replace 'in' query for lessons as well ---
+      const lessonPromises = kuIds.map(id => db.collection(LESSONS_COLLECTION).doc(id).get());
+      const lessonDocs = await Promise.all(lessonPromises);
+      
+      const lessons = lessonDocs.reduce((acc, doc) => {
+        if (doc.exists) {
+          acc[doc.id] = doc.data() as Lesson;
+        }
         return acc;
-      }, {} as Record<string, KnowledgeUnit>);
+      }, {} as Record<string, Lesson>);
+      // --- END FIX ---
 
       const reviewItems: ReviewItem[] = facets
         .map((facet) => ({
           facet: facet,
           ku: kus[facet.kuId],
+          lesson: lessons[facet.kuId], // Add lesson to the item
         }))
         .filter((item) => item.ku);
 
@@ -111,7 +124,7 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { kuId, facetsToCreate } = body as {
       kuId: string;
-      facetsToCreate: string[];
+      facetsToCreate: { key: string, data?: any }[];
     };
 
     logger.warn('Parsed request body:', { body });
@@ -134,7 +147,8 @@ export async function POST(request: Request) {
     // --- END DEBUG ---
 
 
-    for (const facetKey of facetsToCreate) {
+    for (const facet of facetsToCreate) {
+      const facetKey = facet.key;
       logger.debug(`Processing facetKey: ${facetKey}`);
       apiErrorOccurred = false; // Reset API error flag for each potential AI call
       apiCapturedError = null;
@@ -168,8 +182,6 @@ export async function POST(request: Request) {
         const kanjiChar = facetKey.split('-')[2];
         logger.debug(`Handling consolidated Kanji Component key for: '${kanjiChar}'`);
 
-        // This logic is similar to the more specific key handling below, but creates two facets.
-        let kanjiKuId: string;
         const kanjiQuery = db.collection(KNOWLEDGE_UNITS_COLLECTION)
           .where('type', '==', 'Kanji')
           .where('content', '==', kanjiChar)
@@ -177,55 +189,31 @@ export async function POST(request: Request) {
         const kanjiSnapshot = await kanjiQuery.get();
 
         if (kanjiSnapshot.empty) {
-          // Logic to create a new Kanji KU (simplified, assuming AI call is needed)
-          // This part can be refactored into a helper function if it gets more complex.
           logger.info(`Kanji KU not found, creating new one for: ${kanjiChar}`);
-          // (For brevity, omitting the full AI call logic here, but it would be the same as below)
           const newKanjiKuRef = db.collection(KNOWLEDGE_UNITS_COLLECTION).doc();
-          // NOTE: In a real scenario, you'd call the Gemini API here to get the data.
-          // For this refactor, we'll assume placeholder data.
           batch.set(newKanjiKuRef, {
             content: kanjiChar,
             type: 'Kanji',
-            data: { onyomi: '...', kunyomi: '...', meaning: '...' }, // Placeholder
+            data: { 
+              meaning: facet.data?.meaning || '...',
+              onyomi: facet.data?.onyomi || [],
+              kunyomi: facet.data?.kunyomi || [],
+            },
             status: 'learning',
-            facet_count: 2, // It will have two facets
+            facet_count: 0, // No facets created yet
             createdAt: now,
             relatedUnits: [],
             personalNotes: `Auto-generated as component for KU ${kuId}`,
           });
-          kanjiKuId = newKanjiKuRef.id;
         } else {
-          kanjiKuId = kanjiSnapshot.docs[0].id;
+          const kanjiKuId = kanjiSnapshot.docs[0].id;
           const kanjiKuRef = db.collection(KNOWLEDGE_UNITS_COLLECTION).doc(kanjiKuId);
-          batch.update(kanjiKuRef, { facet_count: FieldValue.increment(2) });
+          // If the user re-adds a kanji, ensure it goes back into the learning queue.
+          batch.update(kanjiKuRef, { status: 'learning' });
         }
-
-        // Create BOTH Meaning and Reading facets
-        const meaningFacetRef = db.collection(REVIEW_FACETS_COLLECTION).doc();
-        batch.set(meaningFacetRef, {
-          kuId: kanjiKuId,
-          facetType: 'Kanji-Component-Meaning',
-          srsStage: 0,
-          nextReviewAt: now,
-          createdAt: now,
-          history: [],
-        });
-
-        const readingFacetRef = db.collection(REVIEW_FACETS_COLLECTION).doc();
-        batch.set(readingFacetRef, {
-          kuId: kanjiKuId,
-          facetType: 'Kanji-Component-Reading',
-          srsStage: 0,
-          nextReviewAt: now,
-          createdAt: now,
-          history: [],
-        });
-        
-        logger.debug(`Batch-set Meaning and Reading facets for Kanji KU ${kanjiKuId}`);
       }
 
-      // --- Complex Kanji Facets ---
+      // --- Complex Kanji Facets (DEPRECATED but kept for safety) ---
       else if (facetKey.startsWith('Kanji-Component-')) {
         const parts = facetKey.split('-');
         if (parts.length !== 4) {

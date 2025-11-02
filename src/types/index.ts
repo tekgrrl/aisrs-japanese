@@ -111,6 +111,7 @@ export interface ReviewFacet {
 export interface ReviewItem {
   facet: ReviewFacet;
   ku: KnowledgeUnit;
+  lesson?: Lesson;
 }
 
 // This represents the structure of our old db.json
