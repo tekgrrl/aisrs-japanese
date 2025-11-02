@@ -142,6 +142,10 @@ export default function LearnItemPage() {
         throw new Error(err.error || 'Failed to create facets');
       }
 
+      // --- New: Dispatch event to refresh header stats ---
+      window.dispatchEvent(new CustomEvent('refreshStats'));
+      // --- End New ---
+
       router.push('/'); 
     } catch (err: any) {
       setError(err.message);
