@@ -131,5 +131,35 @@ This phase addresses the complexity of handling multiple Kanji readings (on'yomi
     *   **Example Body:** `{ "kuId": "...", "facetsToCreate": ["Meaning", "Reading-Onyomi-ショク", "Reading-Kunyomi-た.べる"] }`
 *   **Implementation:** The backend will iterate through the `facetsToCreate` array and generate the corresponding `ReviewFacet` documents in Firestore.
 
+**Key Learnings & Recent Design Decisions (Nov 2025)**
+
+This summary captures critical technical lessons and design choices from the recent refactoring work.
+
+1.  **Firestore Timestamp Integrity is Critical:**
+    *   **Problem:** The review queue was silently failing. `review-facets` with past `nextReviewAt` dates were not being fetched.
+    *   **Root Cause:** The `PUT /api/review-facets/[id]` endpoint was converting `Date` objects to ISO strings (`.toISOString()`) before saving to Firestore. This created a data type mismatch, as the query endpoint used a proper `Date` object for comparison against a `string` field.
+    *   **Decision:** All date/time fields (`nextReviewAt`, `createdAt`, `lastReviewAt`) **must** be saved as native JavaScript `Date` objects in server-side code. Firestore will automatically convert them to the correct Timestamp type. Never save dates as strings.
+
+2.  **`firebase-admin` SDK Incompatibility in API Routes:**
+    *   **Problem:** The `GET /api/review-facets` endpoint was consistently returning a generic 500 error, even with `try...catch` blocks.
+    *   **Root Cause:** Importing certain modules from the `firebase-admin` SDK (specifically `FieldValue` and `FieldPath`) into a Next.js API route causes an environment incompatibility crash. The API route's serverless/edge environment does not support the native Node.js dependencies that the Admin SDK relies on. The crash happens at the module initialization level, before any handler code is executed.
+    *   **Decision:** Avoid all imports from `firebase-admin` within API routes. Queries that require `FieldPath` (like `in` queries) have been refactored to use less efficient but more robust individual `doc().get()` calls within a `Promise.all()`.
+
+3.  **Deferred Learning Flow for Component Kanji:**
+    *   **Problem:** Selecting a component Kanji from a Vocab lesson was creating duplicate learning items and review facets prematurely.
+    *   **Decision:** The flow has been redesigned. When a user selects a component Kanji (e.g., `[ ] Add 待`), the API now **only** creates the `Kanji` Knowledge Unit with `status: 'learning'`. It does **not** create any review facets. The new Kanji KU then appears in the main learning queue, where the user can learn it and select its specific facets in a separate, dedicated step. This provides a cleaner, more intentional learning path.
+
+4.  **Frontend-Driven Data for New KUs:**
+    *   **Problem:** When creating a component Kanji KU, the backend had no context for its meaning or readings, resulting in placeholder (`"..."`) data.
+    *   **Decision:** The frontend is now responsible for extracting the relevant data (`meaning`, `onyomi`, `kunyomi`) from the parent Vocab lesson. This data is sent in the body of the `POST /api/review-facets` request. The backend then uses this data to create a fully populated and accurate Kanji KU from the start.
+
+5.  **Gemini API Prompting Strategy:**
+    *   **Problem:** The Gemini API was not reliably returning structured JSON for Kanji lessons.
+    *   **Finding:** For this model, including all instructions (role, task, schema) within a single, comprehensive `userMessage` is more effective than using `systemInstruction`. Furthermore, removing the `responseSchema` parameter and setting `temperature: 0.4` resulted in the most consistent and correct JSON output.
+
+6.  **UI State Synchronization (`refreshStats`):**
+    *   **Pattern:** The application uses a client-side custom event named `refreshStats`. When an action (like creating facets or adding a KU) is likely to change the number of items in the learn or review queues, this event is dispatched on the `window` object.
+    *   **Implementation:** The `<Header>` component listens for this event and triggers a refetch of the `/api/stats` endpoint to update the counts displayed on the "Learn" and "Review" buttons. This is the established pattern for cross-component state updates.
+
 
 
