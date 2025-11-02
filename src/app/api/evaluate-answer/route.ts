@@ -29,7 +29,7 @@ export async function POST(request: Request) {
       );
     }
 
-    console.info(`questionType = ${questionType}, question = ${question}, topic = ${topic}, expectedAnswer = ${expectedAnswer}, userAnswer=${userAnswer}`)
+    const systemPrompt = `You are a Japanese language tutor. A user is being quizzed on their Japanese language skills.
 
     const systemPrompt = `You are a Japanese language tutor. A user is being quizzed on their Japanese language skils.
 - The question was: "What is the ${questionType} of ${question || 'N/A'}"
