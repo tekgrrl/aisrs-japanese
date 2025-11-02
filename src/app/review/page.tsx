@@ -144,6 +144,7 @@ export default function ReviewPage() {
     const expectedAnswer = getExpectedAnswer(currentItem);
     const question = getQuestion(currentItem);
     const topic = currentItem.ku.content; // The "topic" is the KU content
+    const questionType = getQuestionType(currentItem); // Get the question type
 
     if (expectedAnswer === null) {
       setError('Waiting for dynamic question to load.');
@@ -161,7 +162,8 @@ export default function ReviewPage() {
           userAnswer,
           expectedAnswer,
           question,
-          topic
+          topic,
+          questionType, // Add questionType to the payload
         }),
       });
 
@@ -266,19 +268,19 @@ export default function ReviewPage() {
     // 3. Handle "forward" quizzes (Content-to-...)
     if (ku.type === 'Vocab') {
       // --- VOCAB LOGIC ---
-      const lesson = ku.lessonCache as VocabLesson | undefined;
+      const lesson = item.lesson as VocabLesson | undefined;
       if (facet.facetType === 'Content-to-Definition') {
-        // Use lesson cache first, fallback to older ku.data
+        // Use lesson first, fallback to older ku.data
         return lesson?.meaning_explanation || ku.data?.definition || '';
       }
       if (facet.facetType === 'Content-to-Reading') {
-        // Use lesson cache first, fallback to older ku.data
+        // Use lesson first, fallback to older ku.data
         return lesson?.reading_explanation || ku.data?.reading || '';
       }
     } 
     else if (ku.type === 'Kanji') {
-      // --- KANJI LOGIC (THE FIX) ---
-      const lesson = ku.lessonCache as KanjiLesson | undefined;
+      // --- KANJI LOGIC ---
+      const lesson = item.lesson as KanjiLesson | undefined;
       if (facet.facetType === 'Content-to-Definition') {
         // Kanji "definition" is the 'meaning' field from the lesson
         return lesson?.meaning || ku.data?.meaning || '';
@@ -292,7 +294,7 @@ export default function ReviewPage() {
         if (allReadings.length > 0) {
           return allReadings.join(', '); // e.g., "ドク, トク, よむ"
         }
-        // Fallback just in case lessonCache is old/missing
+        // Fallback just in case lesson is old/missing
         return ku.data?.onyomi || ku.data?.kunyomi || '';
       }
     }
@@ -347,6 +349,7 @@ export default function ReviewPage() {
   }
 
   const questionText = getQuestion(currentItem);
+  console.log(`facetType = ${currentItem.facet.facetType}`);
   const isDynamicLoading =
     currentItem.facet.facetType === 'AI-Generated-Question' &&
     (isFetchingDynamicQuestion || !questionText);
