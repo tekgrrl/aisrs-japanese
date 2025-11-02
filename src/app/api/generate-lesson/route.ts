@@ -68,16 +68,30 @@ export async function POST(request: Request) {
     // --- END CACHE CHECK ---
 
     logger.info(`Cache miss. Generating new lesson for KU ${kuId}`);
-    let systemPrompt: string;
     let jsonSchema: any;
     let userMessage: string;
 
     // 2. Select prompt based on KU type
     if (ku.type === 'Kanji') {
-      systemPrompt = KANJI_SYSTEM_PROMPT;
-      jsonSchema = { /* ... Kanji schema ... */ };
-      // TODO this does things the weird way. It did work for Vocab but it shouldn't have
-      userMessage = `Generate a lesson for this Kanji: ${JSON.stringify(ku)}`;
+      const KANJI_USER_PROMPT = `You are an expert Japanese tutor. You will be asked to generate a lesson for the Kanji: ${ku.content}. The lesson should be in English. Where you want to use Japanese text for examples, explanations, meanings and readings do so but do not include Romaji. Don't over think things when determining readings. You MUST return ONLY a valid JSON object with this schema:
+      { 
+        "type": "Kanji",
+        "kanji": "The kanji character",
+        "meaning": "The core meaning(s), as a string.",
+        "reading_onyomi": [
+          { "reading": "Onyomi reading (Katakana)", "example": "Example word (kana)" }
+        ],
+        "reading_kunyomi": [
+          { "reading": "Kunyomi reading (Hiragana)", "example": "Example word (kana)" }
+        ],
+        "radicals": [
+          { "radical": "Radical character", "meaning": "Radical meaning" }
+        ],
+        "mnemonic_meaning": "A short, creative mnemonic for remembering the meaning.",
+        "mnemonic_reading": "A short, creative mnemonic for remembering the main onyomi."
+      }
+      Do not add any text before or after the JSON object.`;
+      userMessage = KANJI_USER_PROMPT;
     } else if (ku.type === 'Vocab' || ku.type === 'Concept' || ku.type === 'Grammar') {
       const VOCAB_USER_PROMPT = `You are an expert Japanese tutor. You will be asked to generate a lesson for the Japanese word: ${ku.content}.  
       The lesson should be in English. Where you want to use Japanese text for examples, explanations, meanings and readings do so but do not include Romaji. 

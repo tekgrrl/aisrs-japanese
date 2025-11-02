@@ -5,7 +5,7 @@ import { API_LOGS_COLLECTION } from '@/lib/firebase-config'; // Import collectio
 import { ApiLog } from '@/types'; // Import the log type
 import { performance } from 'perf_hooks'; // For timing
 
-const MODEL_NAME = process.env.MODEL_GEMINI_PRO || 'gemini-2.5-flash'
+const MODEL_NAME = process.env.MODEL_GEMINI_FLASH || 'gemini-2.5-flash'
 
 export async function POST(request: Request) {
   logger.info('--- POST /api/evaluate-answer ---');
@@ -67,7 +67,7 @@ Example for a fail: {"result": "fail", "explanation": "Incorrect. The expected r
       },
     };
     logRef = await db.collection(API_LOGS_COLLECTION).add(initialLogData);
-    logger.debug(`Created initial log entry: ${logRef.id}`);
+    // logger.debug(`Created initial log entry: ${logRef.id}`);
     // --- End Log ---
 
     const apiKey = process.env.GEMINI_API_KEY;

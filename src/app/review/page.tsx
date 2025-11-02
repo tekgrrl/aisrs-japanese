@@ -280,9 +280,15 @@ export default function ReviewPage() {
     
     // --- KANJI COMPONENT LOGIC ---
     if (facet.facetType === 'Kanji-Component-Meaning') {
-      return ku.data?.definition || '';
+      const lesson = item.lesson as KanjiLesson | undefined;
+      return lesson?.meaning || ku.data?.definition || '';
     }
     if (facet.facetType === 'Kanji-Component-Reading') {
+      const lesson = item.lesson as KanjiLesson | undefined;
+      const onyomi = lesson?.reading_onyomi?.map(r => r.reading) || [];
+      if (onyomi.length > 0) {
+        return onyomi.join(', ');
+      }
       return ku.data?.onyomi || '';
     }
 

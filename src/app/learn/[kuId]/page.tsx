@@ -95,7 +95,7 @@ export default function LearnItemPage() {
   };
 
   const handleSubmitFacets = async () => {
-    if (!ku) return;
+    if (!ku || !lesson) return;
     setIsSubmitting(true);
     setError(null); 
 
@@ -109,13 +109,31 @@ export default function LearnItemPage() {
       return;
     }
 
+    // --- New: Construct detailed payload ---
+    const facetsToCreatePayload = selectedFacetKeys.map(key => {
+      if (key.startsWith('Kanji-Component-') && lesson.type === 'Vocab') {
+        const kanjiChar = key.split('-')[2];
+        const kanjiData = (lesson as VocabLesson).component_kanji?.find(k => k.kanji === kanjiChar);
+        return { 
+          key: key, 
+          data: {
+            meaning: kanjiData?.meaning,
+            onyomi: kanjiData?.onyomi,
+            kunyomi: kanjiData?.kunyomi
+          } 
+        };
+      }
+      return { key: key };
+    });
+    // --- End New ---
+
     try {
       const response = await fetch('/api/review-facets', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           kuId: ku.id,
-          facetsToCreate: selectedFacetKeys,
+          facetsToCreate: facetsToCreatePayload, // Send new payload
         }),
       });
 
@@ -368,8 +386,8 @@ export default function LearnItemPage() {
       {isLoading && <p className="text-xl text-center text-gray-500 dark:text-gray-400">Loading lesson...</p>}
       {error && <div className="bg-red-200 dark:bg-red-800 border border-red-400 dark:border-red-600 text-red-800 dark:text-red-100 p-4 rounded-md mb-6">{error}</div>}
       
-      {lesson && lesson.type === 'Vocab' && renderVocabLesson(lesson as VocabLesson)}
-      {lesson && lesson.type === 'Kanji' && renderKanjiLesson(lesson as KanjiLesson)}
+      {lesson && ku?.type === 'Vocab' && renderVocabLesson(lesson as VocabLesson)}
+      {lesson && ku?.type === 'Kanji' && renderKanjiLesson(lesson as KanjiLesson)}
 
       {!isLoading && !error && lesson && source !== 'review' && (
           <>
