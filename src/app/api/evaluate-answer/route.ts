@@ -41,7 +41,7 @@ Note that "Definition" refers to the english definition.
 Your task is to evaluate if the user's answer is correct.
 1.  Read the "expected answer(s)". This may be a single answer (e.g., "Family") or a comma-separated list of possible correct answers (e.g., "ドク, トク, よむ").
 2.  Compare the user's answer to your understanding of what the actual answer is
-3.  Be lenient with hiragana vs katakana (e.g., if expected is "ドク" and user typed "どく", it's a pass).
+  "result": "pass" | "fail",
 4.  Be lenient with extra punctuation or whitespace.
 5.  If it looks like the user provided the reading instead of the definition or vice versa fail them but let them know in your response
 6.  Provide your evaluation ONLY as a valid JSON object with the following schema:
