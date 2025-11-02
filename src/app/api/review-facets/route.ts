@@ -139,7 +139,7 @@ export async function POST(request: Request) {
     }
 
     const batch = db.batch();
-    const now = Timestamp.now();
+    const now = new Date(); // Use JS Date object
     let parentFacetCount = 0; // Correctly track parent's direct facets
 
     // --- DEBUG: Log the input facets ---

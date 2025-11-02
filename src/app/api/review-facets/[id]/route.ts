@@ -84,15 +84,14 @@ export async function PUT(
     const newNextReviewDate = new Date(
       now.getTime() + intervalHours * 60 * 60 * 1000
     );
-    const newNextReviewAt = newNextReviewDate.toISOString();
 
     // --- Prepare update data ---
     const updateData = {
       srsStage: newStage,
-      nextReviewAt: newNextReviewAt,
-      lastReviewAt: nowISO,
+      nextReviewAt: newNextReviewDate, // Keep as Date object
+      lastReviewAt: now, // Keep as Date object
       history: FieldValue.arrayUnion({
-        timestamp: nowISO,
+        timestamp: now, // Keep as Date object
         result: result,
         stage: newStage,
       }),
@@ -107,7 +106,7 @@ export async function PUT(
     return NextResponse.json({
       success: true,
       newStage: newStage,
-      nextReviewAt: newNextReviewAt,
+      nextReviewAt: newNextReviewDate.toISOString(),
     });
   } catch (error) {
     logger.error(`PUT /api/review-facets/${facetId} - Error`, error);
