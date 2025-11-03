@@ -4,8 +4,7 @@ import { db, Timestamp } from '@/lib/firebase'; // Import db and Timestamp
 import { API_LOGS_COLLECTION } from '@/lib/firebase-config'; // Import collection name
 import { ApiLog } from '@/types'; // Import the log type
 import { performance } from 'perf_hooks'; // For timing
-import { GoogleGenAI } from '@google/genai'; 
-import { GoogleGenAI } from '@google/genai'; 
+
 const MODEL_NAME = process.env.MODEL_GEMINI_FLASH || 'gemini-2.5-flash'
 
 export async function POST(request: Request) {
@@ -19,7 +18,7 @@ export async function POST(request: Request) {
   let evaluationResult: { result: 'pass' | 'fail'; explanation: string } | undefined;
 
   try {
-    const { userAnswer, expectedAnswer, question, topic, questionType } = await request.json();
+    const { userAnswer, expectedAnswer, question, topic } = await request.json();
 
     if (userAnswer === undefined || userAnswer === null || expectedAnswer === null || expectedAnswer === undefined) {
       logger.warn('Missing userAnswer or expectedAnswer', { userAnswer, expectedAnswer });
@@ -29,24 +28,20 @@ export async function POST(request: Request) {
       );
     }
 
-    const systemPrompt = `You are a Japanese language tutor. A user is being quizzed on their Japanese language skills.
-
-    const systemPrompt = `You are a Japanese language tutor. A user is being quizzed on their Japanese language skils.
-- The question was: "What is the ${questionType} of ${question || 'N/A'}"
+    const systemPrompt = `You are an AISRS evaluator. A user is being quizzed.
+- The question was: "${question || 'N/A'}"
+- The topic was: "${topic || 'N/A'}"
 - The expected answer(s) are: "${expectedAnswer}"
 - The user's answer is: "${userAnswer}"
 
-Note that "Definition" refers to the english definition.
-
 Your task is to evaluate if the user's answer is correct.
 1.  Read the "expected answer(s)". This may be a single answer (e.g., "Family") or a comma-separated list of possible correct answers (e.g., "ドク, トク, よむ").
-2.  Compare the user's answer to your understanding of what the actual answer is
-  "result": "pass" | "fail",
+2.  Compare the user's answer to the list. The user is correct if their answer is *any one* of the items in the list.
+3.  Be lenient with hiragana vs katakana (e.g., if expected is "ドク" and user typed "どく", it's a pass).
 4.  Be lenient with extra punctuation or whitespace.
-5.  If it looks like the user provided the reading instead of the definition or vice versa fail them but let them know in your response
-6.  Provide your evaluation ONLY as a valid JSON object with the following schema:
+5.  Provide your evaluation ONLY as a valid JSON object with the following schema:
 {
-  "result": "pass" | "fail" | 
+  "result": "pass" | "fail",
   "explanation": "A brief, one-sentence explanation for *why* the user passed or failed, referencing their answer."
 }
 Example for a pass: {"result": "pass", "explanation": "Correct! よむ is one of the kun'yomi readings."}
@@ -69,7 +64,6 @@ Example for a fail: {"result": "fail", "explanation": "Incorrect. The expected r
         input_expectedAnswer: expectedAnswer,
         input_question: question,
         input_topic: topic,
-        // input_questionType: questionType,
       },
     };
     logRef = await db.collection(API_LOGS_COLLECTION).add(initialLogData);
@@ -87,6 +81,14 @@ Example for a fail: {"result": "fail", "explanation": "Incorrect. The expected r
       systemInstruction: { parts: [{ text: systemPrompt }] },
       generationConfig: {
         responseMimeType: 'application/json',
+        responseSchema: {
+          type: 'OBJECT',
+          properties: {
+            result: { type: 'STRING', enum: ['pass', 'fail'] },
+            explanation: { type: 'STRING' },
+          },
+          required: ['result', 'explanation'],
+        },
       },
     };
 

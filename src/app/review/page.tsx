@@ -16,16 +16,11 @@ export default function ReviewPage() {
   const [userAnswer, setUserAnswer] = useState('');
   const [answerState, setAnswerState] = useState<AnswerState>('unanswered');
   const [aiExplanation, setAiExplanation] = useState('');
-  const [sessionFailureCounts, setSessionFailureCounts] = useState<
-    Record<string, number>
-  >({});
+  const [sessionFailureCounts, setSessionFailureCounts] = useState<Record<string, number>>({});
 
   // --- State for AI-Generated Questions ---
-  const [isFetchingDynamicQuestion, setIsFetchingDynamicQuestion] =
-    useState(false);
-  const [dynamicQuestion, setDynamicQuestion] = useState<string | null>(
-    null
-  );
+  const [isFetchingDynamicQuestion, setIsFetchingDynamicQuestion] = useState(false);
+  const [dynamicQuestion, setDynamicQuestion] = useState<string | null>(null);
   const [dynamicAnswer, setDynamicAnswer] = useState<string | null>(null);
 
   const currentItem = reviewQueue[currentIndex];
@@ -349,7 +344,7 @@ export default function ReviewPage() {
   }
 
   const questionText = getQuestion(currentItem);
-  console.log(`facetType = ${currentItem.facet.facetType}`);
+  console.log(`facetType = ${getQuestionType(currentItem)}`);
   const isDynamicLoading =
     currentItem.facet.facetType === 'AI-Generated-Question' &&
     (isFetchingDynamicQuestion || !questionText);
@@ -392,7 +387,7 @@ export default function ReviewPage() {
             type="text"
             value={userAnswer}
             onChange={(e) => setUserAnswer(e.target.value)}
-            placeholder="Type your answer..."
+            placeholder={getQuestionType(currentItem) === 'Definition' ? "Type your answer..." : "回答を入力して..."}
             disabled={answerState !== 'unanswered' || isDynamicLoading}
             className="w-full p-4 bg-gray-700 border-2 border-gray-600 text-white text-xl rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-800 disabled:text-gray-500"
           />

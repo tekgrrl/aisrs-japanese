@@ -10,6 +10,7 @@ import { useState, useEffect, useCallback } from 'react';
 export default function Header() {
   const [stats, setStats] = useState({ learnCount: 0, reviewCount: 0 });
 
+  console.log("Re-running component code");
   // Wrap fetchStats in useCallback so it's a stable function
   // and can be safely used in useEffect dependency arrays.
   const fetchStats = useCallback(async () => {
