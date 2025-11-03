@@ -146,7 +146,7 @@ export default function LearnItemPage() {
       window.dispatchEvent(new CustomEvent('refreshStats'));
       // --- End New ---
 
-      router.push('/'); 
+      router.push('/learn'); 
     } catch (err: any) {
       setError(err.message);
     } finally {
