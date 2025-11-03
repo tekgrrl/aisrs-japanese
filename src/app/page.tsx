@@ -4,6 +4,8 @@ import React, { useState, useEffect, FormEvent } from 'react';
 // Import from shared types file
 // Assuming '@/types' is a valid path alias in your project
 import { KnowledgeUnit, ReviewFacet } from '@/types';
+import Link from 'next/link';
+
 
 const kuTypes: KnowledgeUnit['type'][] = [
   'Vocab',
@@ -194,6 +196,14 @@ export default function KnowledgeManagementPage() {
                 <span className="text-2xl font-semibold text-white break-all">
                   {ku.content}
                 </span>
+
+                <Link
+                  href={`/learn/${ku.id}?source=review`}
+                  className="text-sm inline-block px-4 py-2 bg-blue-600 text-white font-semibold rounded-md hover:bg-blue-700"
+                  >
+                  Review lesson
+                </Link>
+                
                 <span className="font-mono text-sm bg-gray-900 text-gray-100 px-2 py-1 rounded ml-2 flex-shrink-0">
                   {ku.type}
                 </span>
