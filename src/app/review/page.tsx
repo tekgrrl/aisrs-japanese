@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, FormEvent } from 'react';
+import React, { useState, useEffect, useRef, FormEvent } from 'react';
 import Link from 'next/link';
 import { ReviewItem, ReviewFacet, VocabLesson, KanjiLesson } from '@/types';
 import { logger } from '@/lib/logger';
@@ -24,6 +24,9 @@ export default function ReviewPage() {
   const [dynamicAnswer, setDynamicAnswer] = useState<string | null>(null);
 
   const currentItem = reviewQueue[currentIndex];
+
+  const inputRef = useRef<HTMLInputElement>(null);
+
 
   // --- Fetch Dynamic Question Logic ---
   const fetchDynamicQuestion = async (topic: string) => {
@@ -81,6 +84,14 @@ export default function ReviewPage() {
       setDynamicAnswer(null);
     }
   }, [currentItem, currentIndex]); // Re-run whenever the currentItem OR the index changes
+
+  useEffect(() => {
+    // When the component mounts, check if the ref is attached
+    if (!currentItem && inputRef.current) {
+      // If it is, call the .focus() method on the DOM element
+      inputRef.current.focus();
+    }
+  }, [currentItem]); // The empty array means this runs once on mount
 
   // --- Core SRS Logic ---
 
@@ -344,7 +355,6 @@ export default function ReviewPage() {
   }
 
   const questionText = getQuestion(currentItem);
-  console.log(`facetType = ${getQuestionType(currentItem)}`);
   const isDynamicLoading =
     currentItem.facet.facetType === 'AI-Generated-Question' &&
     (isFetchingDynamicQuestion || !questionText);
@@ -386,6 +396,8 @@ export default function ReviewPage() {
           <input
             type="text"
             value={userAnswer}
+            key={currentIndex}
+            autoFocus
             onChange={(e) => setUserAnswer(e.target.value)}
             placeholder={getQuestionType(currentItem) === 'Definition' ? "Type your answer..." : "回答を入力して..."}
             disabled={answerState !== 'unanswered' || isDynamicLoading}
