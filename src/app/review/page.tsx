@@ -232,9 +232,9 @@ export default function ReviewPage() {
       case 'AI-Generated-Question':
         return `Quiz: ${item.ku.content}`;
       case 'Content-to-Definition':
-        return 'Definition';
+        return 'Vocab Definition';
       case 'Content-to-Reading':
-        return 'Reading';
+        return 'Vocab Reading';
       case 'Kanji-Component-Meaning':
         return 'Kanji Component Meaning';
       case 'Kanji-Component-Reading':
