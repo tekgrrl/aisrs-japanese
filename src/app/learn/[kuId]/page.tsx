@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from 'react'; // <-- Import useRef
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import { KnowledgeUnit, FacetType, Lesson, VocabLesson, KanjiLesson } from '@/types';
 import { db } from '@/lib/firebase-client';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, query, collection, where, getDocs } from 'firebase/firestore';
 import { KNOWLEDGE_UNITS_COLLECTION } from '@/lib/firebase-config';
 
 export default function LearnItemPage() {
@@ -23,6 +23,7 @@ export default function LearnItemPage() {
   const [error, setError] = useState<string | null>(null);
   const [selectedFacets, setSelectedFacets] = useState<Record<string, boolean>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [kanjiStatuses, setKanjiStatuses] = useState<Record<string, string>>({});
 
   useEffect(() => {
     // --- FIX: Add gate to prevent double-fetch ---
@@ -31,13 +32,14 @@ export default function LearnItemPage() {
     }
     // --- END FIX ---
 
-    const fetchLesson = async () => {
+    const fetchLessonAndKanjiStatus = async () => {
       if (!kuId) return; // TODO is this part of normal flow? Maybe empty learning item queue?
 
       setIsLoading(true);
       setError(null);
       setKu(null);
       setLesson(null);
+      setKanjiStatuses({});
 
       try {
         // 1. Fetch the specific KU document
@@ -64,8 +66,23 @@ export default function LearnItemPage() {
           throw new Error(err.error || "Failed to generate lesson");
         }
 
-        const lessonData = await lessonResponse.json();
-        setLesson(lessonData as Lesson); 
+        const lessonData = await lessonResponse.json() as Lesson;
+        setLesson(lessonData);
+
+        // 3. Fetch statuses for component kanji if they exist
+        if (lessonData.type === 'Vocab' && lessonData.component_kanji && lessonData.component_kanji.length > 0) {
+          const kanjiChars = lessonData.component_kanji.map(k => k.kanji);
+          const kanjiQuery = query(collection(db, KNOWLEDGE_UNITS_COLLECTION), where('content', 'in', kanjiChars), where('type', '==', 'Kanji'));
+          const kanjiSnapshot = await getDocs(kanjiQuery);
+          
+          const statuses: Record<string, string> = {};
+          kanjiSnapshot.forEach(doc => {
+            const kanjiKu = doc.data() as KnowledgeUnit;
+            statuses[kanjiKu.content] = kanjiKu.status;
+          });
+          setKanjiStatuses(statuses);
+        }
+
       } catch (err: any) {
         setError(err.message || "An unknown error occurred");
       } finally {
@@ -74,7 +91,7 @@ export default function LearnItemPage() {
     };
 
     if (kuId) {
-       fetchLesson();
+      fetchLessonAndKanjiStatus();
        // --- FIX: Set ref to true after first fetch ---
        if (process.env.NODE_ENV === 'development') {
          fetchRef.current = true;
@@ -291,31 +308,42 @@ export default function LearnItemPage() {
               <span className="ml-3 text-lg text-gray-900 dark:text-white">Reading</span>
             </label>
 
-            {/* --- REFACTOR: Single Component Kanji Checkbox --- */}
-            {lesson.component_kanji && lesson.component_kanji.map((kanji, index) => (
-              <div key={`${kanji.kanji}-${index}`} className="p-4 bg-gray-300 dark:bg-gray-800 rounded-md">
-                <h3 className="text-xl font-semibold text-gray-700 dark:text-gray-300 mb-2">Component Kanji</h3>
-                <p className="text-gray-600 dark:text-gray-400 mb-3">
-                  The kanji is <span className="font-bold text-lg">{kanji.kanji}</span>, which generally means "{kanji.meaning}".
-                  It has the readings:
-                </p>
-                <div className="ml-4 mb-3 text-gray-600 dark:text-gray-400">
-                  {kanji.kunyomi && kanji.kunyomi.length > 0 && (
-                    <p>kun'yomi: {kanji.kunyomi.join(', ')}</p>
-                  )}
-                  {kanji.onyomi && kanji.onyomi.length > 0 && (
-                    <p>on'yomi: {kanji.onyomi.join(', ')}</p>
+            {/* --- REFACTOR: Conditional Component Kanji Display --- */}
+            {lesson.component_kanji && lesson.component_kanji.map((kanji, index) => {
+              const status = kanjiStatuses[kanji.kanji];
+              return (
+                <div key={`${kanji.kanji}-${index}`} className="p-4 bg-gray-300 dark:bg-gray-800 rounded-md">
+                  <h3 className="text-xl font-semibold text-gray-700 dark:text-gray-300 mb-2">Component Kanji</h3>
+                  <p className="text-gray-600 dark:text-gray-400 mb-3">
+                    The kanji is <span className="font-bold text-lg">{kanji.kanji}</span>, which generally means "{kanji.meaning}".
+                  </p>
+                  
+                  {status ? (
+                    <div className="p-2 bg-gray-400 dark:bg-gray-700 rounded-md">
+                      <p className="text-lg text-gray-800 dark:text-gray-200">
+                        {status === 'learning' 
+                          ? `You already have a lesson queued for ${kanji.kanji}.`
+                          : `You are already learning ${kanji.kanji}.`
+                        }
+                      </p>
+                    </div>
+                  ) : (
+                    <>
+                      <p className="text-gray-600 dark:text-gray-400 mb-3">
+                        In this word, it uses the reading <span className="font-bold text-lg">{kanji.reading}</span>.
+                      </p>
+                      <label className="flex items-center p-2 rounded-md hover:bg-gray-400 dark:hover:bg-gray-700 cursor-pointer">
+                        <input type="checkbox" className="h-5 w-5 rounded bg-gray-400 dark:bg-gray-900 border-gray-500 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
+                          checked={!!selectedFacets[`Kanji-Component-${kanji.kanji}`]}
+                          onChange={() => handleCheckboxChange(`Kanji-Component-${kanji.kanji}`)}
+                        />
+                        <span className="ml-3 text-lg text-gray-900 dark:text-white">Add {kanji.kanji}</span>
+                      </label>
+                    </>
                   )}
                 </div>
-                <label className="flex items-center p-2 rounded-md hover:bg-gray-400 dark:hover:bg-gray-700 cursor-pointer">
-                  <input type="checkbox" className="h-5 w-5 rounded bg-gray-400 dark:bg-gray-900 border-gray-500 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
-                    checked={!!selectedFacets[`Kanji-Component-${kanji.kanji}`]}
-                    onChange={() => handleCheckboxChange(`Kanji-Component-${kanji.kanji}`)}
-                  />
-                  <span className="ml-3 text-lg text-gray-900 dark:text-white">Add {kanji.kanji}</span>
-                </label>
-              </div>
-            ))}
+              )
+            })}
             {/* --- END REFACTOR --- */}
           </>
         )}
