@@ -95,7 +95,7 @@ export async function POST(request: Request) {
     } else if (ku.type === 'Vocab' || ku.type === 'Concept' || ku.type === 'Grammar') {
       const VOCAB_USER_PROMPT = `You are an expert Japanese tutor. You will be asked to generate a lesson for the Japanese word: ${ku.content}.  
       The lesson should be in English. Where you want to use Japanese text for examples, explanations, meanings and readings do so but do not include Romaji. 
-      For the Component Kanji, please include any kun'yomi and on'yomi readings you find.
+      For the Component Kanji, please include any kun'yomi and on'yomi readings you find. Do not explain that on'yomi is sino-japanese.
       Your response MUST be a valid JSON object that adheres to this schema:
         {
           "type": "Vocab",

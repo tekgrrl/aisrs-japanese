@@ -10,6 +10,7 @@ import { KNOWLEDGE_UNITS_COLLECTION } from '@/lib/firebase-config';
 export default function LearnItemPage() {
   const router = useRouter();
   const params = useParams();
+  // TODO Seems to imply we don't know what we get passed in the URL params, please check
   const kuId = Array.isArray(params.kuId) ? params.kuId[0] : params.kuId;
 
   // --- FIX: Add useRef to prevent double-fetch in Strict Mode ---
@@ -31,7 +32,7 @@ export default function LearnItemPage() {
     // --- END FIX ---
 
     const fetchLesson = async () => {
-      if (!kuId) return;
+      if (!kuId) return; // TODO is this part of normal flow? Maybe empty learning item queue?
 
       setIsLoading(true);
       setError(null);
@@ -51,7 +52,7 @@ export default function LearnItemPage() {
         const kuData = { id: kuDoc.id, ...kuDoc.data() } as KnowledgeUnit;
         setKu(kuData);
 
-        // 2. Fetch the AI-generated Lesson
+        // 2. Fetch the Lesson for this kuDoc by kuDoc.id
         const lessonResponse = await fetch('/api/generate-lesson', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -64,7 +65,6 @@ export default function LearnItemPage() {
         }
 
         const lessonData = await lessonResponse.json();
-        console.log("Received lesson data:", lessonData);
         setLesson(lessonData as Lesson); 
       } catch (err: any) {
         setError(err.message || "An unknown error occurred");
@@ -360,6 +360,7 @@ export default function LearnItemPage() {
   );
 
 
+  // Used to determine if the call to this page came from the review facet
   const searchParams = useSearchParams();
   const source = searchParams.get('source');
 

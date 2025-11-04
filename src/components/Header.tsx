@@ -46,6 +46,21 @@ export default function Header() {
     };
   }, [fetchStats]); // Depend on fetchStats
 
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        console.log('Page has become visible, refreshing stats...');
+        fetchStats();
+      }
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [fetchStats]);
+
   return (
     <header className="bg-gray-800 shadow-md sticky top-0 z-10">
       <nav className="container mx-auto max-w-4xl px-8 py-4 flex items-center justify-between">
