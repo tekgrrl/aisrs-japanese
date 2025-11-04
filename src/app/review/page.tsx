@@ -25,7 +25,6 @@ export default function ReviewPage() {
 
   const currentItem = reviewQueue[currentIndex];
 
-  const inputRef = useRef<HTMLInputElement>(null);
 
 
   // --- Fetch Dynamic Question Logic ---
@@ -84,14 +83,6 @@ export default function ReviewPage() {
       setDynamicAnswer(null);
     }
   }, [currentItem, currentIndex]); // Re-run whenever the currentItem OR the index changes
-
-  useEffect(() => {
-    // When the component mounts, check if the ref is attached
-    if (!currentItem && inputRef.current) {
-      // If it is, call the .focus() method on the DOM element
-      inputRef.current.focus();
-    }
-  }, [currentItem]); // The empty array means this runs once on mount
 
   // --- Core SRS Logic ---
 
