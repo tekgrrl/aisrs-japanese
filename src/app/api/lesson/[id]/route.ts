@@ -2,7 +2,10 @@ import { logger } from "@/lib/logger";
 import { NextResponse } from "next/server";
 import { db } from '@/lib/firebase';
 import { LESSONS_COLLECTION } from '@/lib/firebase-config';
-import { Lesson } from "@/types";
+import { logger } from "@/lib/logger";
+import { NextResponse } from "next/server";
+import { db } from '@/lib/firebase';
+import { LESSONS_COLLECTION } from '@/lib/firebase-config';
 
 
 
