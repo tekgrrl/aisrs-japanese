@@ -69,7 +69,7 @@ export default function LearnItemPage() {
         const lessonData = await lessonResponse.json() as Lesson;
         setLesson(lessonData);
 
-        // 3. Fetch statuses for component kanji if they exist
+        // The expression in the if statement is an example of TypeScript `type narrowing`
         if (lessonData.type === 'Vocab' && lessonData.component_kanji && lessonData.component_kanji.length > 0) {
           const kanjiChars = lessonData.component_kanji.map(k => k.kanji);
           const kanjiQuery = query(collection(db, KNOWLEDGE_UNITS_COLLECTION), where('content', 'in', kanjiChars), where('type', '==', 'Kanji'));
