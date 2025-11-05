@@ -38,7 +38,12 @@ export async function PUT(request: Request,
 
         // I need to pull the entire record and then stuff the new meaning_explanation into it
         const lessonRef = db.collection(LESSONS_COLLECTION).doc(lessonId);
-        const rawDoc = await lessonRef.get();
+        // I need to pull the entire record and then stuff the new meaning_explanation into it
+        const lessonRef = db.collection(LESSONS_COLLECTION).doc(lessonId);
+
+        await lessonRef.update({
+          [section]: content
+        });
 
         await lessonRef.update({
           [section]: content
