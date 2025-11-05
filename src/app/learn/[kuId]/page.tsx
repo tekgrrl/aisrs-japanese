@@ -252,7 +252,7 @@ export default function LearnItemPage() {
       </div>
     );
   }
-
+          className="absolute top-2 right-2 px-3 py-1 bg-gray-200 dark:bg-gray-700 dark:text-gray-200 text-xs rounded-md"
   // --- Type-Aware Render Functions (With FULL dark mode classes) ---
 
   const renderVocabLesson = (lesson: VocabLesson) => (
