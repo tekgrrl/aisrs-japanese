@@ -252,6 +252,7 @@ export default function LearnItemPage() {
       </div>
     );
   }
+  // --- Type-Aware Render Functions (With FULL dark mode classes) ---
 
   const renderVocabLesson = (lesson: VocabLesson) => (
     <>
@@ -496,9 +497,10 @@ export default function LearnItemPage() {
            : ku?.content || '...' 
           }
         </h1>
-        <p className="text-2xl text-gray-500 dark:text-gray-400 capitalize">
-          {ku ? ku.type : '...'}
-        </p>
+        {lesson && lesson?.type === 'Vocab' && (
+          <p className="text-2xl text-gray-500 dark:text-gray-400 capitalize">
+          {lesson?.partOfSpeech ? lesson.partOfSpeech : (ku ? ku.type : '...')}        </p>
+        )}
       </header>
 
       {isLoading && <p className="text-xl text-center text-gray-500 dark:text-gray-400">Loading lesson...</p>}

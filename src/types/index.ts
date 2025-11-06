@@ -30,6 +30,7 @@ export interface VocabLesson {
   kuId?: string;
   type: 'Vocab';
   vocab: string;
+  partOfSpeech: PartOfSpeech;
   meaning_explanation: string;
   reading_explanation: string;
   context_examples?: { sentence: string; translation: string }[];
@@ -62,6 +63,20 @@ export type KnowledgeUnitType =
   | 'Grammar'
   | 'Concept'
   | 'ExampleSentence';
+
+export type PartOfSpeech =
+  | "transitive-verb"
+  | "intransitive-verb"
+  | "i-adjective"
+  | "na-adjective"
+  | "noun"
+  | "proper-noun"
+  | "noun-suru"
+  | "counter"
+  | "adverb"
+  | "auxiliary-verb"
+  | "prefix"
+  | "conjunction"
 
 export interface KnowledgeUnit {
   id: string;

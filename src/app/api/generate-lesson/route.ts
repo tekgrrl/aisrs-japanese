@@ -6,27 +6,6 @@ import { KnowledgeUnit, Lesson, ApiLog } from '@/types'; // Added ApiLog
 import { API_LOGS_COLLECTION, KNOWLEDGE_UNITS_COLLECTION, LESSONS_COLLECTION } from '@/lib/firebase-config'; // Added log collection name
 import { performance } from 'perf_hooks'; // Added for timing
 
-// This likely needs to be converted to a USER PROMPT and used similar to the VOCAB_USER_PROMPT
-const KANJI_SYSTEM_PROMPT = `You are an expert Japanese tutor. You will be asked to enerate a lesson for a given Kanji. The lesson should be in English. Where you want to use Japanese text for examples, explanations, meanings and readings do so but do not include Romaji. Don't over think things when determining readings. You MUST return ONLY a valid JSON object with this schema:
-{ 
-  "type": "Kanji",
-  "kanji": "The kanji character",
-  "meaning": "The core meaning(s), as a string.",
-  "reading_onyomi": [
-    { "reading": "Onyomi reading (Katakana)", "example": "Example word (kana)" }
-  ],
-  "reading_kunyomi": [
-    { "reading": "Kunyomi reading (Hiragana)", "example": "Example word (kana)" }
-  ],
-  "radicals": [
-    { "radical": "Radical character", "meaning": "Radical meaning" }
-  ],
-  "mnemonic_meaning": "A short, creative mnemonic for remembering the meaning.",
-  "mnemonic_reading": "A short, creative mnemonic for remembering the main onyomi."
-}
-Do not add any text before or after the JSON object.`;
-
-
 
 // --- Define model name centrally ---
 const MODEL_NAME = process.env.MODEL_GEMINI_PRO || 'gemini-2.5-flash'
@@ -94,27 +73,41 @@ export async function POST(request: Request) {
       userMessage = KANJI_USER_PROMPT;
     } else if (ku.type === 'Vocab' || ku.type === 'Concept' || ku.type === 'Grammar') {
       const VOCAB_USER_PROMPT = `You are an expert Japanese tutor. You will be asked to generate a lesson for the Japanese word: ${ku.content}.  
-      The lesson should be in English. Where you want to use Japanese text for examples, explanations, meanings and readings do so but do not include Romaji. 
-      For the Component Kanji, please include any kun'yomi and on'yomi readings you find. Do not explain that on'yomi is sino-japanese.
-      Your response MUST be a valid JSON object that adheres to this schema:
-        {
-          "type": "Vocab",
-          "vocab": "The vocab word",
-          "meaning_explanation": "A detailed explanation of the word's meaning and nuance.",
-          "reading_explanation": "An explanation of the reading (e.g., when to use it).",
-          "context_examples": [
-            { "sentence": "Example sentence in Japanese.", "translation": "English translation." }
-          ],
-          "component_kanji": [
-            { 
-              "kanji": "Single Kanji character", 
-              "reading": "The reading used in this vocab", 
-              "meaning": "Its core meaning",
-              "onyomi": ["onyomi reading 1", "onyomi reading 2"],
-              "kunyomi": ["kunyomi reading 1"]
-            }
-          ]
-        }`;
+The lesson should be in English. Where you want to use Japanese text for examples, explanations, meanings and readings do so but do not include Romaji. 
+For the Component Kanji, please include any kun'yomi and on'yomi readings you find. Do not explain that on'yomi is sino-japanese.
+Your response MUST determine the primary part of speech for the vocabulary word. For the partOfSpeech property, you MUST select one of the following exact strings:
+* noun
+* proper-noun
+* noun-suru
+* i-adjective
+* na-adjective
+* transitive-verb
+* intransitive-verb
+* adverb
+* counter
+* prefix
+* conjunction
+
+Your response MUST be a valid JSON object that adheres to this schema:
+{
+  "type": "Vocab",
+  "vocab": "The vocab word",
+  "partOfSpeech": "The selected part of speech string",
+  "meaning_explanation": "A detailed explanation of the word's meaning and nuance.",
+  "reading_explanation": "An explanation of the reading (e.g., when to use it).",
+  "context_examples": [
+    { "sentence": "Example sentence in Japanese.", "translation": "English translation." }
+  ],
+  "component_kanji": [
+    { 
+      "kanji": "Single Kanji character", 
+      "reading": "The reading used in this vocab", 
+      "meaning": "Its core meaning",
+      "onyomi": ["onyomi reading 1", "onyomi reading 2"],
+      "kunyomi": ["kunyomi reading 1"]
+    }
+  ]
+}`;
       userMessage = VOCAB_USER_PROMPT;
     } else {
       logger.warn(`No lesson generator for type: ${ku.type}`);
