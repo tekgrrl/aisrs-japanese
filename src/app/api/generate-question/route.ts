@@ -6,7 +6,7 @@ import { ApiLog } from '@/types'; // Added ApiLog
 import { performance } from 'perf_hooks'; // Added for timing
 
 // --- Define model name centrally ---
-const MODEL_NAME = process.env.MODEL_GEMINI_PRO || 'gemini-2.5-flash'
+const MODEL_NAME = process.env.GEMINI_MODEL || 'gemini-2.5-flash'
 
 // --- System Prompt ---
 const SYSTEM_PROMPT = `You are an expert Japanese tutor and quiz generator. Your task is to create a single, context-based, fill-in-the-blank style question to test the user's understanding of a specific Japanese vocabulary word or grammar concept (the 'topic'). You MUST return ONLY a valid JSON object with the following schema:

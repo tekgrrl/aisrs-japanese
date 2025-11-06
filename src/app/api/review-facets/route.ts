@@ -10,7 +10,7 @@ import { KNOWLEDGE_UNITS_COLLECTION, REVIEW_FACETS_COLLECTION, API_LOGS_COLLECTI
 import { performance } from 'perf_hooks'; // Added for timing
 
 // --- Define model name centrally ---
-const MODEL_NAME = process.env.MODEL_GEMINI_PRO || 'gemini-2.5-flash'
+const MODEL_NAME = process.env.GEMINI_MODEL || 'gemini-2.5-flash'
 logger.info(`Using ${MODEL_NAME}`);
 
 // --- GET Handler (Unchanged from previous fix) ---

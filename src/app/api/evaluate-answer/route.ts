@@ -5,7 +5,7 @@ import { API_LOGS_COLLECTION } from '@/lib/firebase-config'; // Import collectio
 import { ApiLog } from '@/types'; // Import the log type
 import { performance } from 'perf_hooks'; // For timing
 
-const MODEL_NAME = process.env.MODEL_GEMINI_FLASH || 'gemini-2.5-flash'
+const MODEL_NAME = process.env.GEMINI_MODEL || 'gemini-2.5-flash'
 
 export async function POST(request: Request) {
   logger.info('--- POST /api/evaluate-answer ---');

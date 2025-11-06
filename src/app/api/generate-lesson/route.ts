@@ -8,7 +8,7 @@ import { performance } from 'perf_hooks'; // Added for timing
 
 
 // --- Define model name centrally ---
-const MODEL_NAME = process.env.MODEL_GEMINI_PRO || 'gemini-2.5-flash'
+const MODEL_NAME = process.env.GEMINI_MODEL || 'gemini-2.5-flash'
 
 export async function POST(request: Request) {
   logger.info('--- POST /api/generate-lesson ---');
