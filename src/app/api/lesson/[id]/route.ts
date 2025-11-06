@@ -2,10 +2,7 @@ import { logger } from "@/lib/logger";
 import { NextResponse } from "next/server";
 import { db } from '@/lib/firebase';
 import { LESSONS_COLLECTION } from '@/lib/firebase-config';
-import { logger } from "@/lib/logger";
-import { NextResponse } from "next/server";
-import { db } from '@/lib/firebase';
-import { LESSONS_COLLECTION } from '@/lib/firebase-config';
+import { Lesson } from "@/types";
 
 
 
@@ -38,12 +35,7 @@ export async function PUT(request: Request,
 
         // I need to pull the entire record and then stuff the new meaning_explanation into it
         const lessonRef = db.collection(LESSONS_COLLECTION).doc(lessonId);
-        // I need to pull the entire record and then stuff the new meaning_explanation into it
-        const lessonRef = db.collection(LESSONS_COLLECTION).doc(lessonId);
-
-        await lessonRef.update({
-          [section]: content
-        });
+        const rawDoc = await lessonRef.get();
 
         await lessonRef.update({
           [section]: content
