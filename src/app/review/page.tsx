@@ -230,6 +230,7 @@ export default function ReviewPage() {
   };
 
   const getQuestionType = (item: ReviewItem): string => {
+    console.log(`facetType = ${item.facet.facetType}`); // TODO This is wrong here for Kanji 
     switch (item.facet.facetType) {
       case 'AI-Generated-Question':
         return `Quiz: ${item.ku.content}`;

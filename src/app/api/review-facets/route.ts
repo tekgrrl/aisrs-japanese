@@ -10,7 +10,7 @@ import { KNOWLEDGE_UNITS_COLLECTION, REVIEW_FACETS_COLLECTION, API_LOGS_COLLECTI
 import { performance } from 'perf_hooks'; // Added for timing
 
 // --- Define model name centrally ---
-const MODEL_NAME = process.env.MODEL_GEMINI_PRO || 'gemini-2.5-flash'
+const MODEL_NAME = process.env.GEMINI_MODEL || 'gemini-2.5-flash'
 logger.info(`Using ${MODEL_NAME}`);
 
 // --- GET Handler (Unchanged from previous fix) ---
@@ -131,7 +131,7 @@ export async function POST(request: Request) {
 
 
     if (!kuId || !facetsToCreate || facetsToCreate.length === 0) {
-      logger.warn('Missing kuId or facetsToCreate', { kuId, facetsToCreate });
+      logger.debug('Missing kuId or facetsToCreate', { kuId, facetsToCreate });
       return NextResponse.json(
         { error: 'Missing kuId or facetsToCreate' },
         { status: 400 },
@@ -143,13 +143,13 @@ export async function POST(request: Request) {
     let parentFacetCount = 0; // Correctly track parent's direct facets
 
     // --- DEBUG: Log the input facets ---
-    logger.debug(`Starting batch for ${facetsToCreate.length} facets for KU ${kuId}`, { facetsToCreate });
+    logger.info(`Starting batch for ${facetsToCreate.length} facets for KU ${kuId}`, { facetsToCreate });
     // --- END DEBUG ---
 
 
     for (const facet of facetsToCreate) {
       const facetKey = facet.key;
-      logger.debug(`Processing facetKey: ${facetKey}`);
+      logger.info(`Processing facetKey: ${facetKey}`);
       apiErrorOccurred = false; // Reset API error flag for each potential AI call
       apiCapturedError = null;
       apiAiJsonText = undefined;
@@ -162,6 +162,8 @@ export async function POST(request: Request) {
         facetKey === 'Content-to-Definition' ||
         facetKey === 'Content-to-Reading' ||
         facetKey === 'Definition-to-Content' ||
+        facetKey === 'Kanji-Component-Reading' ||
+        facetKey === 'Kanji-Component-Meaning' ||
         facetKey === 'AI-Generated-Question'
       ) {
         const newFacetRef = db.collection(REVIEW_FACETS_COLLECTION).doc(); // Auto-generates ID
