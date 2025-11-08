@@ -103,9 +103,14 @@ export default function LearnItemPage() {
 
   }, [kuId]);
 
-  // --- Facet Selection Handlers (Unchanged) ---
+  /* 
+   * By passing a function to setSelectedFacets, you're telling React: "I don't know what the state is right now. 
+   * When you're ready to update, please run this function, and give me the guaranteed most recent state, which I will call prev."
+  */
   const handleCheckboxChange = (facetKey: string) => {
+    // Here we replace selectedFacets with a function that can be called by React at render time to get the actual state (which may have changed)
     setSelectedFacets((prev) => ({
+      // recreate the state we passed in with the boolean value of `facetKey` flipped
       ...prev,
       [facetKey]: !prev[facetKey],
     }));
@@ -119,6 +124,8 @@ export default function LearnItemPage() {
     const selectedFacetKeys = Object.keys(selectedFacets).filter(
       (key) => selectedFacets[key]
     );
+
+    console.log(`facets = ${selectedFacets}`);
 
     if (selectedFacetKeys.length === 0) {
       setError('Please select at least one facet to learn.');
@@ -145,6 +152,7 @@ export default function LearnItemPage() {
     // --- End New ---
 
     try {
+      console.log(JSON.stringify(facetsToCreatePayload));
       const response = await fetch('/api/review-facets', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -381,7 +389,7 @@ export default function LearnItemPage() {
           <>
             <label className="flex items-center p-4 bg-gray-200 dark:bg-gray-700 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 cursor-pointer">
               <input type="checkbox" className="h-5 w-5 rounded bg-gray-300 dark:bg-gray-900 border-gray-400 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
-                checked={!!selectedFacets['Content-to-Definition']}
+                checked={!!selectedFacets['Content-to-Definition']} // the !! makes sure that the evaluation is boolean and not undefined or null
                 onChange={() => handleCheckboxChange('Content-to-Definition')}
               />
               <span className="ml-3 text-lg text-gray-900 dark:text-white">Meaning</span>
@@ -438,15 +446,15 @@ export default function LearnItemPage() {
           <>
             <label className="flex items-center p-4 bg-gray-200 dark:bg-gray-700 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 cursor-pointer">
               <input type="checkbox" className="h-5 w-5 rounded bg-gray-300 dark:bg-gray-900 border-gray-400 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
-                checked={!!selectedFacets['Content-to-Definition']}
-                onChange={() => handleCheckboxChange('Content-to-Definition')}
+                checked={!!selectedFacets['Kanji-Component-Meaning']}
+                onChange={() => handleCheckboxChange('Kanji-Component-Meaning')}
               />
               <span className="ml-3 text-lg text-gray-900 dark:text-white">Meaning (Kanji {'->'} Meaning)</span>
             </label>
             <label className="flex items-center p-4 bg-gray-200 dark:bg-gray-700 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 cursor-pointer">
               <input type="checkbox" className="h-5 w-5 rounded bg-gray-300 dark:bg-gray-900 border-gray-400 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
-                checked={!!selectedFacets['Content-to-Reading']}
-                onChange={() => handleCheckboxChange('Content-to-Reading')}
+                checked={!!selectedFacets['Kanji-Component-Reading']}
+                onChange={() => handleCheckboxChange('Kanji-Component-Reading')}
               />
               <span className="ml-3 text-lg text-gray-900 dark:text-white">Reading (Kanji {'->'} On/Kun)</span>
             </label>

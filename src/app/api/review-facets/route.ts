@@ -131,7 +131,7 @@ export async function POST(request: Request) {
 
 
     if (!kuId || !facetsToCreate || facetsToCreate.length === 0) {
-      logger.warn('Missing kuId or facetsToCreate', { kuId, facetsToCreate });
+      logger.debug('Missing kuId or facetsToCreate', { kuId, facetsToCreate });
       return NextResponse.json(
         { error: 'Missing kuId or facetsToCreate' },
         { status: 400 },
@@ -143,13 +143,13 @@ export async function POST(request: Request) {
     let parentFacetCount = 0; // Correctly track parent's direct facets
 
     // --- DEBUG: Log the input facets ---
-    logger.debug(`Starting batch for ${facetsToCreate.length} facets for KU ${kuId}`, { facetsToCreate });
+    logger.info(`Starting batch for ${facetsToCreate.length} facets for KU ${kuId}`, { facetsToCreate });
     // --- END DEBUG ---
 
 
     for (const facet of facetsToCreate) {
       const facetKey = facet.key;
-      logger.debug(`Processing facetKey: ${facetKey}`);
+      logger.info(`Processing facetKey: ${facetKey}`);
       apiErrorOccurred = false; // Reset API error flag for each potential AI call
       apiCapturedError = null;
       apiAiJsonText = undefined;
@@ -162,6 +162,8 @@ export async function POST(request: Request) {
         facetKey === 'Content-to-Definition' ||
         facetKey === 'Content-to-Reading' ||
         facetKey === 'Definition-to-Content' ||
+        facetKey === 'Kanji-Component-Reading' ||
+        facetKey === 'Kanji-Component-Meaning' ||
         facetKey === 'AI-Generated-Question'
       ) {
         const newFacetRef = db.collection(REVIEW_FACETS_COLLECTION).doc(); // Auto-generates ID
