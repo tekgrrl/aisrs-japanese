@@ -346,6 +346,8 @@ export default function ReviewPage() {
     );
   }
 
+  const questionType = getQuestionType(currentItem);
+  console.log(`QuestionType = ${questionType}`);
   const questionText = getQuestion(currentItem);
   const isDynamicLoading =
     currentItem.facet.facetType === 'AI-Generated-Question' &&
@@ -370,14 +372,14 @@ export default function ReviewPage() {
         {/* Question Area */}
         <div className="text-center mb-8 min-h-[160px] flex flex-col justify-center">
           <p className="text-lg font-semibold text-blue-300 mb-3 truncate px-4">
-            {getQuestionType(currentItem)}
+            {questionType}
           </p>
           {isDynamicLoading ? (
             <p className="text-3xl text-gray-400 animate-pulse">
               Generating question...
             </p>
           ) : (
-            <p className="text-5xl font-bold text-white break-words">
+            <p className={`${questionType.startsWith('Quiz') ? 'text-2xl' : 'text-5xl'} font-bold text-white break-words`}>
               {questionText || '[Question not loaded]'}
             </p>
           )}
