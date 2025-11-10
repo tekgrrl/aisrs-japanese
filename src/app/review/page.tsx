@@ -143,12 +143,6 @@ export default function ReviewPage() {
     const topic = currentItem.ku.content; // The "topic" is the KU content
     const questionType = getQuestionType(currentItem); // Get the question type
 
-    if (expectedAnswer) {
-      console.log(`expectedAnswer = ${expectedAnswer}`)
-    } else {
-      console.log("expectedAnswer not set");
-    }
-
     if (expectedAnswer === null) {
       setError('Waiting for dynamic question to load.');
       setAnswerState('unanswered');
