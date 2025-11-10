@@ -1,3 +1,8 @@
+AISRS-Japanese is an SRS based Japanese Language app with AI enhancements. It uses Google Gemini to generate lessons for Vocab and Kanji that the user inputs. Lessons are rich and detailed, and offer the user the option to generate review facets for meaning, reading and component kanji. The review queue is SRS based and answers are evaluated by Gemini. The app can also generate more complex questions tuned to the users (self specified currently) level, but that's WiP. The app currently uses Next 15, Tailwind and Firestore. Plans are in place to move to PostgreSQL for production. 
+
+You'll need to supply your own Gemini API key (as GEMINI_API_KEY) and store them in an .env.local file. The app really requires Gemini Pro for good results. 
+
+
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
 ## Getting Started
