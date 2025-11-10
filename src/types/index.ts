@@ -145,14 +145,14 @@ export type LessonDifficulty =
 
 export interface QuestionItem {
   id: string;
-  kuId: string,
+  kuId: string;
   data: {
-    context?: string,
+    context?: string;
     question: string; 
     answer: string;
     acceptedAlternatives?: string[];
     difficulty: LessonDifficulty;
-  }
+  };
   createdAt: string | Timestamp;
   lastUsed?: string | Timestamp;
 }
