@@ -4,6 +4,8 @@ import { db, Timestamp } from '@/lib/firebase'; // Import db and Timestamp
 import { API_LOGS_COLLECTION } from '@/lib/firebase-config'; // Import collection name
 import { ApiLog } from '@/types'; // Import the log type
 import { performance } from 'perf_hooks'; // For timing
+import { GoogleGenAI } from "@google/genai";
+
 
 const MODEL_NAME = process.env.GEMINI_MODEL || 'gemini-2.5-flash'
 
@@ -70,65 +72,63 @@ Example for a fail: {"result": "fail", "explanation": "Incorrect. The expected r
     // logger.debug(`Created initial log entry: ${logRef.id}`);
     // --- End Log ---
 
+
+    // ... (Assuming MODEL_NAME, logger, userAnswer, expectedAnswer, systemPrompt, NextResponse are defined in the surrounding scope)
+
+    // 1. Initialize the client
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) { throw new Error('GEMINI_API_KEY is not defined'); }
 
-    // Using raw fetch as per current pattern in this file
-    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${apiKey}`;
-
-    const payload = {
-      contents: [{ parts: [{ text: `User Answer: ${userAnswer}\nExpected: ${expectedAnswer}` }] }], // Simple prompt
-      systemInstruction: { parts: [{ text: systemPrompt }] },
-      generationConfig: {
-        responseMimeType: 'application/json',
-        responseSchema: {
-          type: 'OBJECT',
-          properties: {
-            result: { type: 'STRING', enum: ['pass', 'fail'] },
-            explanation: { type: 'STRING' },
-          },
-          required: ['result', 'explanation'],
-        },
-      },
-    };
-
-    const response = await fetch(apiUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-
-    if (!response.ok) {
-      const errorBody = await response.text();
-      logger.error(`Gemini API error: ${response.status}`, { errorBody });
-      throw new Error(`Gemini API Error: ${response.status} ${response.statusText} - ${errorBody}`);
-    }
-
-    const result = await response.json();
-    const candidate = result.candidates?.[0];
-
-    if (!candidate || !candidate.content?.parts?.[0]?.text) {
-      logger.error('Invalid response structure from Gemini', { result });
-      throw new Error('Invalid response structure from Gemini');
-    }
-
-    const aiJsonText = candidate.content.parts[0].text;
+    const client = new GoogleGenAI({ apiKey });
 
     try {
-      evaluationResult = JSON.parse(aiJsonText);
-    } catch (parseError) {
-      logger.error('Failed to parse AI JSON response', { aiJsonText, parseError });
-      throw new Error('Failed to parse AI JSON response');
-    }
+      // 2. Make the call using the SDK
+      const response = await client.models.generateContent({
+        model: MODEL_NAME,
+        contents: [{ parts: [{ text: `User Answer: ${userAnswer}\nExpected: ${expectedAnswer}` }] }],
+        config: {
+          systemInstruction: { parts: [{ text: systemPrompt }] },
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: 'OBJECT',
+            properties: {
+              result: { type: 'STRING', enum: ['pass', 'fail'] },
+              explanation: { type: 'STRING' },
+            },
+            required: ['result', 'explanation'],
+          },
+        },
+      });
 
-    // This check satisfies TypeScript's compiler. In practice, if evaluationResult
-    // is undefined here, the JSON.parse above would have thrown an error.
-    if (!evaluationResult) {
-      throw new Error('Evaluation result is missing after AI response parsing.');
-    }
+      // 3. Extract text using the SDK's helper method
+      const aiJsonText = response.text;
 
-    logger.info(`Evaluation result: ${evaluationResult.result}`);
-    return NextResponse.json(evaluationResult);
+      if (!aiJsonText) {
+        logger.error('Empty response text from Gemini SDK', { response });
+        throw new Error('Invalid response structure from Gemini');
+      }
+
+      // 4. Parse and validate (keeping your existing robust parsing logic)
+      let evaluationResult;
+      try {
+        evaluationResult = JSON.parse(aiJsonText);
+      } catch (parseError) {
+        logger.error('Failed to parse AI JSON response', { aiJsonText, parseError });
+        throw new Error('Failed to parse AI JSON response');
+      }
+
+      if (!evaluationResult) {
+        throw new Error('Evaluation result is missing after AI response parsing.');
+      }
+
+      logger.info(`Evaluation result: ${evaluationResult.result}`);
+      return NextResponse.json(evaluationResult);
+
+    } catch (error: any) {
+      // Catch SDK errors (like 400/500 responses which throw in the SDK)
+      logger.error('Gemini API Error', { error: error.message || error });
+      throw error; // re-throw to be handled by the caller or Next.js error boundary
+    }
 
   } catch (error) {
     errorOccurred = true; // Set flag

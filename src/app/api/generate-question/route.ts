@@ -4,12 +4,14 @@ import { db, Timestamp } from '@/lib/firebase'; // Added Timestamp
 import { API_LOGS_COLLECTION } from '@/lib/firebase-config'; // Added log collection name
 import { ApiLog } from '@/types'; // Added ApiLog
 import { performance } from 'perf_hooks'; // Added for timing
+import { GoogleGenAI } from "@google/genai";
+
 
 // --- Define model name centrally ---
 const MODEL_NAME = process.env.GEMINI_MODEL || 'gemini-2.5-flash'
 
 // --- System Prompt ---
-const SYSTEM_PROMPT = `You are an expert Japanese tutor and quiz generator. 
+const systemPrompt = `You are an expert Japanese tutor and quiz generator. 
 You will be prompted with a single piece of Japanese Vocab: a word or grammar concept (the 'topic'). 
 Your task is to create a single, context-based question to test the user's understanding of that word or grammar concept. 
 You can generate questions in any of the following forms:
@@ -32,15 +34,16 @@ Rules:
 7.  Vary the question format. Sometimes ask for a particle, sometimes a verb conjugation, sometimes the vocab word itself.
 8.  If context is provided, it MUST be in English.
 9.  Do NOT use literal newlines inside the JSON string values. Use spaces instead.
-10. The combination of context and question MUST lead to a single, unambiguous correct answer. Avoid questions that could plausibly be answered by two different words from the topic.
+10. If the provided English context does NOT strictly dictate a specific politeness level, you MUST include standard valid variations (plain form, polite 'masu' form) in the accepted_alternatives array.
 11. Assume that the user is studying at beginner level JLPT N4, they know some of N4 but are not proficient
 12. If provided, use the 'Running List' of the user's weak points to generate a question that specifically targets one of these weaknesses, if it's relevant to the current topic.
-Do not add any text before or after the JSON object.`;
-
+Do not add any text before or after the JSON object.
+13. The question tests a specific concept, but natural language often has valid variations based on politeness (e.g., 食べる vs. 食べます).
+14. The answer field should contain the single most natural form for the sentence.
+15: Ambiguity Prevention: If other distinct words (synonyms) could grammatically and logically fit the blank, use the English context to disambiguate by including the closest English translation of the target word.`;
 
 export async function GET(request: Request) {
   logger.info('--- GET /api/generate-question ---');
-  logger.info(`Using ${MODEL_NAME}`);
 
   let logRef; // Firestore DocumentReference for the log entry
   let startTime = performance.now(); // Start timing
@@ -61,6 +64,7 @@ export async function GET(request: Request) {
     const baseUrl = process.env.NODE_ENV === 'production'
         ? process.env.NEXT_PUBLIC_BASE_URL || request.headers.get('host') || 'http://localhost:3000' // Adjust as needed
         : 'http://localhost:3000'; // Assuming dev server runs on 3000
+        
     const contextResponse = await fetch(`${baseUrl}/api/summarize-context`, { cache: 'no-store' }); // Don't cache context
     let runningListSummary = "No weak points identified yet.";
     if (contextResponse.ok) {
@@ -94,64 +98,54 @@ export async function GET(request: Request) {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) { throw new Error('GEMINI_API_KEY is not defined'); }
 
-    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${apiKey}`;
-
-    const payload = {
-      contents: [{ parts: [{ text: userMessage }] }],
-      systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
-      generationConfig: {
-        responseMimeType: 'application/json',
-        responseSchema: {
-          type: 'OBJECT',
-          properties: {
-            question: { type: 'STRING' },
-            answer: { type: 'STRING' },
-          },
-          required: ['question', 'answer'],
-        },
-      },
-    };
-
-    const response = await fetch(apiUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-
-    if (!response.ok) {
-      const errorBody = await response.text();
-      logger.error(`Gemini API error: ${response.status}`, { errorBody });
-      throw new Error(`Gemini API Error: ${response.status} ${response.statusText} - ${errorBody}`);
-    }
-
-    const result = await response.json();
-    const candidate = result.candidates?.[0];
-
-    if (!candidate || !candidate.content?.parts?.[0]?.text) {
-      logger.error('Invalid response structure from Gemini', { result });
-      throw new Error('Invalid response structure from Gemini');
-    }
-
-    aiJsonText = candidate.content.parts[0].text; // Assign raw text for logging
-
-    if (!aiJsonText) {
-        throw new Error("AI response text was empty.");
-    }
+    const client = new GoogleGenAI({ apiKey });
 
     try {
-      parsedJson = JSON.parse(aiJsonText); // Assign parsed result for logging
-    } catch (parseError) {
-      logger.error('Failed to parse AI JSON response for question', { aiJsonText, parseError });
-      throw new Error('Failed to parse AI JSON response for question');
-    }
+      // 2. Make the call using the SDK
+      const response = await client.models.generateContent({
+        model: MODEL_NAME,
+        contents: [{ parts: [{ text: userMessage }] }],
+        config: {
+          systemInstruction: { parts: [{ text: systemPrompt }] },
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: 'OBJECT',
+            properties: {
+              question: { type: 'STRING' },
+              answer: { type: 'STRING' },
+            },
+            required: ['question', 'answer'],
+          },
+        },
+      });
 
-    if (!parsedJson || !parsedJson.question || !parsedJson.answer) {
-        logger.error('Parsed JSON missing question or answer', { parsedJson });
-      throw new Error('Parsed JSON from AI was missing required fields.');
-    }
+      // 3. Extract text using the SDK's helper method
+      aiJsonText = response.text;
 
-    logger.info(`Successfully generated question for topic: ${topic}`);
-    return NextResponse.json(parsedJson);
+      if (!aiJsonText) {
+        logger.error('Empty response text from Gemini SDK', { response });
+        throw new Error('Invalid response structure from Gemini');
+      }
+
+      // 4. Parse and validate (keeping your existing robust parsing logic)
+      try {
+        parsedJson = JSON.parse(aiJsonText);
+      } catch (parseError) {
+        logger.error('Failed to parse AI JSON response', { aiJsonText, parseError });
+        throw new Error('Failed to parse AI JSON response');
+      }
+
+      if (!parsedJson) {
+        throw new Error('Evaluation result is missing after AI response parsing.');
+      }
+
+      return NextResponse.json(parsedJson);
+
+    } catch (error: any) {
+      // Catch SDK errors (like 400/500 responses which throw in the SDK)
+      logger.error('Gemini API Error', { error: error.message || error });
+      throw error; // re-throw to be handled by the caller or Next.js error boundary
+    }
 
   } catch (error) {
     errorOccurred = true;
@@ -212,8 +206,13 @@ export async function GET(request: Request) {
       try {
         await logRef.update(updateData);
         logger.debug(`Updated log entry: ${logRef.id}`);
-      } catch (logUpdateError) {
-        logger.error(`Failed to update log entry ${logRef.id}`, { logUpdateError });
+      } catch (error) {
+        const logUpdateError = error as Error & { code?: string };
+        logger.error(`Failed to update log entry ${logRef.id}`, {
+          errorMessage: logUpdateError.message,
+          errorCode: logUpdateError.code,
+          errorStack: logUpdateError.stack
+        });
       }
     }
     // --- End Log ---
