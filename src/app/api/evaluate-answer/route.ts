@@ -69,11 +69,6 @@ Example for a fail: {"result": "fail", "explanation": "Incorrect. The expected r
       },
     };
     logRef = await db.collection(API_LOGS_COLLECTION).add(initialLogData);
-    // logger.debug(`Created initial log entry: ${logRef.id}`);
-    // --- End Log ---
-
-
-    // ... (Assuming MODEL_NAME, logger, userAnswer, expectedAnswer, systemPrompt, NextResponse are defined in the surrounding scope)
 
     // 1. Initialize the client
     const apiKey = process.env.GEMINI_API_KEY;

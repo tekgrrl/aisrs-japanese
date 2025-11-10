@@ -136,3 +136,23 @@ export interface Database {
   reviewFacets: ReviewFacet[];
 }
 
+export type LessonDifficulty =
+| 'JLPT-N5'
+| 'JLPT-N4'
+| 'JLPT-N3'
+| 'JLPT-N2'
+| 'JLPT-N1'
+
+export interface QuestionItem {
+  id: string;
+  kuId: string,
+  data: {
+    context?: string,
+    question: string; 
+    answer: string;
+    acceptedAlternatives?: string[];
+    difficulty: LessonDifficulty;
+  }
+  createdAt: string | Timestamp;
+  lastUsed?: string | Timestamp;
+}

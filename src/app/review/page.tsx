@@ -22,6 +22,7 @@ export default function ReviewPage() {
   const [isFetchingDynamicQuestion, setIsFetchingDynamicQuestion] = useState(false);
   const [dynamicQuestion, setDynamicQuestion] = useState<string | null>(null);
   const [dynamicAnswer, setDynamicAnswer] = useState<string | null>(null);
+  const [dynamicContext, setDynamicContext] = useState<string | null>(null);
 
   const currentItem = reviewQueue[currentIndex];
 
@@ -39,9 +40,10 @@ export default function ReviewPage() {
         const errData = await response.json();
         throw new Error(errData.error || 'Failed to generate question');
       }
-      const { question, answer } = await response.json();
+      const { question, answer, context } = await response.json();
       setDynamicQuestion(question);
       setDynamicAnswer(answer);
+      setDynamicContext(context);
     } catch (err) {
       if (err instanceof Error) setError(err.message);
       else setError('An unknown error occurred');
@@ -374,14 +376,25 @@ export default function ReviewPage() {
           <p className="text-lg font-semibold text-blue-300 mb-3 truncate px-4">
             {questionType}
           </p>
+
           {isDynamicLoading ? (
             <p className="text-3xl text-gray-400 animate-pulse">
               Generating question...
             </p>
           ) : (
-            <p className={`${questionType.startsWith('Quiz') ? 'text-2xl' : 'text-5xl'} font-bold text-white break-words`}>
-              {questionText || '[Question not loaded]'}
-            </p>
+            <>
+              {/* Render Context ONLY if it's a dynamic quiz AND we have context */}
+              {questionType.startsWith('Quiz') && dynamicContext && (
+                <p className="text-xl text-gray-300 mb-4 italic">
+                  {dynamicContext}
+                </p>
+              )}
+
+              {/* Main Question Text */}
+              <p className={`${questionType.startsWith('Quiz') ? 'text-2xl' : 'text-5xl'} font-bold text-white break-words`}>
+                {questionText || '[Question not loaded]'}
+              </p>
+            </>
           )}
         </div>
 

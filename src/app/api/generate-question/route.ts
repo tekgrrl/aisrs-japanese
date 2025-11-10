@@ -21,26 +21,27 @@ You can generate questions in any of the following forms:
 
 You MUST return ONLY a valid JSON object with the following schema:
 {
-  "question": "A Japanese phrase or sentence with exactly one blank represented by '[____]'. Include brief English context if necessary.",
-  "answer": "The single Japanese word or particle that correctly fills the blank."
+  "question": "The Japanese phrase/sentence with the blank '[____]'. MUST contain ONLY Japanese text.",
+  "context": "OPTIONAL. Brief English context/hint only if needed for disambiguation.",
+  "answer": "The single Japanese word or particle that best fills the blank.",
+  "accepted_alternatives": ["Array of other grammatically valid answers (e.g. different politeness levels)."]
 }
 Rules:
 1.  The question must directly test the provided 'topic'.
 2.  Use '[____]' for the blank, exactly once.
 3.  The answer must be the single word/particle that fits the blank.
-4.  Include English context for Verb conjugation and particle matching, for general fill-in-the-blank type questions only inllcude if the Japanese sentence alone is ambiguous. 
-5.  Keep any context given brief (1 sentence max).
+4.  The question field MUST contain ONLY Japanese text (and the blank [____]). Do NOT include English in this field.
+5.  Use the context field ONLY if the Japanese sentence alone is ambiguous. It should be a brief (1 sentence max) English hint to guide the user to the specific intended answer (e.g., "polite form required" or "translates to 'absolutely'").
 6.  Ensure the generated question makes grammatical sense in Japanese.
 7.  Vary the question format. Sometimes ask for a particle, sometimes a verb conjugation, sometimes the vocab word itself.
-8.  If context is provided, it MUST be in English.
-9.  Do NOT use literal newlines inside the JSON string values. Use spaces instead.
-10. If the provided English context does NOT strictly dictate a specific politeness level, you MUST include standard valid variations (plain form, polite 'masu' form) in the accepted_alternatives array.
-11. Assume that the user is studying at beginner level JLPT N4, they know some of N4 but are not proficient
-12. If provided, use the 'Running List' of the user's weak points to generate a question that specifically targets one of these weaknesses, if it's relevant to the current topic.
-Do not add any text before or after the JSON object.
-13. The question tests a specific concept, but natural language often has valid variations based on politeness (e.g., 食べる vs. 食べます).
-14. The answer field should contain the single most natural form for the sentence.
-15: Ambiguity Prevention: If other distinct words (synonyms) could grammatically and logically fit the blank, use the English context to disambiguate by including the closest English translation of the target word.`;
+8.  Do NOT use literal newlines inside the JSON string values. Use spaces instead.
+9.  If the provided English context does NOT strictly dictate a specific politeness level, you MUST include standard valid variations (plain form, polite 'masu' form) in the accepted_alternatives array.
+10. Assume that the user is studying at beginner level JLPT N4, they know some of N4 but are not proficient
+11. If provided, use the 'Running List' of the user's weak points to generate a question that specifically targets one of these weaknesses, if it's relevant to the current topic.
+12. The question tests a specific concept, but natural language often has valid variations based on politeness (e.g., 食べる vs. 食べます).
+13. The answer field should contain the single most natural form for the sentence.
+14: Ambiguity Prevention: If other distinct words (synonyms) could grammatically and logically fit the blank, use the English context to disambiguate by including the closest English translation of the target word.
+15. Do not add any text before or after the JSON object.`;
 
 export async function GET(request: Request) {
   logger.info('--- GET /api/generate-question ---');
@@ -112,7 +113,12 @@ export async function GET(request: Request) {
             type: 'OBJECT',
             properties: {
               question: { type: 'STRING' },
+              context: { type: 'STRING' },
               answer: { type: 'STRING' },
+              accepted_alternatives: {
+                type: 'ARRAY',
+                items: { type: 'STRING' }
+              }
             },
             required: ['question', 'answer'],
           },
@@ -127,7 +133,7 @@ export async function GET(request: Request) {
         throw new Error('Invalid response structure from Gemini');
       }
 
-      // 4. Parse and validate (keeping your existing robust parsing logic)
+      // 4. Parse and validate (keeping existing robust parsing logic)
       try {
         parsedJson = JSON.parse(aiJsonText);
       } catch (parseError) {
