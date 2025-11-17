@@ -85,6 +85,7 @@ export interface KnowledgeUnit {
   data: {
     reading?: string;
     definition?: string;
+    meaning?: string; // For Kanji
     // We can add more specific fields here later
     [key: string]: any;
   };

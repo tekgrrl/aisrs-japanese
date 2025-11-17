@@ -11,7 +11,7 @@ const MODEL_NAME = process.env.GEMINI_MODEL || 'gemini-2.5-flash'
 
 export async function POST(request: Request) {
   logger.info('--- POST /api/evaluate-answer ---');
-  logger.info(`Using ${MODEL_NAME}`);
+  logger.debug(`Using ${MODEL_NAME}`);
   
   let logRef; // Firestore DocumentReference for the log entry
   let startTime = performance.now(); // Start timing
@@ -20,20 +20,44 @@ export async function POST(request: Request) {
   let evaluationResult: { result: 'pass' | 'fail'; explanation: string } | undefined;
 
   try {
-    const { userAnswer, expectedAnswer, question, topic } = await request.json();
+    const { userAnswer, expectedAnswers, question, topic } = await request.json();
 
-    if (userAnswer === undefined || userAnswer === null || expectedAnswer === null || expectedAnswer === undefined) {
-      logger.warn('Missing userAnswer or expectedAnswer', { userAnswer, expectedAnswer });
+    if ( userAnswer == null || 
+         expectedAnswers == null || 
+         !Array.isArray(expectedAnswers) || 
+         expectedAnswers.length === 0) {
+      logger.warn('Missing userAnswer or expectedAnswer', { userAnswer, expectedAnswers });
       return NextResponse.json(
         { error: 'Missing userAnswer or expectedAnswer' },
         { status: 400 },
       );
     }
 
+    console.log(`expectedAnswer = ${expectedAnswers}`);
+
+    // 3. --- NEW LOCAL CHECK ---
+    // Perform a simple, case-insensitive check against the array.
+    // You can make this more robust (e.g., kana conversion), but this is a good start.
+    const isMatch = expectedAnswers.some(ans => 
+      ans.toLowerCase() === userAnswer.toLowerCase()
+    );
+
+    if (isMatch) {
+      logger.info('Local answer check: PASS', { userAnswer, expectedAnswers });
+      // Return the "pass" JSON immediately, skipping the AI call
+      // TODO return and evaluationResult object here
+      return NextResponse.json({
+        result: 'pass',
+        explanation: 'Correct!' // Matches the AI's success schema
+      });
+    }
+
+    logger.info('Local answer check: FAIL. Escalating to AI.', { userAnswer, expectedAnswers });
+
     const systemPrompt = `You are an AISRS evaluator. A user is being quizzed.
 - The question was: "${question || 'N/A'}"
 - The topic was: "${topic || 'N/A'}"
-- The expected answer(s) are: "${expectedAnswer}"
+- The expected answer(s) are: "${JSON.stringify(expectedAnswers)}"
 - The user's answer is: "${userAnswer}"
 
 Your task is to evaluate if the user's answer is correct.
@@ -50,7 +74,7 @@ Example for a pass: {"result": "pass", "explanation": "Correct! よむ is one of
 Example for a fail: {"result": "fail", "explanation": "Incorrect. The expected readings were ドク, トク, or よむ."}
 `;
 
-    const userMessage = `User Answer: ${userAnswer}\nExpected: ${expectedAnswer}`; // Simple message for logging
+    const userMessage = `User Answer: ${userAnswer}\nExpected: ${JSON.stringify(expectedAnswers)}`; // Simple message for logging
 
     // --- Create Initial Log Entry ---
     const initialLogData: ApiLog = {
@@ -63,7 +87,7 @@ Example for a fail: {"result": "fail", "explanation": "Incorrect. The expected r
         userMessage: userMessage, // Log the core data
         // Also log the inputs separately for clarity
         input_userAnswer: userAnswer,
-        input_expectedAnswer: expectedAnswer,
+        input_expectedAnswer: JSON.stringify(expectedAnswers),
         input_question: question,
         input_topic: topic,
       },
@@ -80,7 +104,7 @@ Example for a fail: {"result": "fail", "explanation": "Incorrect. The expected r
       // 2. Make the call using the SDK
       const response = await client.models.generateContent({
         model: MODEL_NAME,
-        contents: [{ parts: [{ text: `User Answer: ${userAnswer}\nExpected: ${expectedAnswer}` }] }],
+        contents: [{ parts: [{ text: `User Answer: ${userAnswer}\nExpected: ${JSON.stringify(expectedAnswers)}` }] }],
         config: {
           systemInstruction: { parts: [{ text: systemPrompt }] },
           responseMimeType: 'application/json',

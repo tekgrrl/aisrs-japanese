@@ -23,6 +23,7 @@ export default function ReviewPage() {
   const [dynamicQuestion, setDynamicQuestion] = useState<string | null>(null);
   const [dynamicAnswer, setDynamicAnswer] = useState<string | null>(null);
   const [dynamicContext, setDynamicContext] = useState<string | null>(null);
+  const [dynamicAltAnswers, setDynamicAltAnswers] = useState<string[]>([]);
 
   const currentItem = reviewQueue[currentIndex];
 
@@ -40,10 +41,12 @@ export default function ReviewPage() {
         const errData = await response.json();
         throw new Error(errData.error || 'Failed to generate question');
       }
-      const { question, answer, context } = await response.json();
+      const { question, answer, context, accepted_alternatives } = await response.json();
       setDynamicQuestion(question);
       setDynamicAnswer(answer);
       setDynamicContext(context);
+      setDynamicAltAnswers(accepted_alternatives);
+
     } catch (err) {
       if (err instanceof Error) setError(err.message);
       else setError('An unknown error occurred');
@@ -79,10 +82,12 @@ export default function ReviewPage() {
     if (currentItem && currentItem.facet.facetType === 'AI-Generated-Question') {
       setDynamicQuestion(null);
       setDynamicAnswer(null);
+      setDynamicAltAnswers([]);
       fetchDynamicQuestion(currentItem.ku.content);
     } else {
       setDynamicQuestion(null);
       setDynamicAnswer(null);
+      setDynamicAltAnswers([]);
     }
   }, [currentItem, currentIndex]); // Re-run whenever the currentItem OR the index changes
 
@@ -140,12 +145,13 @@ export default function ReviewPage() {
     setError(null);
     setAiExplanation('');
 
-    const expectedAnswer = getExpectedAnswer(currentItem);
+    const expectedAnswers = getExpectedAnswer(currentItem); // Now using array
     const question = getQuestion(currentItem);
     const topic = currentItem.ku.content; // The "topic" is the KU content
     const questionType = getQuestionType(currentItem); // Get the question type
 
-    if (expectedAnswer === null) {
+    // TODO This shouldn't work
+    if (expectedAnswers === null) {
       setError('Waiting for dynamic question to load.');
       setAnswerState('unanswered');
       return;
@@ -159,7 +165,7 @@ export default function ReviewPage() {
         },
         body: JSON.stringify({
           userAnswer,
-          expectedAnswer,
+          expectedAnswers,
           question,
           topic,
           questionType, // Add questionType to the payload
@@ -235,7 +241,7 @@ export default function ReviewPage() {
     console.log(`facetType = ${item.facet.facetType}`); // TODO This is wrong here for Kanji 
     switch (item.facet.facetType) {
       case 'AI-Generated-Question':
-        return `Quiz: ${item.ku.content}`;
+        return `AI Quiz`;
       case 'Content-to-Definition':
         return 'Vocab Definition';
       case 'Content-to-Reading':
@@ -252,17 +258,23 @@ export default function ReviewPage() {
     }
   };
 
-  const getExpectedAnswer = (item: ReviewItem): string | null => {
+  const getExpectedAnswer = (item: ReviewItem): string[] => {
     const { ku, facet } = item;
+    console.log(`item = ${JSON.stringify(item)}`);
 
     // 1. Handle AI-Generated questions first
     if (facet.facetType === 'AI-Generated-Question') {
-      return dynamicAnswer; // This remains as-is
+      const allExpectedAnswers = [...dynamicAltAnswers]; // initialize
+
+      if (dynamicAnswer) {
+        allExpectedAnswers.push(dynamicAnswer);
+        }
+      return allExpectedAnswers;
     }
 
     // 2. Handle "reverse" quizzes
     if (facet.facetType === 'Definition-to-Content' || facet.facetType === 'Reading-to-Content') {
-      return ku.content;
+      return [ku.content];
     }
 
     // 3. Handle "forward" quizzes (Content-to-...)
@@ -271,11 +283,12 @@ export default function ReviewPage() {
       const lesson = item.lesson as VocabLesson | undefined;
       if (facet.facetType === 'Content-to-Definition') {
         // Use lesson first, fallback to older ku.data
-        return lesson?.meaning_explanation || ku.data?.definition || '';
+        const definitionString = ku.data?.definition || lesson?.meaning_explanation ||  '';
+        return definitionString.split(',').map(answer => answer.trim());
       }
       if (facet.facetType === 'Content-to-Reading') {
         // Use lesson first, fallback to older ku.data
-        return lesson?.reading_explanation || ku.data?.reading || '';
+        return [ku.data?.reading || lesson?.reading_explanation || ''];
       }
     } 
     else if (ku.type === 'Kanji') {
@@ -283,7 +296,8 @@ export default function ReviewPage() {
       const lesson = item.lesson as KanjiLesson | undefined;
       if (facet.facetType === 'Content-to-Definition') {
         // Kanji "definition" is the 'meaning' field from the lesson
-        return lesson?.meaning || ku.data?.meaning || '';
+        const kanjiDefinitionString =  ku.data?.meaning || lesson?.meaning ||  '';
+        return kanjiDefinitionString.split(',').map(answer => answer.trim());
       }
       if (facet.facetType === 'Content-to-Reading') {
         // Kanji "reading" is a combination of all onyomi and kunyomi
@@ -292,30 +306,32 @@ export default function ReviewPage() {
         const allReadings = [...onyomi, ...kunyomi];
         
         if (allReadings.length > 0) {
-          return allReadings.join(', '); // e.g., "ドク, トク, よむ"
+          return allReadings; // facilitate Gemini short circuit
+          //return allReadings.join(', '); // e.g., "ドク, トク, よむ"
         }
         // Fallback just in case lesson is old/missing
-        return ku.data?.onyomi || ku.data?.kunyomi || '';
+        return ku.data?.onyomi || ku.data?.kunyomi || [];
       }
     }
     
     // --- KANJI COMPONENT LOGIC ---
     if (facet.facetType === 'Kanji-Component-Meaning') {
       const lesson = item.lesson as KanjiLesson | undefined;
-      return lesson?.meaning || ku.data?.definition || '';
+      return [lesson?.meaning || ku.data?.definition || ''];
     }
     if (facet.facetType === 'Kanji-Component-Reading') {
       const lesson = item.lesson as KanjiLesson | undefined;
+
       const onyomi = lesson?.reading_onyomi?.map(r => r.reading) || [];
       if (onyomi.length > 0) {
-        return onyomi.join(', ');
+        return onyomi;
       }
-      return ku.data?.onyomi || '';
+      return ku.data?.onyomi || [];
     }
 
     // Fallback for any other combo
     logger.warn(`getExpectedAnswer: No answer path for ${ku.type} / ${facet.facetType}`);
-    return '';
+    return [];
   };
 
   // --- Render Logic ---
@@ -384,7 +400,7 @@ export default function ReviewPage() {
           ) : (
             <>
               {/* Render Context ONLY if it's a dynamic quiz AND we have context */}
-              {questionType.startsWith('Quiz') && dynamicContext && (
+              {currentItem.facet.facetType === 'AI-Generated-Question'   && dynamicContext && (
                 <p className="text-xl text-gray-300 mb-4 italic">
                   {dynamicContext}
                 </p>
@@ -440,7 +456,7 @@ export default function ReviewPage() {
           {answerState === 'incorrect' && (
             <p className="text-lg text-gray-200 mb-4">
               <span className="font-semibold">Correct answer:</span>{' '}
-              {getExpectedAnswer(currentItem)}
+                {getExpectedAnswer(currentItem).join(' / ')}            
             </p>
           )}
           {aiExplanation === 'No answer provided.' ? (
