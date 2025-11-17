@@ -310,7 +310,7 @@ export default function ReviewPage() {
           //return allReadings.join(', '); // e.g., "ドク, トク, よむ"
         }
         // Fallback just in case lesson is old/missing
-        return [ku.data?.onyomi || ku.data?.kunyomi || ''];
+        return ku.data?.onyomi || ku.data?.kunyomi || [];
       }
     }
     
@@ -400,7 +400,7 @@ export default function ReviewPage() {
           ) : (
             <>
               {/* Render Context ONLY if it's a dynamic quiz AND we have context */}
-              {currentItem.facet.facetType === 'AI-Generated-Question' && dynamicContext && (
+              {currentItem.facet.facetType === 'AI-Generated-Question'   && dynamicContext && (
                 <p className="text-xl text-gray-300 mb-4 italic">
                   {dynamicContext}
                 </p>
