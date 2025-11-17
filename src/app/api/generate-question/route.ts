@@ -31,7 +31,7 @@ Rules:
 2.  Use '[____]' for the blank, exactly once.
 3.  The answer must be the single word/particle that fits the blank.
 4.  The question field MUST contain ONLY Japanese text (and the blank [____]). Do NOT include English in this field.
-5.  Use the context field ONLY if the Japanese sentence alone is ambiguous. It should be a brief (1 sentence max) English hint to guide the user to the specific intended answer (e.g., "polite form required" or "translates to 'absolutely'").
+5.  The context field MUST be used for any "fill-in-the-blank" question that tests a noun or adjective, as these are often ambiguous. The context MUST provide a hint to differentiate the answer from common synonyms. (e.g., for 気分, a hint like (Context: a person's mood or feeling) is required).
 6.  Ensure the generated question makes grammatical sense in Japanese.
 7.  Vary the question format. Sometimes ask for a particle, sometimes a verb conjugation, sometimes the vocab word itself.
 8.  Do NOT use literal newlines inside the JSON string values. Use spaces instead.
@@ -41,7 +41,8 @@ Rules:
 12. The question tests a specific concept, but natural language often has valid variations based on politeness (e.g., 食べる vs. 食べます).
 13. The answer field should contain the single most natural form for the sentence.
 14: Ambiguity Prevention: If other distinct words (synonyms) could grammatically and logically fit the blank, use the English context to disambiguate by including the closest English translation of the target word.
-15. Do not add any text before or after the JSON object.`;
+15. The context field MAY be used for verb/grammar questions if the politeness level or specific nuance is important.
+16. Do not add any text before or after the JSON object.`;
 
 export async function GET(request: Request) {
   logger.info('--- GET /api/generate-question ---');
