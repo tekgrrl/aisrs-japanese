@@ -3,7 +3,6 @@
 import React, { useState, useEffect, useRef } from "react"; // <-- Import useRef
 import { useRouter, useParams, useSearchParams } from "next/navigation";
 import Kuroshiro from "kuroshiro";
-import KuromojiAnalyzer from "kuroshiro-analyzer-kuromoji";
 import {
   KnowledgeUnit,
   FacetType,
