@@ -99,6 +99,7 @@ Your response MUST determine the primary part of speech for the vocabulary word.
 * counter
 * prefix
 * conjunction
+For example context sentences, provide the text with Readings in brackets, e.g., 明日[あした]、天気[てんき]がいい。
 
 Your response MUST be a valid JSON object that adheres to this schema:
 {
