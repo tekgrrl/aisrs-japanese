@@ -1,11 +1,24 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from 'react'; // <-- Import useRef
-import { useRouter, useParams, useSearchParams } from 'next/navigation';
-import { KnowledgeUnit, FacetType, Lesson, VocabLesson, KanjiLesson } from '@/types';
-import { db } from '@/lib/firebase-client';
-import { doc, getDoc, query, collection, where, getDocs } from 'firebase/firestore';
-import { KNOWLEDGE_UNITS_COLLECTION } from '@/lib/firebase-config';
+import React, { useState, useEffect, useRef } from "react"; // <-- Import useRef
+import { useRouter, useParams, useSearchParams } from "next/navigation";
+import {
+  KnowledgeUnit,
+  FacetType,
+  Lesson,
+  VocabLesson,
+  KanjiLesson,
+} from "@/types";
+import { db } from "@/lib/firebase-client";
+import {
+  doc,
+  getDoc,
+  query,
+  collection,
+  where,
+  getDocs,
+} from "firebase/firestore";
+import { KNOWLEDGE_UNITS_COLLECTION } from "@/lib/firebase-config";
 
 export default function LearnItemPage() {
   const router = useRouter();
@@ -21,13 +34,17 @@ export default function LearnItemPage() {
   const [lesson, setLesson] = useState<Lesson | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedFacets, setSelectedFacets] = useState<Record<string, boolean>>({});
+  const [selectedFacets, setSelectedFacets] = useState<Record<string, boolean>>(
+    {},
+  );
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [kanjiStatuses, setKanjiStatuses] = useState<Record<string, string>>({});
+  const [kanjiStatuses, setKanjiStatuses] = useState<Record<string, string>>(
+    {},
+  );
 
   useEffect(() => {
     // --- FIX: Add gate to prevent double-fetch ---
-    if (process.env.NODE_ENV === 'development' && fetchRef.current) {
+    if (process.env.NODE_ENV === "development" && fetchRef.current) {
       return; // Already fetched, do nothing on the second mount
     }
     // --- END FIX ---
@@ -50,14 +67,14 @@ export default function LearnItemPage() {
           setError("Learning item not found.");
           return;
         }
-        
+
         const kuData = { id: kuDoc.id, ...kuDoc.data() } as KnowledgeUnit;
         setKu(kuData);
 
         // 2. Fetch the Lesson for this kuDoc by kuDoc.id
-        const lessonResponse = await fetch('/api/generate-lesson', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+        const lessonResponse = await fetch("/api/generate-lesson", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ kuId: kuDoc.id }),
         });
 
@@ -66,23 +83,30 @@ export default function LearnItemPage() {
           throw new Error(err.error || "Failed to generate lesson");
         }
 
-        const lessonData = await lessonResponse.json() as Lesson;
+        const lessonData = (await lessonResponse.json()) as Lesson;
         setLesson(lessonData);
 
         // The expression in the if statement is an example of TypeScript `type narrowing`
-        if (lessonData.type === 'Vocab' && lessonData.component_kanji && lessonData.component_kanji.length > 0) {
-          const kanjiChars = lessonData.component_kanji.map(k => k.kanji);
-          const kanjiQuery = query(collection(db, KNOWLEDGE_UNITS_COLLECTION), where('content', 'in', kanjiChars), where('type', '==', 'Kanji'));
+        if (
+          lessonData.type === "Vocab" &&
+          lessonData.component_kanji &&
+          lessonData.component_kanji.length > 0
+        ) {
+          const kanjiChars = lessonData.component_kanji.map((k) => k.kanji);
+          const kanjiQuery = query(
+            collection(db, KNOWLEDGE_UNITS_COLLECTION),
+            where("content", "in", kanjiChars),
+            where("type", "==", "Kanji"),
+          );
           const kanjiSnapshot = await getDocs(kanjiQuery);
-          
+
           const statuses: Record<string, string> = {};
-          kanjiSnapshot.forEach(doc => {
+          kanjiSnapshot.forEach((doc) => {
             const kanjiKu = doc.data() as KnowledgeUnit;
             statuses[kanjiKu.content] = kanjiKu.status;
           });
           setKanjiStatuses(statuses);
         }
-
       } catch (err: any) {
         setError(err.message || "An unknown error occurred");
       } finally {
@@ -92,21 +116,20 @@ export default function LearnItemPage() {
 
     if (kuId) {
       fetchLessonAndKanjiStatus();
-       // --- FIX: Set ref to true after first fetch ---
-       if (process.env.NODE_ENV === 'development') {
-         fetchRef.current = true;
-       }
-       // --- END FIX ---
+      // --- FIX: Set ref to true after first fetch ---
+      if (process.env.NODE_ENV === "development") {
+        fetchRef.current = true;
+      }
+      // --- END FIX ---
     } else {
-        setIsLoading(false);
+      setIsLoading(false);
     }
-
   }, [kuId]);
 
-  /* 
-   * By passing a function to setSelectedFacets, you're telling React: "I don't know what the state is right now. 
+  /*
+   * By passing a function to setSelectedFacets, you're telling React: "I don't know what the state is right now.
    * When you're ready to update, please run this function, and give me the guaranteed most recent state, which I will call prev."
-  */
+   */
   const handleCheckboxChange = (facetKey: string) => {
     // Here we replace selectedFacets with a function that can be called by React at render time to get the actual state (which may have changed)
     setSelectedFacets((prev) => ({
@@ -119,32 +142,34 @@ export default function LearnItemPage() {
   const handleSubmitFacets = async () => {
     if (!ku || !lesson) return;
     setIsSubmitting(true);
-    setError(null); 
+    setError(null);
 
     const selectedFacetKeys = Object.keys(selectedFacets).filter(
-      (key) => selectedFacets[key]
+      (key) => selectedFacets[key],
     );
 
     console.log(`facets = ${selectedFacets}`);
 
     if (selectedFacetKeys.length === 0) {
-      setError('Please select at least one facet to learn.');
+      setError("Please select at least one facet to learn.");
       setIsSubmitting(false);
       return;
     }
 
     // --- New: Construct detailed payload ---
-    const facetsToCreatePayload = selectedFacetKeys.map(key => {
-      if (key.startsWith('Kanji-Component-') && lesson.type === 'Vocab') {
-        const kanjiChar = key.split('-')[2];
-        const kanjiData = (lesson as VocabLesson).component_kanji?.find(k => k.kanji === kanjiChar);
-        return { 
-          key: key, 
+    const facetsToCreatePayload = selectedFacetKeys.map((key) => {
+      if (key.startsWith("Kanji-Component-") && lesson.type === "Vocab") {
+        const kanjiChar = key.split("-")[2];
+        const kanjiData = (lesson as VocabLesson).component_kanji?.find(
+          (k) => k.kanji === kanjiChar,
+        );
+        return {
+          key: key,
           data: {
             meaning: kanjiData?.meaning,
             onyomi: kanjiData?.onyomi,
-            kunyomi: kanjiData?.kunyomi
-          } 
+            kunyomi: kanjiData?.kunyomi,
+          },
         };
       }
       return { key: key };
@@ -153,9 +178,9 @@ export default function LearnItemPage() {
 
     try {
       console.log(JSON.stringify(facetsToCreatePayload));
-      const response = await fetch('/api/review-facets', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const response = await fetch("/api/review-facets", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           kuId: ku.id,
           facetsToCreate: facetsToCreatePayload, // Send new payload
@@ -164,14 +189,14 @@ export default function LearnItemPage() {
 
       if (!response.ok) {
         const err = await response.json();
-        throw new Error(err.error || 'Failed to create facets');
+        throw new Error(err.error || "Failed to create facets");
       }
 
       // --- New: Dispatch event to refresh header stats ---
-      window.dispatchEvent(new CustomEvent('refreshStats'));
+      window.dispatchEvent(new CustomEvent("refreshStats"));
       // --- End New ---
 
-      router.push('/learn'); 
+      router.push("/learn");
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -186,8 +211,8 @@ export default function LearnItemPage() {
 
     try {
       const response = await fetch(`/api/lesson/${ku.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ section: sectionKey, content: newContent }),
       });
 
@@ -195,11 +220,10 @@ export default function LearnItemPage() {
 
       // --- Success ---
       // Update the local 'lesson' state to reflect the change instantly
-      setLesson(prevLesson => ({
+      setLesson((prevLesson) => ({
         ...prevLesson!,
-        [sectionKey]: newContent // Just update the string field
+        [sectionKey]: newContent, // Just update the string field
       }));
-      
     } catch (err: any) {
       setError(err.message);
     }
@@ -209,17 +233,22 @@ export default function LearnItemPage() {
     title: string;
     content: string; // Or whatever type 'content' is
     sectionKey: string;
-    onSave: (sectionKey: string, newContent: string) => Promise<void>; 
+    onSave: (sectionKey: string, newContent: string) => Promise<void>;
   };
 
   // A simple component to manage its own edit state
-  function EditableSection({ title, content, sectionKey, onSave  }: EditableSectionProps) {
+  function EditableSection({
+    title,
+    content,
+    sectionKey,
+    onSave,
+  }: EditableSectionProps) {
     const [isEditing, setIsEditing] = useState(false);
     const [draft, setDraft] = useState(String(content));
 
     const handleSave = () => {
       onSave(sectionKey, draft); // Call the main save handler
-      setIsEditing(false);      // Close the editor
+      setIsEditing(false); // Close the editor
     };
 
     const handleEdit = () => {
@@ -238,8 +267,18 @@ export default function LearnItemPage() {
             onChange={(e) => setDraft(e.target.value)}
           />
           <div className="flex justify-end space-x-2 mt-2">
-            <button onClick={() => setIsEditing(false)} className="px-4 py-2 bg-gray-600 rounded-md">Cancel</button>
-            <button onClick={handleSave} className="px-4 py-2 bg-blue-600 rounded-md">Save</button>
+            <button
+              onClick={() => setIsEditing(false)}
+              className="px-4 py-2 bg-gray-600 rounded-md"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSave}
+              className="px-4 py-2 bg-blue-600 rounded-md"
+            >
+              Save
+            </button>
           </div>
         </div>
       );
@@ -248,15 +287,19 @@ export default function LearnItemPage() {
     // --- DEFAULT VIEW ---
     return (
       <div className="bg-gray-100 dark:bg-gray-800 p-6 rounded-lg shadow-lg mb-8 relative">
-        <button 
-          onClick={handleEdit} 
+        <button
+          onClick={handleEdit}
           className="absolute top-2 right-2 px-3 py-1 bg-gray-200 text-xs rounded-md"
         >
           Edit
         </button>
-        <h2 className="text-2xl font-semibold mb-4 text-gray-900 dark:text-white">{title}</h2>
+        <h2 className="text-2xl font-semibold mb-4 text-gray-900 dark:text-white">
+          {title}
+        </h2>
         {/* This just displays the raw content. You'd format this better. */}
-        <p className="text-lg text-gray-700 dark:text-gray-300">{String(content)}</p>
+        <p className="text-lg text-gray-700 dark:text-gray-300">
+          {String(content)}
+        </p>
       </div>
     );
   }
@@ -278,35 +321,59 @@ export default function LearnItemPage() {
         onSave={handleSaveSection}
       />
       <div className="bg-gray-100 dark:bg-gray-800 p-6 rounded-lg shadow-lg mb-8">
-        <h2 className="text-2xl font-semibold mb-4 text-gray-900 dark:text-white">Context Examples</h2>
+        <h2 className="text-2xl font-semibold mb-4 text-gray-900 dark:text-white">
+          Context Examples
+        </h2>
         <ul className="space-y-4">
           {lesson.context_examples && lesson.context_examples.length > 0 ? (
             lesson.context_examples.map((ex, i) => (
-              <li key={i} className="p-4 bg-gray-200 dark:bg-gray-700 rounded-md">
-                <p className="text-2xl text-gray-900 dark:text-white mb-1">{ex.sentence}</p>
-                <p className="text-md text-gray-600 dark:text-gray-400">{ex.translation}</p>
+              <li
+                key={i}
+                className="p-4 bg-gray-200 dark:bg-gray-700 rounded-md"
+              >
+                <p className="text-2xl text-gray-900 dark:text-white mb-1">
+                  {ex.sentence}
+                </p>
+                <p className="text-md text-gray-600 dark:text-gray-400">
+                  {ex.translation}
+                </p>
               </li>
             ))
           ) : (
-            <p className="text-gray-500 dark:text-gray-400 italic">No context examples provided.</p>
+            <p className="text-gray-500 dark:text-gray-400 italic">
+              No context examples provided.
+            </p>
           )}
         </ul>
       </div>
       <div className="bg-gray-100 dark:bg-gray-800 p-6 rounded-lg shadow-lg mb-8">
-        <h2 className="text-2xl font-semibold mb-4 text-gray-900 dark:text-white">Component Kanji</h2>
+        <h2 className="text-2xl font-semibold mb-4 text-gray-900 dark:text-white">
+          Component Kanji
+        </h2>
         <ul className="space-y-2">
           {lesson.component_kanji && lesson.component_kanji.length > 0 ? (
             lesson.component_kanji.map((k, i) => (
-              <li key={`${k.kanji}-${i}`} className="flex items-center space-x-4 p-3 bg-gray-200 dark:bg-gray-700 rounded-md">
-                <span className="text-3xl text-gray-900 dark:text-white">{k.kanji}</span>
+              <li
+                key={`${k.kanji}-${i}`}
+                className="flex items-center space-x-4 p-3 bg-gray-200 dark:bg-gray-700 rounded-md"
+              >
+                <span className="text-3xl text-gray-900 dark:text-white">
+                  {k.kanji}
+                </span>
                 <div>
-                  <p className="text-lg text-gray-700 dark:text-gray-300">{k.reading}</p>
-                  <p className="text-md text-gray-600 dark:text-gray-400">{k.meaning}</p>
+                  <p className="text-lg text-gray-700 dark:text-gray-300">
+                    {k.reading}
+                  </p>
+                  <p className="text-md text-gray-600 dark:text-gray-400">
+                    {k.meaning}
+                  </p>
                 </div>
               </li>
             ))
           ) : (
-             <p className="text-gray-500 dark:text-gray-400 italic">No component kanji provided.</p>
+            <p className="text-gray-500 dark:text-gray-400 italic">
+              No component kanji provided.
+            </p>
           )}
         </ul>
       </div>
@@ -316,159 +383,247 @@ export default function LearnItemPage() {
   const renderKanjiLesson = (lesson: KanjiLesson) => (
     <>
       <div className="bg-gray-100 dark:bg-gray-800 p-6 rounded-lg shadow-lg mb-8">
-        <h2 className="text-2xl font-semibold mb-4 text-gray-900 dark:text-white">Meaning</h2>
-        <p className="text-lg text-gray-700 dark:text-gray-300">{lesson.meaning}</p>
+        <h2 className="text-2xl font-semibold mb-4 text-gray-900 dark:text-white">
+          Meaning
+        </h2>
+        <p className="text-lg text-gray-700 dark:text-gray-300">
+          {lesson.meaning}
+        </p>
       </div>
       <div className="bg-gray-100 dark:bg-gray-800 p-6 rounded-lg shadow-lg mb-8">
-        <h2 className="text-2xl font-semibold mb-4 text-gray-900 dark:text-white">Radicals</h2>
+        <h2 className="text-2xl font-semibold mb-4 text-gray-900 dark:text-white">
+          Radicals
+        </h2>
         <ul className="flex flex-wrap gap-4">
           {lesson.radicals && lesson.radicals.length > 0 ? (
             lesson.radicals.map((r, i) => (
-              <li key={`${r.radical}-${i}`} className="p-4 bg-gray-200 dark:bg-gray-700 rounded-md text-center">
-                <span className="text-3xl text-gray-900 dark:text-white">{r.radical}</span>
-                <p className="text-md text-gray-600 dark:text-gray-400">{r.meaning}</p>
+              <li
+                key={`${r.radical}-${i}`}
+                className="p-4 bg-gray-200 dark:bg-gray-700 rounded-md text-center"
+              >
+                <span className="text-3xl text-gray-900 dark:text-white">
+                  {r.radical}
+                </span>
+                <p className="text-md text-gray-600 dark:text-gray-400">
+                  {r.meaning}
+                </p>
               </li>
             ))
           ) : (
-            <p className="text-gray-500 dark:text-gray-400 italic">No radicals provided.</p>
+            <p className="text-gray-500 dark:text-gray-400 italic">
+              No radicals provided.
+            </p>
           )}
         </ul>
       </div>
       <div className="bg-gray-100 dark:bg-gray-800 p-6 rounded-lg shadow-lg mb-8">
-        <h2 className="text-2xl font-semibold mb-4 text-gray-900 dark:text-white">Meaning Mnemonic</h2>
-        <p className="text-lg text-gray-700 dark:text-gray-300 italic">{lesson.mnemonic_meaning}</p>
+        <h2 className="text-2xl font-semibold mb-4 text-gray-900 dark:text-white">
+          Meaning Mnemonic
+        </h2>
+        <p className="text-lg text-gray-700 dark:text-gray-300 italic">
+          {lesson.mnemonic_meaning}
+        </p>
       </div>
       <div className="bg-gray-100 dark:bg-gray-800 p-6 rounded-lg shadow-lg mb-8">
-        <h2 className="text-2xl font-semibold mb-4 text-gray-900 dark:text-white">Readings</h2>
+        <h2 className="text-2xl font-semibold mb-4 text-gray-900 dark:text-white">
+          Readings
+        </h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <h3 className="text-xl font-semibold text-gray-500 dark:text-gray-400 mb-2">On'yomi (Katakana)</h3>
+            <h3 className="text-xl font-semibold text-gray-500 dark:text-gray-400 mb-2">
+              On'yomi (Katakana)
+            </h3>
             <ul className="space-y-2">
               {lesson.reading_onyomi && lesson.reading_onyomi.length > 0 ? (
                 lesson.reading_onyomi.map((r, i) => (
-                  <li key={`${r.reading}-${i}`} className="p-3 bg-gray-200 dark:bg-gray-700 rounded-md">
-                    <span className="text-2xl text-gray-900 dark:text-white">{r.reading}</span>
-                    <p className="text-md text-gray-600 dark:text-gray-400">e.g., {r.example}</p>
+                  <li
+                    key={`${r.reading}-${i}`}
+                    className="p-3 bg-gray-200 dark:bg-gray-700 rounded-md"
+                  >
+                    <span className="text-2xl text-gray-900 dark:text-white">
+                      {r.reading}
+                    </span>
+                    <p className="text-md text-gray-600 dark:text-gray-400">
+                      e.g., {r.example}
+                    </p>
                   </li>
                 ))
               ) : (
-                <p className="text-gray-500 dark:text-gray-400 italic">No on'yomi provided.</p>
+                <p className="text-gray-500 dark:text-gray-400 italic">
+                  No on'yomi provided.
+                </p>
               )}
             </ul>
           </div>
           <div>
-            <h3 className="text-xl font-semibold text-gray-500 dark:text-gray-400 mb-2">Kun'yomi (Hiragana)</h3>
+            <h3 className="text-xl font-semibold text-gray-500 dark:text-gray-400 mb-2">
+              Kun'yomi (Hiragana)
+            </h3>
             <ul className="space-y-2">
               {lesson.reading_kunyomi && lesson.reading_kunyomi.length > 0 ? (
                 lesson.reading_kunyomi.map((r, i) => (
-                  <li key={`${r.reading}-${i}`} className="p-3 bg-gray-200 dark:bg-gray-700 rounded-md">
-                    <span className="text-2xl text-gray-900 dark:text-white">{r.reading}</span>
-                    <p className="text-md text-gray-600 dark:text-gray-400">e.g., {r.example}</p>
+                  <li
+                    key={`${r.reading}-${i}`}
+                    className="p-3 bg-gray-200 dark:bg-gray-700 rounded-md"
+                  >
+                    <span className="text-2xl text-gray-900 dark:text-white">
+                      {r.reading}
+                    </span>
+                    <p className="text-md text-gray-600 dark:text-gray-400">
+                      e.g., {r.example}
+                    </p>
                   </li>
                 ))
               ) : (
-                <p className="text-gray-500 dark:text-gray-400 italic">No kun'yomi provided.</p>
+                <p className="text-gray-500 dark:text-gray-400 italic">
+                  No kun'yomi provided.
+                </p>
               )}
             </ul>
           </div>
         </div>
       </div>
       <div className="bg-gray-100 dark:bg-gray-800 p-6 rounded-lg shadow-lg mb-8">
-        <h2 className="text-2xl font-semibold mb-4 text-gray-900 dark:text-white">Reading Mnemonic</h2>
-        <p className="text-lg text-gray-700 dark:text-gray-300 italic">{lesson.mnemonic_reading}</p>
+        <h2 className="text-2xl font-semibold mb-4 text-gray-900 dark:text-white">
+          Reading Mnemonic
+        </h2>
+        <p className="text-lg text-gray-700 dark:text-gray-300 italic">
+          {lesson.mnemonic_reading}
+        </p>
       </div>
     </>
   );
 
   const renderFacetChecklist = () => (
     <div className="bg-gray-100 dark:bg-gray-800 p-6 rounded-lg shadow-lg">
-      <h2 className="text-2xl font-semibold mb-4 text-gray-900 dark:text-white">Choose What to Learn</h2>
+      <h2 className="text-2xl font-semibold mb-4 text-gray-900 dark:text-white">
+        Choose What to Learn
+      </h2>
       <div className="space-y-4">
-
-        {lesson?.type === 'Vocab' && (
+        {lesson?.type === "Vocab" && (
           <>
             <label className="flex items-center p-4 bg-gray-200 dark:bg-gray-700 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 cursor-pointer">
-              <input type="checkbox" className="h-5 w-5 rounded bg-gray-300 dark:bg-gray-900 border-gray-400 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
-                checked={!!selectedFacets['Content-to-Definition']} // the !! makes sure that the evaluation is boolean and not undefined or null
-                onChange={() => handleCheckboxChange('Content-to-Definition')}
+              <input
+                type="checkbox"
+                className="h-5 w-5 rounded bg-gray-300 dark:bg-gray-900 border-gray-400 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
+                checked={!!selectedFacets["Content-to-Definition"]} // the !! makes sure that the evaluation is boolean and not undefined or null
+                onChange={() => handleCheckboxChange("Content-to-Definition")}
               />
-              <span className="ml-3 text-lg text-gray-900 dark:text-white">Meaning</span>
+              <span className="ml-3 text-lg text-gray-900 dark:text-white">
+                Meaning
+              </span>
             </label>
             <label className="flex items-center p-4 bg-gray-200 dark:bg-gray-700 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 cursor-pointer">
-              <input type="checkbox" className="h-5 w-5 rounded bg-gray-300 dark:bg-gray-900 border-gray-400 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
-                checked={!!selectedFacets['Content-to-Reading']}
-                onChange={() => handleCheckboxChange('Content-to-Reading')}
+              <input
+                type="checkbox"
+                className="h-5 w-5 rounded bg-gray-300 dark:bg-gray-900 border-gray-400 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
+                checked={!!selectedFacets["Content-to-Reading"]}
+                onChange={() => handleCheckboxChange("Content-to-Reading")}
               />
-              <span className="ml-3 text-lg text-gray-900 dark:text-white">Reading</span>
+              <span className="ml-3 text-lg text-gray-900 dark:text-white">
+                Reading
+              </span>
             </label>
 
             {/* --- REFACTOR: Conditional Component Kanji Display --- */}
-            {lesson.component_kanji && lesson.component_kanji.map((kanji, index) => {
-              const status = kanjiStatuses[kanji.kanji];
-              return (
-                <div key={`${kanji.kanji}-${index}`} className="p-4 bg-gray-300 dark:bg-gray-800 rounded-md">
-                  <h3 className="text-xl font-semibold text-gray-700 dark:text-gray-300 mb-2">Component Kanji</h3>
-                  <p className="text-gray-600 dark:text-gray-400 mb-3">
-                    The kanji is <span className="font-bold text-lg">{kanji.kanji}</span>, which generally means "{kanji.meaning}".
-                  </p>
-                  
-                  {status ? (
-                    <div className="p-2 bg-gray-400 dark:bg-gray-700 rounded-md">
-                      <p className="text-lg text-gray-800 dark:text-gray-200">
-                        {status === 'learning' 
-                          ? `You already have a lesson queued for ${kanji.kanji}.`
-                          : `You are already learning ${kanji.kanji}.`
-                        }
-                      </p>
-                    </div>
-                  ) : (
-                    <>
-                      <p className="text-gray-600 dark:text-gray-400 mb-3">
-                        In this word, it uses the reading <span className="font-bold text-lg">{kanji.reading}</span>.
-                      </p>
-                      <label className="flex items-center p-2 rounded-md hover:bg-gray-400 dark:hover:bg-gray-700 cursor-pointer">
-                        <input type="checkbox" className="h-5 w-5 rounded bg-gray-400 dark:bg-gray-900 border-gray-500 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
-                          checked={!!selectedFacets[`Kanji-Component-${kanji.kanji}`]}
-                          onChange={() => handleCheckboxChange(`Kanji-Component-${kanji.kanji}`)}
-                        />
-                        <span className="ml-3 text-lg text-gray-900 dark:text-white">Add {kanji.kanji}</span>
-                      </label>
-                    </>
-                  )}
-                </div>
-              )
-            })}
+            {lesson.component_kanji &&
+              lesson.component_kanji.map((kanji, index) => {
+                const status = kanjiStatuses[kanji.kanji];
+                return (
+                  <div
+                    key={`${kanji.kanji}-${index}`}
+                    className="p-4 bg-gray-300 dark:bg-gray-800 rounded-md"
+                  >
+                    <h3 className="text-xl font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                      Component Kanji
+                    </h3>
+                    <p className="text-gray-600 dark:text-gray-400 mb-3">
+                      The kanji is{" "}
+                      <span className="font-bold text-lg">{kanji.kanji}</span>,
+                      which generally means "{kanji.meaning}".
+                    </p>
+
+                    {status ? (
+                      <div className="p-2 bg-gray-400 dark:bg-gray-700 rounded-md">
+                        <p className="text-lg text-gray-800 dark:text-gray-200">
+                          {status === "learning"
+                            ? `You already have a lesson queued for ${kanji.kanji}.`
+                            : `You are already learning ${kanji.kanji}.`}
+                        </p>
+                      </div>
+                    ) : (
+                      <>
+                        <p className="text-gray-600 dark:text-gray-400 mb-3">
+                          In this word, it uses the reading{" "}
+                          <span className="font-bold text-lg">
+                            {kanji.reading}
+                          </span>
+                          .
+                        </p>
+                        <label className="flex items-center p-2 rounded-md hover:bg-gray-400 dark:hover:bg-gray-700 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            className="h-5 w-5 rounded bg-gray-400 dark:bg-gray-900 border-gray-500 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
+                            checked={
+                              !!selectedFacets[`Kanji-Component-${kanji.kanji}`]
+                            }
+                            onChange={() =>
+                              handleCheckboxChange(
+                                `Kanji-Component-${kanji.kanji}`,
+                              )
+                            }
+                          />
+                          <span className="ml-3 text-lg text-gray-900 dark:text-white">
+                            Add {kanji.kanji}
+                          </span>
+                        </label>
+                      </>
+                    )}
+                  </div>
+                );
+              })}
             {/* --- END REFACTOR --- */}
           </>
         )}
 
-        {lesson?.type === 'Kanji' && (
+        {lesson?.type === "Kanji" && (
           <>
             <label className="flex items-center p-4 bg-gray-200 dark:bg-gray-700 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 cursor-pointer">
-              <input type="checkbox" className="h-5 w-5 rounded bg-gray-300 dark:bg-gray-900 border-gray-400 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
-                checked={!!selectedFacets['Kanji-Component-Meaning']}
-                onChange={() => handleCheckboxChange('Kanji-Component-Meaning')}
+              <input
+                type="checkbox"
+                className="h-5 w-5 rounded bg-gray-300 dark:bg-gray-900 border-gray-400 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
+                checked={!!selectedFacets["Kanji-Component-Meaning"]}
+                onChange={() => handleCheckboxChange("Kanji-Component-Meaning")}
               />
-              <span className="ml-3 text-lg text-gray-900 dark:text-white">Meaning (Kanji {'->'} Meaning)</span>
+              <span className="ml-3 text-lg text-gray-900 dark:text-white">
+                Meaning (Kanji {"->"} Meaning)
+              </span>
             </label>
             <label className="flex items-center p-4 bg-gray-200 dark:bg-gray-700 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 cursor-pointer">
-              <input type="checkbox" className="h-5 w-5 rounded bg-gray-300 dark:bg-gray-900 border-gray-400 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
-                checked={!!selectedFacets['Kanji-Component-Reading']}
-                onChange={() => handleCheckboxChange('Kanji-Component-Reading')}
+              <input
+                type="checkbox"
+                className="h-5 w-5 rounded bg-gray-300 dark:bg-gray-900 border-gray-400 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
+                checked={!!selectedFacets["Kanji-Component-Reading"]}
+                onChange={() => handleCheckboxChange("Kanji-Component-Reading")}
               />
-              <span className="ml-3 text-lg text-gray-900 dark:text-white">Reading (Kanji {'->'} On/Kun)</span>
+              <span className="ml-3 text-lg text-gray-900 dark:text-white">
+                Reading (Kanji {"->"} On/Kun)
+              </span>
             </label>
           </>
         )}
 
         <label className="flex items-center p-4 bg-gray-200 dark:bg-gray-700 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 cursor-pointer">
-          <input type="checkbox" className="h-5 w-5 rounded bg-gray-300 dark:bg-gray-900 border-gray-400 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
-            checked={!!selectedFacets['AI-Generated-Question']}
-            onChange={() => handleCheckboxChange('AI-Generated-Question')}
+          <input
+            type="checkbox"
+            className="h-5 w-5 rounded bg-gray-300 dark:bg-gray-900 border-gray-400 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
+            checked={!!selectedFacets["AI-Generated-Question"]}
+            onChange={() => handleCheckboxChange("AI-Generated-Question")}
           />
-          <span className="ml-3 text-lg text-gray-900 dark:text-white">AI-Generated Quiz Questions</span>
+          <span className="ml-3 text-lg text-gray-900 dark:text-white">
+            AI-Generated Quiz Questions
+          </span>
         </label>
-
       </div>
 
       <button
@@ -476,55 +631,71 @@ export default function LearnItemPage() {
         disabled={isSubmitting || !lesson}
         className="mt-6 w-full px-4 py-3 bg-blue-600 text-white font-semibold rounded-md shadow-md hover:bg-blue-700 disabled:bg-gray-500 disabled:cursor-wait"
       >
-        {isSubmitting ? 'Saving...' : 'Start Learning Selected Facets'}
+        {isSubmitting ? "Saving..." : "Start Learning Selected Facets"}
       </button>
     </div>
   );
 
-
   // Used to determine if the call to this page came from the review facet
   const searchParams = useSearchParams();
-  const source = searchParams.get('source');
+  const source = searchParams.get("source");
 
   // --- Main Render ---
   return (
     <>
       {/* --- DEBUGGING LOG --- */}
-      {console.log('[Render Debug]', { 
-        isLoading, 
-        hasError: !!error, 
+      {console.log("[Render Debug]", {
+        isLoading,
+        hasError: !!error,
         lessonType: lesson?.type,
         hasLesson: !!lesson,
-        source: source
+        source: source,
       })}
-    <main className="container mx-auto max-w-4xl p-8">
-      <header className="mb-8">
-        <h1 className="text-6xl font-bold text-gray-900 dark:text-white mb-2 break-all">
-          {isLoading ? '...'
-           : lesson?.type === 'Kanji' && (lesson as KanjiLesson).kanji ? (lesson as KanjiLesson).kanji 
-           : ku?.content || '...' 
-          }
-        </h1>
-        {lesson && lesson?.type === 'Vocab' && (
-          <p className="text-2xl text-gray-500 dark:text-gray-400 capitalize">
-          {lesson?.partOfSpeech ? lesson.partOfSpeech : (ku ? ku.type : '...')}        </p>
+      <main className="container mx-auto max-w-4xl p-8">
+        <header className="mb-8">
+          <h1 className="text-6xl font-bold text-gray-900 dark:text-white mb-2 break-all">
+            {isLoading
+              ? "..."
+              : lesson?.type === "Kanji" && (lesson as KanjiLesson).kanji
+                ? (lesson as KanjiLesson).kanji
+                : ku?.content || "..."}
+          </h1>
+          {lesson && lesson?.type === "Vocab" && (
+            <p className="text-2xl text-gray-500 dark:text-gray-400 capitalize">
+              {lesson?.partOfSpeech
+                ? lesson.partOfSpeech
+                : ku
+                  ? ku.type
+                  : "..."}{" "}
+            </p>
+          )}
+        </header>
+
+        {isLoading && (
+          <p className="text-xl text-center text-gray-500 dark:text-gray-400">
+            Loading lesson...
+          </p>
         )}
-      </header>
+        {error && (
+          <div className="bg-red-200 dark:bg-red-800 border border-red-400 dark:border-red-600 text-red-800 dark:text-red-100 p-4 rounded-md mb-6">
+            {error}
+          </div>
+        )}
 
-      {isLoading && <p className="text-xl text-center text-gray-500 dark:text-gray-400">Loading lesson...</p>}
-      {error && <div className="bg-red-200 dark:bg-red-800 border border-red-400 dark:border-red-600 text-red-800 dark:text-red-100 p-4 rounded-md mb-6">{error}</div>}
-      
-      {lesson && ku?.type === 'Vocab' && renderVocabLesson(lesson as VocabLesson)}
-      {lesson && ku?.type === 'Kanji' && renderKanjiLesson(lesson as KanjiLesson)}
+        {lesson &&
+          ku?.type === "Vocab" &&
+          renderVocabLesson(lesson as VocabLesson)}
+        {lesson &&
+          ku?.type === "Kanji" &&
+          renderKanjiLesson(lesson as KanjiLesson)}
 
-      {!isLoading && !error && lesson && source !== 'review' && (
+        {!isLoading && !error && lesson && source !== "review" && (
           <>
-              {/* {console.log("Render conditions met, lesson object:", lesson)} */}
-              {renderFacetChecklist()}
+            {/* {console.log("Render conditions met, lesson object:", lesson)} */}
+            {renderFacetChecklist()}
           </>
-      )}
-
-    </main>
+        )}
+      </main>
     </>
   );
 }

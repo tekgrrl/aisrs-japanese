@@ -1,18 +1,17 @@
 "use client";
 
-import React, { useState, useEffect, FormEvent } from 'react';
+import React, { useState, useEffect, FormEvent } from "react";
 // Import from shared types file
 // Assuming '@/types' is a valid path alias in your project
-import { KnowledgeUnit, ReviewFacet } from '@/types';
-import Link from 'next/link';
+import { KnowledgeUnit, ReviewFacet } from "@/types";
+import Link from "next/link";
 
-
-const kuTypes: KnowledgeUnit['type'][] = [
-  'Vocab',
-  'Kanji',
-  'Grammar',
-  'Concept',
-  'ExampleSentence',
+const kuTypes: KnowledgeUnit["type"][] = [
+  "Vocab",
+  "Kanji",
+  "Grammar",
+  "Concept",
+  "ExampleSentence",
 ];
 
 export default function KnowledgeManagementPage() {
@@ -22,26 +21,25 @@ export default function KnowledgeManagementPage() {
   const [error, setError] = useState<string | null>(null);
 
   // --- Form State ---
-  const [newKuType, setNewKuType] =
-    useState<KnowledgeUnit['type']>('Vocab');
-  const [newKuContent, setNewKuContent] = useState('');
-  const [newKuReading, setNewKuReading] = useState('');
-  const [newKuDefinition, setNewKuDefinition] = useState('');
-  const [newKuNotes, setNewKuNotes] = useState('');
-  const [generatingFacetKuId, setGeneratingFacetKuId] = useState<
-    string | null
-  >(null);
+  const [newKuType, setNewKuType] = useState<KnowledgeUnit["type"]>("Vocab");
+  const [newKuContent, setNewKuContent] = useState("");
+  const [newKuReading, setNewKuReading] = useState("");
+  const [newKuDefinition, setNewKuDefinition] = useState("");
+  const [newKuNotes, setNewKuNotes] = useState("");
+  const [generatingFacetKuId, setGeneratingFacetKuId] = useState<string | null>(
+    null,
+  );
 
   // --- VALIDATION ---
   // Derived state to determine if the form is valid.
   // This is recalculated on every render.
-  const isContentValid = newKuContent.trim() !== '';
+  const isContentValid = newKuContent.trim() !== "";
   let isFormValid = isContentValid; // Base requirement
 
-  if (newKuType === 'Vocab') {
+  if (newKuType === "Vocab") {
     // If type is Vocab, all three fields are required
-    const isReadingValid = newKuReading.trim() !== '';
-    const isDefinitionValid = newKuDefinition.trim() !== '';
+    const isReadingValid = newKuReading.trim() !== "";
+    const isDefinitionValid = newKuDefinition.trim() !== "";
     isFormValid = isContentValid && isReadingValid && isDefinitionValid;
   }
   // For other types, only 'Content' is required.
@@ -54,13 +52,12 @@ export default function KnowledgeManagementPage() {
       setIsLoading(true);
 
       const [kuResponse, facetResponse] = await Promise.all([
-        fetch('/api/ku'),
-        fetch('/api/review-facets'),
+        fetch("/api/ku"),
+        fetch("/api/review-facets"),
       ]);
 
-      if (!kuResponse.ok) throw new Error('Failed to fetch knowledge units');
-      if (!facetResponse.ok)
-        throw new Error('Failed to fetch review facets');
+      if (!kuResponse.ok) throw new Error("Failed to fetch knowledge units");
+      if (!facetResponse.ok) throw new Error("Failed to fetch review facets");
 
       const kuData = await kuResponse.json();
       const facetData = await facetResponse.json();
@@ -69,7 +66,7 @@ export default function KnowledgeManagementPage() {
       setFacets(facetData);
     } catch (err) {
       if (err instanceof Error) setError(err.message);
-      else setError('An unknown error occurred');
+      else setError("An unknown error occurred");
     } finally {
       setIsLoading(false);
     }
@@ -87,22 +84,22 @@ export default function KnowledgeManagementPage() {
     // --- VALIDATION ---
     // Double-check validation on submit
     if (!isFormValid) {
-      setError('Please fill out all required fields.');
+      setError("Please fill out all required fields.");
       return;
     }
     // --- END VALIDATION ---
 
     let kuData: Record<string, string> = {};
-    if (newKuType === 'Vocab') {
+    if (newKuType === "Vocab") {
       kuData.reading = newKuReading;
       kuData.definition = newKuDefinition;
     }
 
     try {
-      const response = await fetch('/api/ku', {
-        method: 'POST',
+      const response = await fetch("/api/ku", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
           type: newKuType,
@@ -113,28 +110,28 @@ export default function KnowledgeManagementPage() {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to add new unit');
+        throw new Error("Failed to add new unit");
       }
 
       // Reset form fields
-      setNewKuContent('');
-      setNewKuType('Vocab');
-      setNewKuReading('');
-      setNewKuDefinition('');
-      setNewKuNotes('');
+      setNewKuContent("");
+      setNewKuType("Vocab");
+      setNewKuReading("");
+      setNewKuDefinition("");
+      setNewKuNotes("");
 
       await fetchData(); // Refetch all data
 
       // Dispatch a custom event to tell the Header to refresh its stats
-      window.dispatchEvent(new CustomEvent('refreshStats'));
+      window.dispatchEvent(new CustomEvent("refreshStats"));
     } catch (err) {
       if (err instanceof Error) setError(err.message);
-      else setError('An unknown error occurred');
+      else setError("An unknown error occurred");
     }
   };
 
   // --- New Facet Generation Handling ---
- /*  const handleGenerateFacets = async (kuId: string) => {
+  /*  const handleGenerateFacets = async (kuId: string) => {
     setGeneratingFacetKuId(kuId);
     setError(null);
     try {
@@ -188,10 +185,7 @@ export default function KnowledgeManagementPage() {
           } */
 
           return (
-            <li
-              key={ku.id}
-              className="p-4 bg-gray-700 rounded-lg shadow"
-            >
+            <li key={ku.id} className="p-4 bg-gray-700 rounded-lg shadow">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-2xl font-semibold text-white break-all">
                   {ku.content}
@@ -200,10 +194,10 @@ export default function KnowledgeManagementPage() {
                 <Link
                   href={`/learn/${ku.id}?source=review`}
                   className="text-sm inline-block px-4 py-2 bg-blue-600 text-white font-semibold rounded-md hover:bg-blue-700"
-                  >
+                >
                   Review lesson
                 </Link>
-                
+
                 <span className="font-mono text-sm bg-gray-900 text-gray-100 px-2 py-1 rounded ml-2 flex-shrink-0">
                   {ku.type}
                 </span>
@@ -211,13 +205,13 @@ export default function KnowledgeManagementPage() {
 
               {ku.data && ku.data.reading && (
                 <p className="text-lg text-gray-300 break-all">
-                  <span className="font-semibold">Reading:</span>{' '}
+                  <span className="font-semibold">Reading:</span>{" "}
                   {ku.data.reading}
                 </p>
               )}
               {ku.data && ku.data.definition && (
                 <p className="text-lg text-gray-300 break-all">
-                  <span className="font-semibold">Definition:</span>{' '}
+                  <span className="font-semibold">Definition:</span>{" "}
                   {ku.data.definition}
                 </p>
               )}
@@ -265,12 +259,8 @@ export default function KnowledgeManagementPage() {
   return (
     <main className="container mx-auto max-w-4xl p-8">
       <header className="mb-8">
-        <h1 className="text-4xl font-bold text-white mb-2">
-          Manage Knowledge
-        </h1>
-        <p className="text-xl text-gray-400">
-          Your personal knowledge graph.
-        </p>
+        <h1 className="text-4xl font-bold text-white mb-2">Manage Knowledge</h1>
+        <p className="text-xl text-gray-400">Your personal knowledge graph.</p>
       </header>
 
       {/* Show form-level error messages here */}
@@ -298,7 +288,7 @@ export default function KnowledgeManagementPage() {
               id="kuType"
               value={newKuType}
               onChange={(e) =>
-                setNewKuType(e.target.value as KnowledgeUnit['type'])
+                setNewKuType(e.target.value as KnowledgeUnit["type"])
               }
               className="w-full p-3 bg-gray-700 border-gray-600 text-white rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
             >
@@ -329,7 +319,7 @@ export default function KnowledgeManagementPage() {
           </div>
 
           {/* --- Conditional Fields: Vocab --- */}
-          {newKuType === 'Vocab' && (
+          {newKuType === "Vocab" && (
             <>
               <div>
                 <label
@@ -407,4 +397,3 @@ export default function KnowledgeManagementPage() {
     </main>
   );
 }
-

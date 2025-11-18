@@ -1,18 +1,21 @@
-import { NextResponse } from 'next/server';
-import { db, Timestamp } from '@/lib/firebase';
-import { KNOWLEDGE_UNITS_COLLECTION, REVIEW_FACETS_COLLECTION } from '@/lib/firebase-config';
+import { NextResponse } from "next/server";
+import { db, Timestamp } from "@/lib/firebase";
+import {
+  KNOWLEDGE_UNITS_COLLECTION,
+  REVIEW_FACETS_COLLECTION,
+} from "@/lib/firebase-config";
 
 export async function GET() {
   try {
     const learnQuery = db
       .collection(KNOWLEDGE_UNITS_COLLECTION)
-      .where('status', '==', 'learning')
+      .where("status", "==", "learning")
       .count()
       .get();
 
     const reviewQuery = db
       .collection(REVIEW_FACETS_COLLECTION)
-      .where('nextReviewAt', '<=', Timestamp.now())
+      .where("nextReviewAt", "<=", Timestamp.now())
       .count()
       .get();
 
@@ -26,10 +29,10 @@ export async function GET() {
 
     return NextResponse.json({ learnCount, reviewCount });
   } catch (error) {
-    console.error('Error fetching stats:', error);
+    console.error("Error fetching stats:", error);
     return NextResponse.json(
-      { error: 'Failed to fetch stats' },
-      { status: 500 }
+      { error: "Failed to fetch stats" },
+      { status: 500 },
     );
   }
 }

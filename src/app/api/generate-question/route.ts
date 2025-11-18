@@ -1,14 +1,13 @@
-import { NextResponse } from 'next/server';
-import { logger } from '@/lib/logger';
-import { db, Timestamp } from '@/lib/firebase'; // Added Timestamp
-import { API_LOGS_COLLECTION } from '@/lib/firebase-config'; // Added log collection name
-import { ApiLog } from '@/types'; // Added ApiLog
-import { performance } from 'perf_hooks'; // Added for timing
+import { NextResponse } from "next/server";
+import { logger } from "@/lib/logger";
+import { db, Timestamp } from "@/lib/firebase"; // Added Timestamp
+import { API_LOGS_COLLECTION } from "@/lib/firebase-config"; // Added log collection name
+import { ApiLog } from "@/types"; // Added ApiLog
+import { performance } from "perf_hooks"; // Added for timing
 import { GoogleGenAI } from "@google/genai";
 
-
 // --- Define model name centrally ---
-const MODEL_NAME = process.env.GEMINI_MODEL || 'gemini-2.5-flash'
+const MODEL_NAME = process.env.GEMINI_MODEL || "gemini-2.5-flash";
 
 // --- System Prompt ---
 const systemPrompt = `You are an expert Japanese tutor and quiz generator. 
@@ -46,7 +45,7 @@ Rules:
 17. Do not add any text before or after the JSON object.`;
 
 export async function GET(request: Request) {
-  logger.info('--- GET /api/generate-question ---');
+  logger.info("--- GET /api/generate-question ---");
 
   let logRef; // Firestore DocumentReference for the log entry
   let startTime = performance.now(); // Start timing
@@ -57,36 +56,45 @@ export async function GET(request: Request) {
 
   try {
     const { searchParams } = new URL(request.url);
-    const topic = searchParams.get('topic');
+    const topic = searchParams.get("topic");
     if (!topic) {
-      return NextResponse.json({ error: 'Topic parameter is required' }, { status: 400 });
+      return NextResponse.json(
+        { error: "Topic parameter is required" },
+        { status: 400 },
+      );
     }
 
     // --- Fetch the Running List (Context Summarizer) ---
     // Note: Using absolute URL for server-side fetch to self
-    const baseUrl = process.env.NODE_ENV === 'production'
-        ? process.env.NEXT_PUBLIC_BASE_URL || request.headers.get('host') || 'http://localhost:3000' // Adjust as needed
-        : 'http://localhost:3000'; // Assuming dev server runs on 3000
-        
-    const contextResponse = await fetch(`${baseUrl}/api/summarize-context`, { cache: 'no-store' }); // Don't cache context
+    const baseUrl =
+      process.env.NODE_ENV === "production"
+        ? process.env.NEXT_PUBLIC_BASE_URL ||
+          request.headers.get("host") ||
+          "http://localhost:3000" // Adjust as needed
+        : "http://localhost:3000"; // Assuming dev server runs on 3000
+
+    const contextResponse = await fetch(`${baseUrl}/api/summarize-context`, {
+      cache: "no-store",
+    }); // Don't cache context
     let runningListSummary = "No weak points identified yet.";
     if (contextResponse.ok) {
-        const contextData = await contextResponse.json();
-        runningListSummary = contextData.summary || runningListSummary;
+      const contextData = await contextResponse.json();
+      runningListSummary = contextData.summary || runningListSummary;
     } else {
-        logger.warn('Failed to fetch running list context for question generation.');
+      logger.warn(
+        "Failed to fetch running list context for question generation.",
+      );
     }
     logger.debug(`Using running list: ${runningListSummary}`);
     // --- End Fetch Running List ---
-
 
     const userMessage = `Topic: ${topic}\nRunning List: ${runningListSummary}`;
 
     // --- Create Initial Log Entry ---
     const initialLogData: ApiLog = {
       timestamp: Timestamp.now(),
-      route: '/api/generate-question',
-      status: 'pending',
+      route: "/api/generate-question",
+      status: "pending",
       modelUsed: MODEL_NAME,
       requestData: {
         // systemPrompt, // Optional
@@ -99,7 +107,9 @@ export async function GET(request: Request) {
 
     // 3. Call Gemini API (using fetch as before)
     const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) { throw new Error('GEMINI_API_KEY is not defined'); }
+    if (!apiKey) {
+      throw new Error("GEMINI_API_KEY is not defined");
+    }
 
     const client = new GoogleGenAI({ apiKey });
 
@@ -110,19 +120,19 @@ export async function GET(request: Request) {
         contents: [{ parts: [{ text: userMessage }] }],
         config: {
           systemInstruction: { parts: [{ text: systemPrompt }] },
-          responseMimeType: 'application/json',
+          responseMimeType: "application/json",
           responseSchema: {
-            type: 'OBJECT',
+            type: "OBJECT",
             properties: {
-              question: { type: 'STRING' },
-              context: { type: 'STRING' },
-              answer: { type: 'STRING' },
+              question: { type: "STRING" },
+              context: { type: "STRING" },
+              answer: { type: "STRING" },
               accepted_alternatives: {
-                type: 'ARRAY',
-                items: { type: 'STRING' }
-              }
+                type: "ARRAY",
+                items: { type: "STRING" },
+              },
             },
-            required: ['question', 'answer'],
+            required: ["question", "answer"],
           },
         },
       });
@@ -131,61 +141,70 @@ export async function GET(request: Request) {
       aiJsonText = response.text;
 
       if (!aiJsonText) {
-        logger.error('Empty response text from Gemini SDK', { response });
-        throw new Error('Invalid response structure from Gemini');
+        logger.error("Empty response text from Gemini SDK", { response });
+        throw new Error("Invalid response structure from Gemini");
       }
 
       // 4. Parse and validate (keeping existing robust parsing logic)
       try {
         parsedJson = JSON.parse(aiJsonText);
       } catch (parseError) {
-        logger.error('Failed to parse AI JSON response', { aiJsonText, parseError });
-        throw new Error('Failed to parse AI JSON response');
+        logger.error("Failed to parse AI JSON response", {
+          aiJsonText,
+          parseError,
+        });
+        throw new Error("Failed to parse AI JSON response");
       }
 
       if (!parsedJson) {
-        throw new Error('Evaluation result is missing after AI response parsing.');
+        throw new Error(
+          "Evaluation result is missing after AI response parsing.",
+        );
       }
 
       return NextResponse.json(parsedJson);
-
     } catch (error: any) {
       // Catch SDK errors (like 400/500 responses which throw in the SDK)
-      logger.error('Gemini API Error', { error: error.message || error });
+      logger.error("Gemini API Error", { error: error.message || error });
       throw error; // re-throw to be handled by the caller or Next.js error boundary
     }
-
   } catch (error) {
     errorOccurred = true;
     capturedError = error;
 
     // --- Robust Error Logging ---
-    logger.error('--- UNHANDLED ERROR IN generate-question GET ---');
+    logger.error("--- UNHANDLED ERROR IN generate-question GET ---");
     let errorDetails: any = {};
-    let errorMessage = 'An unknown error occurred';
+    let errorMessage = "An unknown error occurred";
     if (error instanceof Error) {
-        errorMessage = error.message;
-        errorDetails = { message: error.message, name: error.name, stack: error.stack };
-        if (error.message.includes('fetch') || error.message.includes('network')) {
-             errorMessage = `Network error during AI call: ${error.message}`;
-        }
+      errorMessage = error.message;
+      errorDetails = {
+        message: error.message,
+        name: error.name,
+        stack: error.stack,
+      };
+      if (
+        error.message.includes("fetch") ||
+        error.message.includes("network")
+      ) {
+        errorMessage = `Network error during AI call: ${error.message}`;
+      }
     } else {
-        try {
-            errorDetails = { rawError: JSON.stringify(error, null, 2) };
-            errorMessage = `Non-Error exception: ${errorDetails.rawError}`;
-        } catch (e) {
-            errorDetails = { rawError: "Failed to stringify non-Error object" };
-            errorMessage = 'An un-stringifiable error object was caught.';
-        }
+      try {
+        errorDetails = { rawError: JSON.stringify(error, null, 2) };
+        errorMessage = `Non-Error exception: ${errorDetails.rawError}`;
+      } catch (e) {
+        errorDetails = { rawError: "Failed to stringify non-Error object" };
+        errorMessage = "An un-stringifiable error object was caught.";
+      }
     }
-    logger.error('Failed in /api/generate-question', errorDetails);
+    logger.error("Failed in /api/generate-question", errorDetails);
 
     return NextResponse.json(
       { error: errorMessage, details: errorDetails },
-      { status: 500 }
+      { status: 500 },
     );
     // --- End Robust Error Logging ---
-
   } finally {
     // --- Update Log Entry ---
     if (logRef) {
@@ -194,17 +213,23 @@ export async function GET(request: Request) {
       const updateData: Partial<ApiLog> = { durationMs };
 
       if (errorOccurred) {
-        updateData.status = 'error';
+        updateData.status = "error";
         let errorDetails: any = {};
-         if (capturedError instanceof Error) {
-             errorDetails = { message: capturedError.message, stack: capturedError.stack };
-         } else {
-             try { errorDetails = { rawError: JSON.stringify(capturedError, null, 2) }; }
-             catch { errorDetails = { rawError: "Unstringifiable error" }; }
-         }
+        if (capturedError instanceof Error) {
+          errorDetails = {
+            message: capturedError.message,
+            stack: capturedError.stack,
+          };
+        } else {
+          try {
+            errorDetails = { rawError: JSON.stringify(capturedError, null, 2) };
+          } catch {
+            errorDetails = { rawError: "Unstringifiable error" };
+          }
+        }
         updateData.errorData = errorDetails;
       } else {
-        updateData.status = 'success';
+        updateData.status = "success";
         updateData.responseData = {
           rawText: aiJsonText, // Log raw text on success
           parsedJson: parsedJson, // Log parsed result on success
@@ -219,11 +244,10 @@ export async function GET(request: Request) {
         logger.error(`Failed to update log entry ${logRef.id}`, {
           errorMessage: logUpdateError.message,
           errorCode: logUpdateError.code,
-          errorStack: logUpdateError.stack
+          errorStack: logUpdateError.stack,
         });
       }
     }
     // --- End Log ---
   }
 }
-

@@ -1,10 +1,10 @@
-import { Timestamp } from 'firebase-admin/firestore';
+import { Timestamp } from "firebase-admin/firestore";
 
 export interface ApiLog {
   id?: string; // Firestore document ID
   timestamp: any; // Firestore Timestamp
   route: string; // e.g., '/api/generate-lesson'
-  status: 'pending' | 'success' | 'error';
+  status: "pending" | "success" | "error";
   durationMs?: number; // Time taken for the API call
   modelUsed: string;
   requestData: {
@@ -28,7 +28,7 @@ export interface ApiLog {
 
 export interface VocabLesson {
   kuId?: string;
-  type: 'Vocab';
+  type: "Vocab";
   vocab: string;
   partOfSpeech: PartOfSpeech;
   meaning_explanation: string;
@@ -45,7 +45,7 @@ export interface VocabLesson {
 
 export interface KanjiLesson {
   kuId?: string;
-  type: 'Kanji';
+  type: "Kanji";
   kanji: string;
   meaning: string;
   reading_onyomi?: { reading: string; example: string }[];
@@ -58,11 +58,11 @@ export interface KanjiLesson {
 export type Lesson = VocabLesson | KanjiLesson;
 
 export type KnowledgeUnitType =
-  | 'Vocab'
-  | 'Kanji'
-  | 'Grammar'
-  | 'Concept'
-  | 'ExampleSentence';
+  | "Vocab"
+  | "Kanji"
+  | "Grammar"
+  | "Concept"
+  | "ExampleSentence";
 
 export type PartOfSpeech =
   | "transitive-verb"
@@ -76,7 +76,7 @@ export type PartOfSpeech =
   | "adverb"
   | "auxiliary-verb"
   | "prefix"
-  | "conjunction"
+  | "conjunction";
 
 export interface KnowledgeUnit {
   id: string;
@@ -91,20 +91,24 @@ export interface KnowledgeUnit {
   };
   personalNotes: string;
   relatedUnits: string[]; // Array of other KnowledgeUnit IDs
-  createdAt: string | Timestamp; // Added for sorting
-  status: 'learning' | 'reviewing';
+  createdAt: Timestamp; // Added for sorting
+  status: "learning" | "reviewing";
   facet_count: number;
   history?: any[]; // Or define a proper history type
 }
 
+export type KnowledgeUnitClient = Omit<KnowledgeUnit, "createdAt"> & {
+  createdAt: string;
+};
+
 export type FacetType =
-  | 'Content-to-Definition'
-  | 'Definition-to-Content'
-  | 'Content-to-Reading'
-  | 'AI-Generated-Question'
-  | 'Reading-to-Content'
-  | 'Kanji-Component-Meaning' // e.g., "食" -> "eat"
-  | 'Kanji-Component-Reading'; // e.g., "食" -> "ショク"
+  | "Content-to-Definition"
+  | "Definition-to-Content"
+  | "Content-to-Reading"
+  | "AI-Generated-Question"
+  | "Reading-to-Content"
+  | "Kanji-Component-Meaning" // e.g., "食" -> "eat"
+  | "Kanji-Component-Reading"; // e.g., "食" -> "ショク"
 
 export interface ReviewFacet {
   id: string;
@@ -115,7 +119,7 @@ export interface ReviewFacet {
   lastReviewAt?: string; // ISO string
   history?: Array<{
     timestamp: string;
-    result: 'pass' | 'fail';
+    result: "pass" | "fail";
     stage: number;
   }>;
 }
@@ -138,18 +142,18 @@ export interface Database {
 }
 
 export type LessonDifficulty =
-| 'JLPT-N5'
-| 'JLPT-N4'
-| 'JLPT-N3'
-| 'JLPT-N2'
-| 'JLPT-N1'
+  | "JLPT-N5"
+  | "JLPT-N4"
+  | "JLPT-N3"
+  | "JLPT-N2"
+  | "JLPT-N1";
 
 export interface QuestionItem {
   id: string;
   kuId: string;
   data: {
     context?: string;
-    question: string; 
+    question: string;
     answer: string;
     acceptedAlternatives?: string[];
     difficulty: LessonDifficulty;
