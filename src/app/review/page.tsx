@@ -446,7 +446,6 @@ export default function ReviewPage() {
             type="text"
             value={userAnswer}
             autoFocus
-            // onChange={(e) => setUserAnswer(e.target.value)}
             onChange={(e) => {
               const input = e.target.value;
               
