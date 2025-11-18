@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect, useRef } from "react"; // <-- Import useRef
 import { useRouter, useParams, useSearchParams } from "next/navigation";
+import Kuroshiro from "kuroshiro";
+import KuromojiAnalyzer from "kuroshiro-analyzer-kuromoji";
 import {
   KnowledgeUnit,
   FacetType,
@@ -19,8 +21,10 @@ import {
   getDocs,
 } from "firebase/firestore";
 import { KNOWLEDGE_UNITS_COLLECTION } from "@/lib/firebase-config";
+import { FuriganaText } from '@/components/FuriganaText';
 
 export default function LearnItemPage() {
+  const kuroshiro = new Kuroshiro();
   const router = useRouter();
   const params = useParams();
   // TODO Seems to imply we don't know what we get passed in the URL params, please check
@@ -327,13 +331,13 @@ export default function LearnItemPage() {
         <ul className="space-y-4">
           {lesson.context_examples && lesson.context_examples.length > 0 ? (
             lesson.context_examples.map((ex, i) => (
-              <li
-                key={i}
-                className="p-4 bg-gray-200 dark:bg-gray-700 rounded-md"
-              >
+              <li key={i} className="p-4 bg-gray-200 dark:bg-gray-700 rounded-md">
+                {/* Japanese Sentence with Furigana */}
                 <p className="text-2xl text-gray-900 dark:text-white mb-1">
-                  {ex.sentence}
+                  <FuriganaText text={ex.sentence} />
                 </p>
+                
+                {/* English Translation (remains plain text) */}
                 <p className="text-md text-gray-600 dark:text-gray-400">
                   {ex.translation}
                 </p>
