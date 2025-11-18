@@ -1,13 +1,13 @@
-import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
-import '@/app/ui/globals.css';
-import Header from '@/components/Header'; // Import the new Header
+import type { Metadata } from "next";
+import { Inter } from "next/font/google";
+import "@/app/ui/globals.css";
+import Header from "@/components/Header"; // Import the new Header
 
-const inter = Inter({ subsets: ['latin'] });
+const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: 'AISRS - Personal Knowledge Graph',
-  description: 'A flexible, AI-powered SRS',
+  title: "AISRS - Personal Knowledge Graph",
+  description: "A flexible, AI-powered SRS",
 };
 
 export default function RootLayout({

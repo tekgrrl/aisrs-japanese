@@ -1,12 +1,12 @@
 "use client";
 
-import React, { useState, useEffect, useRef, FormEvent } from 'react';
-import Link from 'next/link';
-import { ReviewItem, ReviewFacet, VocabLesson, KanjiLesson } from '@/types';
-import * as wanakana from 'wanakana';
-import { logger } from '@/lib/logger';
+import React, { useState, useEffect, useRef, FormEvent } from "react";
+import Link from "next/link";
+import { ReviewItem, ReviewFacet, VocabLesson, KanjiLesson } from "@/types";
+import * as wanakana from "wanakana";
+import { logger } from "@/lib/logger";
 
-type AnswerState = 'unanswered' | 'evaluating' | 'correct' | 'incorrect';
+type AnswerState = "unanswered" | "evaluating" | "correct" | "incorrect";
 
 export default function ReviewPage() {
   const [reviewQueue, setReviewQueue] = useState<ReviewItem[]>([]);
@@ -14,13 +14,16 @@ export default function ReviewPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [userAnswer, setUserAnswer] = useState('');
-  const [answerState, setAnswerState] = useState<AnswerState>('unanswered');
-  const [aiExplanation, setAiExplanation] = useState('');
-  const [sessionFailureCounts, setSessionFailureCounts] = useState<Record<string, number>>({});
+  const [userAnswer, setUserAnswer] = useState("");
+  const [answerState, setAnswerState] = useState<AnswerState>("unanswered");
+  const [aiExplanation, setAiExplanation] = useState("");
+  const [sessionFailureCounts, setSessionFailureCounts] = useState<
+    Record<string, number>
+  >({});
 
   // --- State for AI-Generated Questions ---
-  const [isFetchingDynamicQuestion, setIsFetchingDynamicQuestion] = useState(false);
+  const [isFetchingDynamicQuestion, setIsFetchingDynamicQuestion] =
+    useState(false);
   const [dynamicQuestion, setDynamicQuestion] = useState<string | null>(null);
   const [dynamicAnswer, setDynamicAnswer] = useState<string | null>(null);
   const [dynamicContext, setDynamicContext] = useState<string | null>(null);
@@ -36,21 +39,21 @@ export default function ReviewPage() {
     setError(null);
     try {
       const response = await fetch(
-        `/api/generate-question?topic=${encodeURIComponent(topic)}`
+        `/api/generate-question?topic=${encodeURIComponent(topic)}`,
       );
       if (!response.ok) {
         const errData = await response.json();
-        throw new Error(errData.error || 'Failed to generate question');
+        throw new Error(errData.error || "Failed to generate question");
       }
-      const { question, answer, context, accepted_alternatives } = await response.json();
+      const { question, answer, context, accepted_alternatives } =
+        await response.json();
       setDynamicQuestion(question);
       setDynamicAnswer(answer);
       setDynamicContext(context || null);
       setDynamicAltAnswers(accepted_alternatives || null);
-
     } catch (err) {
       if (err instanceof Error) setError(err.message);
-      else setError('An unknown error occurred');
+      else setError("An unknown error occurred");
     } finally {
       setIsFetchingDynamicQuestion(false);
     }
@@ -62,15 +65,15 @@ export default function ReviewPage() {
       try {
         setIsLoading(true);
         setError(null);
-        const response = await fetch('/api/review-facets?due=true');
+        const response = await fetch("/api/review-facets?due=true");
         if (!response.ok) {
-          throw new Error('Failed to fetch due review items');
+          throw new Error("Failed to fetch due review items");
         }
         const data: ReviewItem[] = await response.json();
         setReviewQueue(data);
       } catch (err) {
         if (err instanceof Error) setError(err.message);
-        else setError('An unknown error occurred');
+        else setError("An unknown error occurred");
       } finally {
         setIsLoading(false);
       }
@@ -80,7 +83,10 @@ export default function ReviewPage() {
 
   // --- Effect to handle current item changes ---
   useEffect(() => {
-    if (currentItem && currentItem.facet.facetType === 'AI-Generated-Question') {
+    if (
+      currentItem &&
+      currentItem.facet.facetType === "AI-Generated-Question"
+    ) {
       // --- FIX: Double Fetch Prevention ---
       // If we have already triggered a fetch for this exact facet ID, do nothing.
       if (lastFetchedFacetId.current === currentItem.facet.id) {
@@ -101,46 +107,44 @@ export default function ReviewPage() {
       setDynamicAnswer(null);
       setDynamicAltAnswers([]);
       setDynamicContext(null);
-
     }
   }, [currentItem, currentIndex]); // Re-run whenever the currentItem OR the index changes
 
   // --- Core SRS Logic ---
 
-  const handleUpdateSrs = async (result: 'pass' | 'fail') => {
+  const handleUpdateSrs = async (result: "pass" | "fail") => {
     if (!currentItem) return;
     try {
       const response = await fetch(
         `/api/review-facets/${currentItem.facet.id}`,
         {
-          method: 'PUT',
+          method: "PUT",
           headers: {
-            'Content-Type': 'application/json',
+            "Content-Type": "application/json",
           },
           body: JSON.stringify({ result }),
-        }
+        },
       );
-      if (!response.ok) throw new Error('Failed to update SRS data');
+      if (!response.ok) throw new Error("Failed to update SRS data");
 
       // SUCCESS! The API call finished and was OK.
       // *Now* we dispatch the event from the client.
-      window.dispatchEvent(new Event('refreshStats'));
-      
+      window.dispatchEvent(new Event("refreshStats"));
     } catch (err) {
       if (err instanceof Error) setError(err.message);
-      else setError('An unknown error occurred');
+      else setError("An unknown error occurred");
     }
   };
 
   const handleEvaluateAnswer = async (e: FormEvent) => {
     e.preventDefault();
-    if (answerState !== 'unanswered' || !currentItem) return;
+    if (answerState !== "unanswered" || !currentItem) return;
 
     // --- New: Short-circuit for empty answer ---
-    if (userAnswer.trim() === '') {
-      setAiExplanation('No answer provided.');
-      await handleUpdateSrs('fail');
-      setAnswerState('incorrect');
+    if (userAnswer.trim() === "") {
+      setAiExplanation("No answer provided.");
+      await handleUpdateSrs("fail");
+      setAnswerState("incorrect");
 
       const facetId = currentItem.facet.id;
       const newFailureCount = (sessionFailureCounts[facetId] || 0) + 1;
@@ -155,9 +159,9 @@ export default function ReviewPage() {
     }
     // --- End New ---
 
-    setAnswerState('evaluating');
+    setAnswerState("evaluating");
     setError(null);
-    setAiExplanation('');
+    setAiExplanation("");
 
     const expectedAnswers = getExpectedAnswer(currentItem); // Now using array
     const question = getQuestion(currentItem);
@@ -165,17 +169,20 @@ export default function ReviewPage() {
     const questionType = getQuestionType(currentItem); // Get the question type
 
     // TODO This shouldn't work
-    if (expectedAnswers.length === 0 && currentItem.facet.facetType === 'AI-Generated-Question') {
-      setError('Waiting for dynamic question to load.');
-      setAnswerState('unanswered');
+    if (
+      expectedAnswers.length === 0 &&
+      currentItem.facet.facetType === "AI-Generated-Question"
+    ) {
+      setError("Waiting for dynamic question to load.");
+      setAnswerState("unanswered");
       return;
     }
 
     try {
-      const response = await fetch('/api/evaluate-answer', {
-        method: 'POST',
+      const response = await fetch("/api/evaluate-answer", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
           userAnswer,
@@ -188,18 +195,18 @@ export default function ReviewPage() {
 
       if (!response.ok) {
         const errData = await response.json();
-        throw new Error(errData.error || 'Evaluation API failed');
+        throw new Error(errData.error || "Evaluation API failed");
       }
 
       const { result, explanation } = await response.json();
       setAiExplanation(explanation);
 
-      if (result === 'pass') {
-        await handleUpdateSrs('pass');
-        setAnswerState('correct');
+      if (result === "pass") {
+        await handleUpdateSrs("pass");
+        setAnswerState("correct");
       } else {
-        await handleUpdateSrs('fail');
-        setAnswerState('incorrect');
+        await handleUpdateSrs("fail");
+        setAnswerState("incorrect");
 
         const facetId = currentItem.facet.id;
         const newFailureCount = (sessionFailureCounts[facetId] || 0) + 1;
@@ -216,15 +223,15 @@ export default function ReviewPage() {
       }
     } catch (err) {
       if (err instanceof Error) setError(err.message);
-      else setError('An unknown error occurred');
-      setAnswerState('unanswered');
+      else setError("An unknown error occurred");
+      setAnswerState("unanswered");
     }
   };
 
   const goToNextItem = () => {
-    setUserAnswer('');
-    setAnswerState('unanswered');
-    setAiExplanation('');
+    setUserAnswer("");
+    setAnswerState("unanswered");
+    setAiExplanation("");
     // Use functional update to ensure we use the latest state
     setCurrentIndex((prevIndex) => prevIndex + 1);
   };
@@ -234,41 +241,41 @@ export default function ReviewPage() {
   const getQuestion = (item: ReviewItem): string | null => {
     const { ku, facet } = item;
     switch (facet.facetType) {
-      case 'AI-Generated-Question':
+      case "AI-Generated-Question":
         return dynamicQuestion; // Returns null if loading
-      case 'Content-to-Definition':
-      case 'Content-to-Reading':
+      case "Content-to-Definition":
+      case "Content-to-Reading":
         return ku.content;
-      case 'Kanji-Component-Meaning':
-      case 'Kanji-Component-Reading':
+      case "Kanji-Component-Meaning":
+      case "Kanji-Component-Reading":
         return ku.content;
-      case 'Definition-to-Content':
-        return ku.data?.definition || '[No Definition]';
-      case 'Reading-to-Content':
-        return ku.data?.reading || '[No Reading]';
+      case "Definition-to-Content":
+        return ku.data?.definition || "[No Definition]";
+      case "Reading-to-Content":
+        return ku.data?.reading || "[No Reading]";
       default:
-        return 'Unknown Facet';
+        return "Unknown Facet";
     }
   };
 
   const getQuestionType = (item: ReviewItem): string => {
-    console.log(`facetType = ${item.facet.facetType}`); // TODO This is wrong here for Kanji 
+    console.log(`facetType = ${item.facet.facetType}`); // TODO This is wrong here for Kanji
     switch (item.facet.facetType) {
-      case 'AI-Generated-Question':
+      case "AI-Generated-Question":
         return `AI Quiz`;
-      case 'Content-to-Definition':
-        return 'Vocab Definition';
-      case 'Content-to-Reading':
-        return 'Vocab Reading';
-      case 'Kanji-Component-Meaning':
-        return 'Kanji Component Meaning';
-      case 'Kanji-Component-Reading':
-        return 'Kanji Component Reading';
-      case 'Definition-to-Content':
-      case 'Reading-to-Content':
-        return 'Vocab/Kanji';
+      case "Content-to-Definition":
+        return "Vocab Definition";
+      case "Content-to-Reading":
+        return "Vocab Reading";
+      case "Kanji-Component-Meaning":
+        return "Kanji Component Meaning";
+      case "Kanji-Component-Reading":
+        return "Kanji Component Reading";
+      case "Definition-to-Content":
+      case "Reading-to-Content":
+        return "Vocab/Kanji";
       default:
-        return '...';
+        return "...";
     }
   };
 
@@ -277,9 +284,9 @@ export default function ReviewPage() {
     const type = item.facet.facetType;
     // Add any other types that expect Japanese input
     return (
-      type === 'Content-to-Reading' || 
-      type === 'Kanji-Component-Reading' ||
-      type === 'AI-Generated-Question' 
+      type === "Content-to-Reading" ||
+      type === "Kanji-Component-Reading" ||
+      type === "AI-Generated-Question"
     );
   };
 
@@ -288,48 +295,51 @@ export default function ReviewPage() {
     console.log(`item = ${JSON.stringify(item)}`);
 
     // 1. Handle AI-Generated questions first
-    if (facet.facetType === 'AI-Generated-Question') {
+    if (facet.facetType === "AI-Generated-Question") {
       const allExpectedAnswers = [...dynamicAltAnswers]; // initialize
 
       if (dynamicAnswer) {
         allExpectedAnswers.push(dynamicAnswer);
-        }
+      }
       return allExpectedAnswers;
     }
 
     // 2. Handle "reverse" quizzes
-    if (facet.facetType === 'Definition-to-Content' || facet.facetType === 'Reading-to-Content') {
+    if (
+      facet.facetType === "Definition-to-Content" ||
+      facet.facetType === "Reading-to-Content"
+    ) {
       return [ku.content];
     }
 
     // 3. Handle "forward" quizzes (Content-to-...)
-    if (ku.type === 'Vocab') {
+    if (ku.type === "Vocab") {
       // --- VOCAB LOGIC ---
       const lesson = item.lesson as VocabLesson | undefined;
-      if (facet.facetType === 'Content-to-Definition') {
+      if (facet.facetType === "Content-to-Definition") {
         // Use lesson first, fallback to older ku.data
-        const definitionString = ku.data?.definition || lesson?.meaning_explanation ||  '';
-        return definitionString.split(',').map(answer => answer.trim());
+        const definitionString =
+          ku.data?.definition || lesson?.meaning_explanation || "";
+        return definitionString.split(",").map((answer) => answer.trim());
       }
-      if (facet.facetType === 'Content-to-Reading') {
+      if (facet.facetType === "Content-to-Reading") {
         // Use lesson first, fallback to older ku.data
-        return [ku.data?.reading || lesson?.reading_explanation || ''];
+        return [ku.data?.reading || lesson?.reading_explanation || ""];
       }
-    } 
-    else if (ku.type === 'Kanji') {
+    } else if (ku.type === "Kanji") {
       // --- KANJI LOGIC ---
       const lesson = item.lesson as KanjiLesson | undefined;
-      if (facet.facetType === 'Content-to-Definition') {
+      if (facet.facetType === "Content-to-Definition") {
         // Kanji "definition" is the 'meaning' field from the lesson
-        const kanjiDefinitionString =  ku.data?.meaning || lesson?.meaning ||  '';
-        return kanjiDefinitionString.split(',').map(answer => answer.trim());
+        const kanjiDefinitionString = ku.data?.meaning || lesson?.meaning || "";
+        return kanjiDefinitionString.split(",").map((answer) => answer.trim());
       }
-      if (facet.facetType === 'Content-to-Reading') {
+      if (facet.facetType === "Content-to-Reading") {
         // Kanji "reading" is a combination of all onyomi and kunyomi
-        const onyomi = lesson?.reading_onyomi?.map(r => r.reading) || [];
-        const kunyomi = lesson?.reading_kunyomi?.map(r => r.reading) || [];
+        const onyomi = lesson?.reading_onyomi?.map((r) => r.reading) || [];
+        const kunyomi = lesson?.reading_kunyomi?.map((r) => r.reading) || [];
         const allReadings = [...onyomi, ...kunyomi];
-        
+
         if (allReadings.length > 0) {
           return allReadings; // facilitate Gemini short circuit
           //return allReadings.join(', '); // e.g., "ドク, トク, よむ"
@@ -338,16 +348,16 @@ export default function ReviewPage() {
         return ku.data?.onyomi || ku.data?.kunyomi || [];
       }
     }
-    
+
     // --- KANJI COMPONENT LOGIC ---
-    if (facet.facetType === 'Kanji-Component-Meaning') {
+    if (facet.facetType === "Kanji-Component-Meaning") {
       const lesson = item.lesson as KanjiLesson | undefined;
-      return [lesson?.meaning || ku.data?.definition || ''];
+      return [lesson?.meaning || ku.data?.definition || ""];
     }
-    if (facet.facetType === 'Kanji-Component-Reading') {
+    if (facet.facetType === "Kanji-Component-Reading") {
       const lesson = item.lesson as KanjiLesson | undefined;
 
-      const onyomi = lesson?.reading_onyomi?.map(r => r.reading) || [];
+      const onyomi = lesson?.reading_onyomi?.map((r) => r.reading) || [];
       if (onyomi.length > 0) {
         return onyomi;
       }
@@ -355,7 +365,9 @@ export default function ReviewPage() {
     }
 
     // Fallback for any other combo
-    logger.warn(`getExpectedAnswer: No answer path for ${ku.type} / ${facet.facetType}`);
+    logger.warn(
+      `getExpectedAnswer: No answer path for ${ku.type} / ${facet.facetType}`,
+    );
     return [];
   };
 
@@ -393,7 +405,7 @@ export default function ReviewPage() {
   console.log(`QuestionType = ${questionType}`);
   const questionText = getQuestion(currentItem);
   const isDynamicLoading =
-    currentItem.facet.facetType === 'AI-Generated-Question' &&
+    currentItem.facet.facetType === "AI-Generated-Question" &&
     (isFetchingDynamicQuestion || !questionText);
 
   return (
@@ -425,15 +437,18 @@ export default function ReviewPage() {
           ) : (
             <>
               {/* Render Context ONLY if it's a dynamic quiz AND we have context */}
-              {currentItem.facet.facetType === 'AI-Generated-Question'   && dynamicContext && (
-                <p className="text-xl text-gray-300 mb-4 italic">
-                  {dynamicContext}
-                </p>
-              )}
+              {currentItem.facet.facetType === "AI-Generated-Question" &&
+                dynamicContext && (
+                  <p className="text-xl text-gray-300 mb-4 italic">
+                    {dynamicContext}
+                  </p>
+                )}
 
               {/* Main Question Text */}
-              <p className={`${currentItem.facet.facetType === 'AI-Generated-Question' ? 'text-2xl' : 'text-5xl'} font-bold text-white break-words`}>
-                {questionText || '[Question not loaded]'}
+              <p
+                className={`${currentItem.facet.facetType === "AI-Generated-Question" ? "text-2xl" : "text-5xl"} font-bold text-white break-words`}
+              >
+                {questionText || "[Question not loaded]"}
               </p>
             </>
           )}
@@ -448,7 +463,7 @@ export default function ReviewPage() {
             autoFocus
             onChange={(e) => {
               const input = e.target.value;
-              
+
               // Only convert if it's a Reading question
               if (isJapaneseInput(currentItem)) {
                 // toKana with IMEMode: true mimics real typing behavior
@@ -460,54 +475,54 @@ export default function ReviewPage() {
                 setUserAnswer(input);
               }
             }}
-            placeholder={getQuestionType(currentItem) === 'Definition' ? "Type your answer..." : "回答を入力して..."}
-            disabled={answerState !== 'unanswered' || isDynamicLoading}
+            placeholder={
+              getQuestionType(currentItem) === "Definition"
+                ? "Type your answer..."
+                : "回答を入力して..."
+            }
+            disabled={answerState !== "unanswered" || isDynamicLoading}
             className="w-full p-4 bg-gray-700 border-2 border-gray-600 text-white text-xl rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-800 disabled:text-gray-500"
           />
           <button
             type="submit"
-            disabled={answerState !== 'unanswered' || isDynamicLoading}
+            disabled={answerState !== "unanswered" || isDynamicLoading}
             className="w-full mt-4 px-6 py-4 bg-blue-600 text-white text-xl font-semibold rounded-md shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-800 disabled:bg-gray-500 disabled:cursor-wait"
           >
-            {answerState === 'evaluating'
-              ? 'Evaluating...'
-              : 'Submit Answer'}
+            {answerState === "evaluating" ? "Evaluating..." : "Submit Answer"}
           </button>
         </form>
       </div>
 
       {/* --- Answer Feedback Section --- */}
-      {answerState !== 'unanswered' && answerState !== 'evaluating' && (
+      {answerState !== "unanswered" && answerState !== "evaluating" && (
         <div
           className={`mt-8 p-6 rounded-lg ${
-            answerState === 'correct'
-              ? 'bg-green-800 border-green-600'
-              : 'bg-red-800 border-red-600'
+            answerState === "correct"
+              ? "bg-green-800 border-green-600"
+              : "bg-red-800 border-red-600"
           }`}
         >
           <h3 className="text-2xl font-semibold text-white mb-3">
-            {answerState === 'correct' ? 'Correct' : 'Incorrect'}
+            {answerState === "correct" ? "Correct" : "Incorrect"}
           </h3>
           <p className="text-lg text-gray-200 mb-2">
             <span className="font-semibold">Your answer:</span> {userAnswer}
           </p>
-          {answerState === 'incorrect' && (
+          {answerState === "incorrect" && (
             <p className="text-lg text-gray-200 mb-4">
-              <span className="font-semibold">Correct answer:</span>{' '}
-                {getExpectedAnswer(currentItem).join(' / ')}            
+              <span className="font-semibold">Correct answer:</span>{" "}
+              {getExpectedAnswer(currentItem).join(" / ")}
             </p>
           )}
-          {aiExplanation === 'No answer provided.' ? (
-            <p className="text-lg text-gray-200 italic">
-              {aiExplanation}
-            </p>
+          {aiExplanation === "No answer provided." ? (
+            <p className="text-lg text-gray-200 italic">{aiExplanation}</p>
           ) : (
             <p className="text-lg text-gray-200 italic">
               <span className="font-semibold">AI:</span> {aiExplanation}
             </p>
           )}
 
-          {answerState === 'incorrect' && currentItem && (
+          {answerState === "incorrect" && currentItem && (
             <div className="mt-4">
               <Link
                 href={`/learn/${currentItem.ku.id}?source=review`}
@@ -529,4 +544,3 @@ export default function ReviewPage() {
     </main>
   );
 }
-
