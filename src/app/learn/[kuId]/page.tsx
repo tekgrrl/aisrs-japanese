@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect, useRef } from "react"; // <-- Import useRef
 import { useRouter, useParams, useSearchParams } from "next/navigation";
-import Kuroshiro from "kuroshiro";
 import {
   KnowledgeUnit,
   FacetType,
@@ -23,7 +22,6 @@ import { KNOWLEDGE_UNITS_COLLECTION } from "@/lib/firebase-config";
 import { FuriganaText } from '@/components/FuriganaText';
 
 export default function LearnItemPage() {
-  const kuroshiro = new Kuroshiro();
   const router = useRouter();
   const params = useParams();
   // TODO Seems to imply we don't know what we get passed in the URL params, please check
