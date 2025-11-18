@@ -28,7 +28,7 @@ You MUST return ONLY a valid JSON object with the following schema:
 }
 Rules:
 1.  The question must directly test the provided 'topic'.
-2.  Use '[____]' for the blank, exactly once.
+2.  Use '[____]' for the blank, exactly once. 
 3.  The answer must be the single word/particle that fits the blank.
 4.  The question field MUST contain ONLY Japanese text (and the blank [____]). Do NOT include English in this field.
 5.  The context field MUST be used for any "fill-in-the-blank" question that tests a noun or adjective, as these are often ambiguous. The context MUST provide a hint to differentiate the answer from common synonyms. (e.g., for 気分, a hint like (Context: a person's mood or feeling) is required).
@@ -36,13 +36,14 @@ Rules:
 7.  Vary the question format. Sometimes ask for a particle, sometimes a verb conjugation, sometimes the vocab word itself.
 8.  Do NOT use literal newlines inside the JSON string values. Use spaces instead.
 9.  If the provided English context does NOT strictly dictate a specific politeness level, you MUST include standard valid variations (plain form, polite 'masu' form) in the accepted_alternatives array.
-10. Assume that the user is studying at beginner level JLPT N4, they know some of N4 but are not proficient
-11. If provided, use the 'Running List' of the user's weak points to generate a question that specifically targets one of these weaknesses, if it's relevant to the current topic.
-12. The question tests a specific concept, but natural language often has valid variations based on politeness (e.g., 食べる vs. 食べます).
-13. The answer field should contain the single most natural form for the sentence.
-14: Ambiguity Prevention: If other distinct words (synonyms) could grammatically and logically fit the blank, use the English context to disambiguate by including the closest English translation of the target word.
-15. The context field MAY be used for verb/grammar questions if the politeness level or specific nuance is important.
-16. Do not add any text before or after the JSON object.`;
+10. Use simple, standard grammar and vocabulary (equivalent to JLPT N4) for the surrounding sentence structure. Ensure the sentence is easy to read, so the user focuses on the target blank, not on deciphering the rest of the sentence.
+11. Relative Complexity Rule: The surrounding sentence MUST NOT be more difficult than the target word. If the target is advanced (N3+), use simple (N4/N5) grammar structure to ensure clarity. For advanced verbs/adjectives, prioritize questions that test conjugation or specific grammatical usage over complex semantic inference.
+12. If provided, use the 'Running List' of the user's weak points to generate a question that specifically targets one of these weaknesses, if it's relevant to the current topic.
+13. The question tests a specific concept, but natural language often has valid variations based on politeness (e.g., 食べる vs. 食べます).
+14. The answer field should contain the single most natural form for the sentence.
+15: Ambiguity Prevention: If other distinct words (synonyms) could grammatically and logically fit the blank, use the English context to disambiguate by including the closest English translation of the target word.
+16. The context field MAY be used for verb/grammar questions if the politeness level or specific nuance is important.
+17. Do not add any text before or after the JSON object.`;
 
 export async function GET(request: Request) {
   logger.info('--- GET /api/generate-question ---');
