@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef, FormEvent } from 'react';
 import Link from 'next/link';
 import { ReviewItem, ReviewFacet, VocabLesson, KanjiLesson } from '@/types';
+import * as wanakana from 'wanakana';
 import { logger } from '@/lib/logger';
 
 type AnswerState = 'unanswered' | 'evaluating' | 'correct' | 'incorrect';
@@ -27,7 +28,7 @@ export default function ReviewPage() {
 
   const currentItem = reviewQueue[currentIndex];
 
-
+  const lastFetchedFacetId = useRef<string | null>(null);
 
   // --- Fetch Dynamic Question Logic ---
   const fetchDynamicQuestion = async (topic: string) => {
@@ -44,8 +45,8 @@ export default function ReviewPage() {
       const { question, answer, context, accepted_alternatives } = await response.json();
       setDynamicQuestion(question);
       setDynamicAnswer(answer);
-      setDynamicContext(context);
-      setDynamicAltAnswers(accepted_alternatives);
+      setDynamicContext(context || null);
+      setDynamicAltAnswers(accepted_alternatives || null);
 
     } catch (err) {
       if (err instanceof Error) setError(err.message);
@@ -80,14 +81,27 @@ export default function ReviewPage() {
   // --- Effect to handle current item changes ---
   useEffect(() => {
     if (currentItem && currentItem.facet.facetType === 'AI-Generated-Question') {
+      // --- FIX: Double Fetch Prevention ---
+      // If we have already triggered a fetch for this exact facet ID, do nothing.
+      if (lastFetchedFacetId.current === currentItem.facet.id) {
+        return;
+      }
+
+      // Mark this ID as fetched so subsequent runs (Strict Mode) skip it
+      lastFetchedFacetId.current = currentItem.facet.id;
+
       setDynamicQuestion(null);
       setDynamicAnswer(null);
       setDynamicAltAnswers([]);
+      setDynamicContext(null);
+
       fetchDynamicQuestion(currentItem.ku.content);
     } else {
       setDynamicQuestion(null);
       setDynamicAnswer(null);
       setDynamicAltAnswers([]);
+      setDynamicContext(null);
+
     }
   }, [currentItem, currentIndex]); // Re-run whenever the currentItem OR the index changes
 
@@ -151,7 +165,7 @@ export default function ReviewPage() {
     const questionType = getQuestionType(currentItem); // Get the question type
 
     // TODO This shouldn't work
-    if (expectedAnswers === null) {
+    if (expectedAnswers.length === 0 && currentItem.facet.facetType === 'AI-Generated-Question') {
       setError('Waiting for dynamic question to load.');
       setAnswerState('unanswered');
       return;
@@ -215,7 +229,7 @@ export default function ReviewPage() {
     setCurrentIndex((prevIndex) => prevIndex + 1);
   };
 
-  // --- Helper Functions (Updated) ---
+  // --- Helper Functions ---
 
   const getQuestion = (item: ReviewItem): string | null => {
     const { ku, facet } = item;
@@ -256,6 +270,17 @@ export default function ReviewPage() {
       default:
         return '...';
     }
+  };
+
+  // Helper to check if we should auto-convert
+  const isJapaneseInput = (item: ReviewItem) => {
+    const type = item.facet.facetType;
+    // Add any other types that expect Japanese input
+    return (
+      type === 'Content-to-Reading' || 
+      type === 'Kanji-Component-Reading' ||
+      type === 'AI-Generated-Question' 
+    );
   };
 
   const getExpectedAnswer = (item: ReviewItem): string[] => {
@@ -407,7 +432,7 @@ export default function ReviewPage() {
               )}
 
               {/* Main Question Text */}
-              <p className={`${questionType.startsWith('Quiz') ? 'text-2xl' : 'text-5xl'} font-bold text-white break-words`}>
+              <p className={`${currentItem.facet.facetType === 'AI-Generated-Question' ? 'text-2xl' : 'text-5xl'} font-bold text-white break-words`}>
                 {questionText || '[Question not loaded]'}
               </p>
             </>
@@ -417,11 +442,25 @@ export default function ReviewPage() {
         {/* Answer Form */}
         <form onSubmit={handleEvaluateAnswer}>
           <input
+            key={currentItem.facet.id} // Force re-render (and autoFocus) on new item
             type="text"
             value={userAnswer}
-            key={currentIndex}
             autoFocus
-            onChange={(e) => setUserAnswer(e.target.value)}
+            // onChange={(e) => setUserAnswer(e.target.value)}
+            onChange={(e) => {
+              const input = e.target.value;
+              
+              // Only convert if it's a Reading question
+              if (isJapaneseInput(currentItem)) {
+                // toKana with IMEMode: true mimics real typing behavior
+                // e.g., typing 'n' waits to see if 'a' comes next (な) or another 'n' (ん)
+                const converted = wanakana.toKana(input, { IMEMode: true });
+                setUserAnswer(converted);
+              } else {
+                // For meanings/definitions, just pass raw text
+                setUserAnswer(input);
+              }
+            }}
             placeholder={getQuestionType(currentItem) === 'Definition' ? "Type your answer..." : "回答を入力して..."}
             disabled={answerState !== 'unanswered' || isDynamicLoading}
             className="w-full p-4 bg-gray-700 border-2 border-gray-600 text-white text-xl rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-800 disabled:text-gray-500"
