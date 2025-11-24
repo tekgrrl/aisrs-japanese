@@ -70,12 +70,14 @@ export type PartOfSpeech =
   | "i-adjective"
   | "na-adjective"
   | "noun"
+  | "noun-prenominal"
   | "proper-noun"
   | "noun-suru"
   | "counter"
   | "adverb"
-  | "auxiliary-verb"
+  | "auxiliary-verb"    
   | "prefix"
+  | "suffix"
   | "conjunction";
 
 export interface KnowledgeUnit {
