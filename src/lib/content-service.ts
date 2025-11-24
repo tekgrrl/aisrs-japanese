@@ -162,8 +162,6 @@ class FileSystemContentService implements ContentService {
     
     const lessons: LessonContent[] = [];
 
-    console.info(`topicId = ${topicId}`);
-
     // 1. Explicit links from Topic
     for (const id of linkedLessonIds) {
       const lesson = await this.getLesson(id);
