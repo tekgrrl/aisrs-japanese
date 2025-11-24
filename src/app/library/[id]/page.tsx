@@ -3,8 +3,8 @@ import { notFound } from 'next/navigation';
 import { contentService } from '@/lib/content-service';
 import { FuriganaText } from '@/components/FuriganaText';
 
-export default async function LibraryTopicPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
+export default async function LibraryTopicPage({ params }: { params: { id: string } }) {
+  const { id } = params;
   const decodedId = decodeURIComponent(id);
 
   const topic = await contentService.getTopic(decodedId);
