@@ -56,3 +56,6 @@ test-results/
 ms-playwright/
 blob-report/
 playwright/.auth/
+
+# content library
+content/
