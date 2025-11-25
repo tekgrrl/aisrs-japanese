@@ -121,7 +121,55 @@ Your response MUST be a valid JSON object that adheres to this schema:
     }
   ]
 }`;
-      userMessage = VOCAB_USER_PROMPT;
+const VOCAB_USER_PROMPT2 = `You are an expert Japanese tutor. You will be asked to generate a lesson for the Japanese word: ${ku.content}.
+
+The lesson should be in English. Where you want to use Japanese text for examples, explanations, meanings and readings do so but do not include Romaji.
+
+**Task 1: Metadata Extraction**
+* Provide the standard **Kana Reading**.
+* Provide a **Concise Definition** (comma-separated, max 3-5 words) suitable for a dictionary entry or flashcard.
+* Identify the **Part of Speech**.
+* Identify the **Conjugation Type** (if applicable).
+
+**Task 2: Lesson Generation**
+* Generate detailed explanations for meaning and reading.
+* Generate context examples.
+* Analyze component Kanji.
+
+**Constraints:**
+For the \`partOfSpeech\` property, select one of:
+* noun, proper-noun, noun-suru, i-adjective, na-adjective, transitive-verb, intransitive-verb, adverb, counter, prefix, suffix, conjunction, particle
+
+For the \`conjugation_type\` property, select one of (or null):
+* godan, ichidan, irregular, suru, i-adjective, na-adjective, null
+
+**Response Schema:**
+You MUST return a valid JSON object matching this schema:
+{
+  "type": "Vocab",
+  "vocab": "The canonical Japanese word",
+  "reading": "The canonical kana reading (e.g. ぜったい)",
+  "definition": "Concise dictionary definition (e.g. absolutely, unconditionally)",
+  "partOfSpeech": "The selected part of speech string",
+  "conjugation_type": "The selected conjugation type or null",
+  
+  "meaning_explanation": "A detailed explanation of the word's meaning and nuance.",
+  "reading_explanation": "An explanation of the reading (e.g., nuance, rendaku).",
+  
+  "context_examples": [
+    { "sentence": "Japanese sentence with Furigana in brackets e.g. 明日[あした]", "translation": "English translation." }
+  ],
+  "component_kanji": [
+    { 
+      "kanji": "Single Kanji", 
+      "reading": "Reading in this word", 
+      "meaning": "Core meaning",
+      "onyomi": ["on1"],
+      "kunyomi": ["kun1"]
+    }
+  ]
+}`;
+      userMessage = VOCAB_USER_PROMPT2;
     } else {
       logger.warn(`No lesson generator for type: ${ku.type}`);
       return NextResponse.json(
