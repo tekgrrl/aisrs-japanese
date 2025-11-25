@@ -31,15 +31,15 @@ export default function ReviewPage() {
 
   const currentItem = reviewQueue[currentIndex];
 
-  const lastFetchedFacetId = useRef<string | null>(null);
+  const lastFetchedIndex = useRef<number | null>(null);
 
   // --- Fetch Dynamic Question Logic ---
-  const fetchDynamicQuestion = async (topic: string) => {
+  const fetchDynamicQuestion = async (topic: string, facetId: string) => {
     setIsFetchingDynamicQuestion(true);
     setError(null);
     try {
       const response = await fetch(
-        `/api/generate-question?topic=${encodeURIComponent(topic)}`,
+        `/api/generate-question?topic=${encodeURIComponent(topic)}&facetId=${facetId}`,
       );
       if (!response.ok) {
         const errData = await response.json();
@@ -88,20 +88,20 @@ export default function ReviewPage() {
       currentItem.facet.facetType === "AI-Generated-Question"
     ) {
       // --- FIX: Double Fetch Prevention ---
-      // If we have already triggered a fetch for this exact facet ID, do nothing.
-      if (lastFetchedFacetId.current === currentItem.facet.id) {
+      // If we have already triggered a fetch for this exact index, do nothing.
+      if (lastFetchedIndex.current === currentIndex) {
         return;
       }
 
-      // Mark this ID as fetched so subsequent runs (Strict Mode) skip it
-      lastFetchedFacetId.current = currentItem.facet.id;
+      // Mark this index as fetched
+      lastFetchedIndex.current = currentIndex;
 
       setDynamicQuestion(null);
       setDynamicAnswer(null);
       setDynamicAltAnswers([]);
       setDynamicContext(null);
 
-      fetchDynamicQuestion(currentItem.ku.content);
+      fetchDynamicQuestion(currentItem.ku.content, currentItem.facet.id);
     } else {
       setDynamicQuestion(null);
       setDynamicAnswer(null);

@@ -124,6 +124,8 @@ export interface ReviewFacet {
     result: "pass" | "fail";
     stage: number;
   }>;
+  currentQuestionId?: string;
+  questionAttempts?: number;
 }
 
 /**

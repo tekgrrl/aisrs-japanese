@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { logger } from "@/lib/logger";
 import { db, Timestamp } from "@/lib/firebase"; // Added Timestamp
-import { API_LOGS_COLLECTION } from "@/lib/firebase-config"; // Added log collection name
-import { ApiLog } from "@/types"; // Added ApiLog
+import { API_LOGS_COLLECTION, QUESTIONS_COLLECTION, REVIEW_FACETS_COLLECTION } from "@/lib/firebase-config"; // Added log collection name
+import { ApiLog, ReviewFacet, QuestionItem } from "@/types"; // Added ApiLog
 import { performance } from "perf_hooks"; // Added for timing
 import { GoogleGenAI } from "@google/genai";
 
@@ -52,17 +52,67 @@ export async function GET(request: Request) {
   let errorOccurred = false;
   let capturedError: any = null;
   let aiJsonText: string | undefined; // Capture raw text for logging
-  let parsedJson: { question: string; answer: string } | undefined; // Capture parsed result
+  let parsedJson: {
+    question: string;
+    answer: string;
+    context?: string;
+    accepted_alternatives?: string[];
+  } | undefined; // Capture parsed result
 
   try {
     const { searchParams } = new URL(request.url);
     const topic = searchParams.get("topic");
+    const facetId = searchParams.get("facetId");
+
     if (!topic) {
       return NextResponse.json(
         { error: "Topic parameter is required" },
         { status: 400 },
       );
     }
+
+    // --- Persistence Logic ---
+    let facetRef;
+    let facetData: ReviewFacet | undefined;
+
+    if (facetId) {
+      facetRef = db.collection(REVIEW_FACETS_COLLECTION).doc(facetId);
+      const facetDoc = await facetRef.get();
+      if (facetDoc.exists) {
+        facetData = facetDoc.data() as ReviewFacet;
+
+        // Check if we should reuse an existing question
+        if (
+          facetData.currentQuestionId &&
+          (facetData.questionAttempts || 0) < 3
+        ) {
+          logger.info(
+            `Reusing question ${facetData.currentQuestionId} for facet ${facetId} (attempts: ${facetData.questionAttempts})`,
+          );
+          const questionDoc = await db
+            .collection(QUESTIONS_COLLECTION)
+            .doc(facetData.currentQuestionId)
+            .get();
+
+          if (questionDoc.exists) {
+            const questionItem = questionDoc.data() as QuestionItem;
+            // Return the stored question data directly
+            // We need to map it back to the expected response format
+            return NextResponse.json({
+              question: questionItem.data.question,
+              context: questionItem.data.context,
+              answer: questionItem.data.answer,
+              accepted_alternatives: questionItem.data.acceptedAlternatives,
+            });
+          } else {
+            logger.warn(
+              `Question ${facetData.currentQuestionId} not found, generating new one.`,
+            );
+          }
+        }
+      }
+    }
+    // --- End Persistence Logic ---
 
     // --- Fetch the Running List (Context Summarizer) ---
     // Note: Using absolute URL for server-side fetch to self
@@ -161,6 +211,40 @@ export async function GET(request: Request) {
           "Evaluation result is missing after AI response parsing.",
         );
       }
+
+      // --- Save Generated Question ---
+      if (facetId && facetRef) {
+        try {
+          const newQuestionRef = db.collection(QUESTIONS_COLLECTION).doc();
+          const newQuestionItem: QuestionItem = {
+            id: newQuestionRef.id,
+            kuId: topic, // Using topic as kuId for now, or we could pass kuId param
+            data: {
+              question: parsedJson.question,
+              context: parsedJson.context,
+              answer: parsedJson.answer,
+              acceptedAlternatives: parsedJson.accepted_alternatives,
+              difficulty: "JLPT-N5", // Default or infer?
+            },
+            createdAt: Timestamp.now(),
+            lastUsed: Timestamp.now(),
+          };
+
+          await newQuestionRef.set(newQuestionItem);
+          logger.info(`Saved new question: ${newQuestionRef.id}`);
+
+          // Update Facet
+          await facetRef.update({
+            currentQuestionId: newQuestionRef.id,
+            questionAttempts: 0,
+          });
+          logger.info(`Updated facet ${facetId} with new question`);
+        } catch (saveError) {
+          logger.error("Failed to save generated question", saveError);
+          // Don't fail the request if saving fails, just log it
+        }
+      }
+      // --- End Save ---
 
       return NextResponse.json(parsedJson);
     } catch (error: any) {
