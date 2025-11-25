@@ -233,7 +233,7 @@ export async function GET(request: Request) {
               context: parsedJson.context,
               answer: parsedJson.answer,
               acceptedAlternatives: parsedJson.accepted_alternatives,
-              difficulty: "JLPT-N5", // Default or infer?
+              difficulty: "JLPT-N5", // TODO Need to get this value from the generate-question response eventually
             },
             createdAt: Timestamp.now(),
             lastUsed: Timestamp.now(),
