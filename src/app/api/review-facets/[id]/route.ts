@@ -80,6 +80,10 @@ export async function PUT(
     let currentQuestionId = facet.currentQuestionId || null;
     let questionAttempts = facet.questionAttempts || 0;
 
+    logger.info(
+      `Before update: facet ${facetId}, currentQuestionId: ${currentQuestionId}, attempts: ${questionAttempts}, result: ${result}`,
+    );
+
     if (result === "fail") {
       questionAttempts += 1;
       // If we haven't reached 3 attempts, we keep the same question
@@ -87,12 +91,12 @@ export async function PUT(
       // But the requirement says "show it to them three times", so on the 3rd failure (attempts=3),
       // we should probably clear it so the NEXT time they see it, it's new.
       if (questionAttempts >= 3) {
-        currentQuestionId = FieldValue.delete(); // Remove the field
+        currentQuestionId = FieldValue.delete() as any; // Remove the field
         questionAttempts = 0; // Reset attempts
       }
     } else {
       // Pass: Clear the current question so we get a fresh one next time
-      currentQuestionId = FieldValue.delete();
+      currentQuestionId = FieldValue.delete() as any;
       questionAttempts = 0;
     }
     // --- End Question Persistence Logic ---

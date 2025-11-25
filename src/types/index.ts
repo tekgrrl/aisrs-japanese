@@ -164,4 +164,9 @@ export interface QuestionItem {
   };
   createdAt: string | Timestamp;
   lastUsed?: string | Timestamp;
+  previousAnswers?: {
+    answer: string;
+    result: "pass" | "fail";
+    timestamp: Timestamp;
+  }[];
 }

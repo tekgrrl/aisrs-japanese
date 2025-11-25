@@ -63,6 +63,7 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const topic = searchParams.get("topic");
     const facetId = searchParams.get("facetId");
+    const kuId = searchParams.get("kuId");
 
     if (!topic) {
       return NextResponse.json(
@@ -96,6 +97,7 @@ export async function GET(request: Request) {
 
           if (questionDoc.exists) {
             const questionItem = questionDoc.data() as QuestionItem;
+            logger.info(`Question ${facetData.currentQuestionId} found. Returning it.`);
             // Return the stored question data directly
             // We need to map it back to the expected response format
             return NextResponse.json({
@@ -103,13 +105,20 @@ export async function GET(request: Request) {
               context: questionItem.data.context,
               answer: questionItem.data.answer,
               accepted_alternatives: questionItem.data.acceptedAlternatives,
+              questionId: questionItem.id, // Return the ID
             });
           } else {
             logger.warn(
               `Question ${facetData.currentQuestionId} not found, generating new one.`,
             );
           }
+        } else {
+          logger.info(
+            `Not reusing question. currentQuestionId: ${facetData.currentQuestionId}, attempts: ${facetData.questionAttempts}`,
+          );
         }
+      } else {
+        logger.warn(`Facet ${facetId} not found`);
       }
     }
     // --- End Persistence Logic ---
@@ -218,7 +227,7 @@ export async function GET(request: Request) {
           const newQuestionRef = db.collection(QUESTIONS_COLLECTION).doc();
           const newQuestionItem: QuestionItem = {
             id: newQuestionRef.id,
-            kuId: topic, // Using topic as kuId for now, or we could pass kuId param
+            kuId: kuId || topic, // Use kuId if available, fallback to topic
             data: {
               question: parsedJson.question,
               context: parsedJson.context,
@@ -246,7 +255,10 @@ export async function GET(request: Request) {
       }
       // --- End Save ---
 
-      return NextResponse.json(parsedJson);
+      return NextResponse.json({
+        ...parsedJson,
+        questionId: facetId && facetRef ? (facetData?.currentQuestionId || null) : null, // Return the ID if we saved/updated it
+      });
     } catch (error: any) {
       // Catch SDK errors (like 400/500 responses which throw in the SDK)
       logger.error("Gemini API Error", { error: error.message || error });
