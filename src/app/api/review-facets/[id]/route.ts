@@ -76,6 +76,31 @@ export async function PUT(
       newStage = Math.max(Math.floor(newStage / 2), 0);
     }
 
+    // --- Question Persistence Logic ---
+    let currentQuestionId = facet.currentQuestionId || null;
+    let questionAttempts = facet.questionAttempts || 0;
+
+    logger.info(
+      `Before update: facet ${facetId}, currentQuestionId: ${currentQuestionId}, attempts: ${questionAttempts}, result: ${result}`,
+    );
+
+    if (result === "fail") {
+      questionAttempts += 1;
+      // If we haven't reached 3 attempts, we keep the same question
+      // If we reached 3, we might want to clear it so a new one is generated next time
+      // But the requirement says "show it to them three times", so on the 3rd failure (attempts=3),
+      // we should probably clear it so the NEXT time they see it, it's new.
+      if (questionAttempts >= 3) {
+        currentQuestionId = FieldValue.delete() as any; // Remove the field
+        questionAttempts = 0; // Reset attempts
+      }
+    } else {
+      // Pass: Clear the current question so we get a fresh one next time
+      currentQuestionId = FieldValue.delete() as any;
+      questionAttempts = 0;
+    }
+    // --- End Question Persistence Logic ---
+
     // --- Calculate new review date ---
     const intervalHours = srsIntervals[newStage as SrsStage];
     const newNextReviewDate = new Date(
@@ -92,6 +117,8 @@ export async function PUT(
         result: result,
         stage: newStage,
       }),
+      currentQuestionId: currentQuestionId as any,
+      questionAttempts: questionAttempts,
     };
 
     // Atomically update the document

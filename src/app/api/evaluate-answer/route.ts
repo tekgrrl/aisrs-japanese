@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { logger } from "@/lib/logger";
 import { db, Timestamp } from "@/lib/firebase"; // Import db and Timestamp
-import { API_LOGS_COLLECTION } from "@/lib/firebase-config"; // Import collection name
+import { API_LOGS_COLLECTION, QUESTIONS_COLLECTION } from "@/lib/firebase-config"; // Import collection name
 import { ApiLog } from "@/types"; // Import the log type
+import { FieldValue } from "firebase-admin/firestore";
 import { performance } from "perf_hooks"; // For timing
 import { GoogleGenAI } from "@google/genai";
 
@@ -21,7 +22,7 @@ export async function POST(request: Request) {
     | undefined;
 
   try {
-    const { userAnswer, expectedAnswers, question, topic } =
+    const { userAnswer, expectedAnswers, question, topic, questionId } =
       await request.json();
 
     if (
@@ -51,6 +52,30 @@ export async function POST(request: Request) {
 
     if (isMatch) {
       logger.info("Local answer check: PASS", { userAnswer, expectedAnswers });
+
+      // --- Update Question History (Local Pass) ---
+      if (questionId) {
+        try {
+          const questionRef = db
+            .collection(QUESTIONS_COLLECTION)
+            .doc(questionId);
+          await questionRef.update({
+            previousAnswers: FieldValue.arrayUnion({
+              answer: userAnswer,
+              result: "pass",
+              timestamp: Timestamp.now(),
+            }),
+          });
+          logger.info(`Updated question ${questionId} with pass history`);
+        } catch (histError) {
+          logger.error(
+            "Failed to update question history (local pass)",
+            histError,
+          );
+        }
+      }
+      // --- End Update ---
+
       // Return the "pass" JSON immediately, skipping the AI call
       // TODO return and evaluationResult object here
       return NextResponse.json({
@@ -166,6 +191,30 @@ Example for a fail: {"result": "fail", "explanation": "Incorrect. The expected r
       }
 
       logger.info(`Evaluation result: ${evaluationResult.result}`);
+      logger.info(`Evaluation result: ${evaluationResult.result}`);
+
+      // --- Update Question History (AI Result) ---
+      if (questionId) {
+        try {
+          const questionRef = db
+            .collection(QUESTIONS_COLLECTION)
+            .doc(questionId);
+          await questionRef.update({
+            previousAnswers: FieldValue.arrayUnion({
+              answer: userAnswer,
+              result: evaluationResult.result,
+              timestamp: Timestamp.now(),
+            }),
+          });
+          logger.info(
+            `Updated question ${questionId} with AI result: ${evaluationResult.result}`,
+          );
+        } catch (histError) {
+          logger.error("Failed to update question history (AI)", histError);
+        }
+      }
+      // --- End Update ---
+
       return NextResponse.json(evaluationResult);
     } catch (error: any) {
       // Catch SDK errors (like 400/500 responses which throw in the SDK)

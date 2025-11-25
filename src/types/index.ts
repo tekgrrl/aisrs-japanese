@@ -124,6 +124,8 @@ export interface ReviewFacet {
     result: "pass" | "fail";
     stage: number;
   }>;
+  currentQuestionId?: string;
+  questionAttempts?: number;
 }
 
 /**
@@ -162,4 +164,9 @@ export interface QuestionItem {
   };
   createdAt: string | Timestamp;
   lastUsed?: string | Timestamp;
+  previousAnswers?: {
+    answer: string;
+    result: "pass" | "fail";
+    timestamp: Timestamp;
+  }[];
 }
