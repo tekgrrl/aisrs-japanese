@@ -4,17 +4,20 @@ import {
   KNOWLEDGE_UNITS_COLLECTION,
   REVIEW_FACETS_COLLECTION,
 } from "@/lib/firebase-config";
+import { CURRENT_USER_ID } from "@/lib/constants";
 
 export async function GET() {
   try {
     const learnQuery = db
       .collection(KNOWLEDGE_UNITS_COLLECTION)
+      .where("userId", "==", CURRENT_USER_ID)
       .where("status", "==", "learning")
       .count()
       .get();
 
     const reviewQuery = db
       .collection(REVIEW_FACETS_COLLECTION)
+      .where("userId", "==", CURRENT_USER_ID)
       .where("nextReviewAt", "<=", Timestamp.now())
       .count()
       .get();

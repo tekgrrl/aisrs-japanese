@@ -3,6 +3,8 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/firebase";
 import { LESSONS_COLLECTION } from "@/lib/firebase-config";
 import { Lesson } from "@/types";
+import { CURRENT_USER_ID } from "@/lib/constants";
+import { FieldPath } from "firebase-admin/firestore";
 
 export async function PUT(
   request: Request,
@@ -33,8 +35,17 @@ export async function PUT(
     }
 
     // I need to pull the entire record and then stuff the new meaning_explanation into it
-    const lessonRef = db.collection(LESSONS_COLLECTION).doc(lessonId);
-    const rawDoc = await lessonRef.get();
+    const snapshot = await db
+      .collection(LESSONS_COLLECTION)
+      .where(FieldPath.documentId(), "==", lessonId)
+      .where("userId", "==", CURRENT_USER_ID)
+      .get();
+
+    if (snapshot.empty) {
+      return NextResponse.json({ error: "Lesson not found" }, { status: 404 });
+    }
+
+    const lessonRef = snapshot.docs[0].ref;
 
     await lessonRef.update({
       [section]: content,

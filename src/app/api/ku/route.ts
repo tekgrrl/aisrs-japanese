@@ -4,6 +4,7 @@ import { KNOWLEDGE_UNITS_COLLECTION } from "@/lib/firebase-config";
 import { KnowledgeUnit } from "@/types";
 import { Timestamp } from "firebase-admin/firestore";
 import { logger } from "@/lib/logger";
+import { CURRENT_USER_ID } from "@/lib/constants";
 
 // GET all Knowledge Units
 export async function GET() {
@@ -11,6 +12,7 @@ export async function GET() {
   try {
     const snapshot = await db
       .collection(KNOWLEDGE_UNITS_COLLECTION)
+      .where("userId", "==", CURRENT_USER_ID)
       .orderBy("createdAt", "desc") // Order by creation time, newest first
       .get();
 
@@ -27,7 +29,8 @@ export async function GET() {
         ...data,
         // Convert Firestore Timestamp to string for client-side
         createdAt: (data.createdAt as Timestamp).toDate().toISOString(),
-      } as KnowledgeUnit);
+        userId: data.userId || CURRENT_USER_ID, // Ensure userId is present
+      } as unknown as KnowledgeUnit);
     });
 
     logger.info(`GET /api/ku - Returning ${kus.length} units.`);
@@ -63,6 +66,7 @@ export async function POST(request: Request) {
       createdAt: Timestamp.now(), // Add Firestore timestamp
       status: "learning",
       facet_count: 0,
+      userId: CURRENT_USER_ID,
     };
 
     const newDocRef = await db

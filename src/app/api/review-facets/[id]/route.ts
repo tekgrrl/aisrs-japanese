@@ -2,8 +2,9 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/firebase";
 import { REVIEW_FACETS_COLLECTION } from "@/lib/firebase-config";
 import { ReviewFacet } from "@/types";
-import { Timestamp, FieldValue } from "firebase-admin/firestore";
+import { Timestamp, FieldValue, FieldPath } from "firebase-admin/firestore";
 import { logger } from "@/lib/logger";
+import { CURRENT_USER_ID } from "@/lib/constants";
 
 // SRS intervals in hours (maps to srsStage)
 const srsIntervals = {
@@ -23,15 +24,14 @@ type SrsStage = keyof typeof srsIntervals;
 // PUT: Update an existing Review Facet's SRS data
 export async function PUT(
   request: Request,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   let facetId: string;
 
   // Re-using the robust URL parsing from our previous fix
   try {
-    const url = new URL(request.url);
-    const pathParts = url.pathname.split("/");
-    facetId = pathParts[pathParts.length - 1]; // Get the last part of the path (the ID)
+    const { id } = await params;
+    facetId = id;
 
     if (!facetId) throw new Error("Facet ID not found in URL");
   } catch (urlError) {
@@ -55,13 +55,23 @@ export async function PUT(
       );
     }
 
-    const facetRef = db.collection(REVIEW_FACETS_COLLECTION).doc(facetId);
-    const doc = await facetRef.get();
+    // Since you are moving from .doc(id) to a .where() clause, you can't just say 
+    // .where('id', '==', facetId) because the ID isn't a field inside the document; 
+    // it's the key. FieldPath.documentId() is Firestore's syntax for querying against 
+    // that key.
+    const snapshot = await db
+      .collection(REVIEW_FACETS_COLLECTION)
+      .where(FieldPath.documentId(), "==", facetId) 
+      .where("userId", "==", CURRENT_USER_ID)
+      .get();
 
-    if (!doc.exists) {
+    if (snapshot.empty) {
       logger.warn(`PUT /api/review-facets/${facetId} - Facet not found`);
       return NextResponse.json({ error: "Facet not found" }, { status: 404 });
     }
+
+    const doc = snapshot.docs[0];
+    const facetRef = doc.ref;
 
     const facet = doc.data() as ReviewFacet;
     const now = new Date();

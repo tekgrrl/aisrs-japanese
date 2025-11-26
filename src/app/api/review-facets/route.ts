@@ -19,6 +19,7 @@ import {
   API_LOGS_COLLECTION,
   LESSONS_COLLECTION,
 } from "@/lib/firebase-config"; // Added log collection name
+import { CURRENT_USER_ID } from "@/lib/constants";
 import { performance } from "perf_hooks"; // Added for timing
 
 // --- Define model name centrally ---
@@ -39,6 +40,7 @@ export async function GET(request: Request) {
 
       const dueFacetsSnapshot = await db
         .collection(REVIEW_FACETS_COLLECTION)
+        .where("userId", "==", CURRENT_USER_ID)
         .where("nextReviewAt", "<=", now)
         .get();
 
@@ -112,7 +114,10 @@ export async function GET(request: Request) {
       logger.info(
         "GET /api/review-facets - Fetching all facets for manage page.",
       );
-      const querySnapshot = await db.collection(REVIEW_FACETS_COLLECTION).get();
+      const querySnapshot = await db
+        .collection(REVIEW_FACETS_COLLECTION)
+        .where("userId", "==", CURRENT_USER_ID)
+        .get();
       const facets = querySnapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
@@ -196,6 +201,7 @@ export async function POST(request: Request) {
           nextReviewAt: now,
           createdAt: now,
           history: [],
+          userId: CURRENT_USER_ID,
         });
         parentFacetCount++; // Increment parent's facet count
         logger.debug(`Batch-set simple/AI facet: ${facetKey}`);
@@ -234,6 +240,7 @@ export async function POST(request: Request) {
             createdAt: now,
             relatedUnits: [],
             personalNotes: `Auto-generated as component for KU ${kuId}`,
+            userId: CURRENT_USER_ID,
           });
         } else {
           const kanjiKuId = kanjiSnapshot.docs[0].id;
@@ -418,6 +425,7 @@ export async function POST(request: Request) {
             relatedUnits: [],
             personalNotes: `Auto-generated as component for KU ${kuId}`,
             // id: newKanjiKuRef.id // Don't add id field
+            userId: CURRENT_USER_ID,
           });
 
           kanjiKuId = newKanjiKuRef.id;
@@ -445,6 +453,7 @@ export async function POST(request: Request) {
           nextReviewAt: now,
           createdAt: now,
           history: [],
+          userId: CURRENT_USER_ID,
         });
         // --- DEBUG ---
         logger.debug(
