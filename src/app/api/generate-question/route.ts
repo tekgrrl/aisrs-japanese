@@ -74,8 +74,10 @@ export async function GET(request: Request) {
     }
 
     // --- Persistence Logic ---
+    // --- Persistence Logic ---
     let facetRef;
     let facetData: ReviewFacet | undefined;
+    let returnedQuestionId: string | null = null;
 
     if (facetId) {
       facetRef = db.collection(REVIEW_FACETS_COLLECTION).doc(facetId);
@@ -98,16 +100,22 @@ export async function GET(request: Request) {
 
           if (questionDoc.exists) {
             const questionItem = questionDoc.data() as QuestionItem;
-            logger.info(`Question ${facetData.currentQuestionId} found. Returning it.`);
-            // Return the stored question data directly
-            // We need to map it back to the expected response format
-            return NextResponse.json({
-              question: questionItem.data.question,
-              context: questionItem.data.context,
-              answer: questionItem.data.answer,
-              accepted_alternatives: questionItem.data.acceptedAlternatives,
-              questionId: questionItem.id, // Return the ID
-            });
+            
+            // Check if the question is active
+            if (questionItem.status === "inactive") {
+               logger.info(`Question ${facetData.currentQuestionId} is inactive. Generating new one.`);
+            } else {
+                logger.info(`Question ${facetData.currentQuestionId} found and active. Returning it.`);
+                // Return the stored question data directly
+                // We need to map it back to the expected response format
+                return NextResponse.json({
+                question: questionItem.data.question,
+                context: questionItem.data.context,
+                answer: questionItem.data.answer,
+                accepted_alternatives: questionItem.data.acceptedAlternatives,
+                questionId: questionItem.id, // Return the ID
+                });
+            }
           } else {
             logger.warn(
               `Question ${facetData.currentQuestionId} not found, generating new one.`,
@@ -239,6 +247,7 @@ export async function GET(request: Request) {
             createdAt: Timestamp.now(),
             lastUsed: Timestamp.now(),
             userId: CURRENT_USER_ID,
+            status: "active", // Default status
           };
 
           await newQuestionRef.set(newQuestionItem);
@@ -250,6 +259,7 @@ export async function GET(request: Request) {
             questionAttempts: 0,
           });
           logger.info(`Updated facet ${facetId} with new question`);
+          returnedQuestionId = newQuestionRef.id;
         } catch (saveError) {
           logger.error("Failed to save generated question", saveError);
           // Don't fail the request if saving fails, just log it
@@ -259,7 +269,7 @@ export async function GET(request: Request) {
 
       return NextResponse.json({
         ...parsedJson,
-        questionId: facetId && facetRef ? (facetData?.currentQuestionId || null) : null, // Return the ID if we saved/updated it
+        questionId: returnedQuestionId,
       });
     } catch (error: any) {
       // Catch SDK errors (like 400/500 responses which throw in the SDK)

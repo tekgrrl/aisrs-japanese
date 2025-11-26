@@ -165,6 +165,7 @@ export interface QuestionItem {
     acceptedAlternatives?: string[];
     difficulty: LessonDifficulty;
   };
+  status?: "active" | "flagged" | "inactive"; // Default is 'active' if undefined
   createdAt: string | Timestamp;
   lastUsed?: string | Timestamp;
   previousAnswers?: {
