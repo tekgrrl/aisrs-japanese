@@ -5,6 +5,7 @@ import { API_LOGS_COLLECTION, QUESTIONS_COLLECTION, REVIEW_FACETS_COLLECTION } f
 import { ApiLog, ReviewFacet, QuestionItem } from "@/types"; // Added ApiLog
 import { performance } from "perf_hooks"; // Added for timing
 import { GoogleGenAI } from "@google/genai";
+import { CURRENT_USER_ID } from "@/lib/constants";
 
 // --- Define model name centrally ---
 const MODEL_NAME = process.env.GEMINI_MODEL || "gemini-2.5-flash";
@@ -237,6 +238,7 @@ export async function GET(request: Request) {
             },
             createdAt: Timestamp.now(),
             lastUsed: Timestamp.now(),
+            userId: CURRENT_USER_ID,
           };
 
           await newQuestionRef.set(newQuestionItem);

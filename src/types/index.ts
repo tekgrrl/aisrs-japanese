@@ -82,6 +82,7 @@ export type PartOfSpeech =
 
 export interface KnowledgeUnit {
   id: string;
+  userId: string;
   type: KnowledgeUnitType;
   content: string; // The main "thing" (e.g., "食べる", "家族", "Giving/Receiving")
   data: {
@@ -114,6 +115,7 @@ export type FacetType =
 
 export interface ReviewFacet {
   id: string;
+  userId: string;
   kuId: string; // ID of the parent KnowledgeUnit
   facetType: FacetType;
   srsStage: number; // 0 (new) to 8 (mastered)
@@ -154,6 +156,7 @@ export type LessonDifficulty =
 
 export interface QuestionItem {
   id: string;
+  userId: string;
   kuId: string;
   data: {
     context?: string;

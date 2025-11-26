@@ -9,6 +9,7 @@ import {
   LESSONS_COLLECTION,
 } from "@/lib/firebase-config"; // Added log collection name
 import { performance } from "perf_hooks"; // Added for timing
+import { CURRENT_USER_ID } from "@/lib/constants";
 
 // --- Define model name centrally ---
 const MODEL_NAME = process.env.GEMINI_MODEL || "gemini-2.5-flash";
@@ -341,6 +342,7 @@ You MUST return a valid JSON object matching this schema:
     try {
       lessonJson = JSON.parse(jsonString) as Lesson; // Assign parsed lesson for logging
       lessonJson.kuId = kuId; // Add the kuId to the lesson object
+      (lessonJson as any).userId = CURRENT_USER_ID; // Add userId
       console.info(lessonJson);
     } catch (parseError) {
       logger.error("Failed to parse AI JSON response for lesson", {
