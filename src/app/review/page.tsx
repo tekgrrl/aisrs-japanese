@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ReviewItem, ReviewFacet, VocabLesson, KanjiLesson } from "@/types";
 import * as wanakana from "wanakana";
 import { logger } from "@/lib/logger";
+import { QuestionFeedbackModal } from "@/components/QuestionFeedbackModal";
 
 type AnswerState = "unanswered" | "evaluating" | "correct" | "incorrect";
 
@@ -29,6 +30,10 @@ export default function ReviewPage() {
   const [dynamicContext, setDynamicContext] = useState<string | null>(null);
   const [dynamicAltAnswers, setDynamicAltAnswers] = useState<string[]>([]);
   const [dynamicQuestionId, setDynamicQuestionId] = useState<string | null>(null);
+
+  // --- Feedback Modal State ---
+  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+  const [pendingSrsResult, setPendingSrsResult] = useState<"pass" | "fail" | null>(null);
 
   const currentItem = reviewQueue[currentIndex];
 
@@ -148,6 +153,41 @@ export default function ReviewPage() {
     }
   };
 
+  const updateQuestionStatus = async (
+    questionId: string,
+    status: "active" | "flagged" | "inactive",
+  ) => {
+    try {
+      const res = await fetch(`/api/questions/${questionId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      });
+      if (!res.ok) {
+        console.error(`[ReviewPage] updateQuestionStatus failed: ${res.status}`);
+      }
+    } catch (err) {
+      console.error("Failed to update question status", err);
+    }
+  };
+
+  const isNewAiQuestion = (item: ReviewItem) => {
+    if (item.facet.facetType !== "AI-Generated-Question") return false;
+    
+    // If we don't have a dynamic question ID yet, we can't determine.
+    // But this is called during answer evaluation, so it should be set.
+    if (!dynamicQuestionId) return false;
+
+    // If the facet has a recorded question ID that matches the current one,
+    // it means we've seen this question before (and failed it).
+    if (item.facet.currentQuestionId === dynamicQuestionId) {
+      return false;
+    }
+
+    // Otherwise (no recorded ID, or different ID), it's a new question.
+    return true;
+  };
+
   const handleEvaluateAnswer = async (e: FormEvent) => {
     e.preventDefault();
     if (answerState !== "unanswered" || !currentItem) return;
@@ -155,7 +195,15 @@ export default function ReviewPage() {
     // --- New: Short-circuit for empty answer ---
     if (userAnswer.trim() === "") {
       setAiExplanation("No answer provided.");
-      await handleUpdateSrs("fail");
+      
+      // Check if we need to defer SRS update
+      if (isNewAiQuestion(currentItem)) {
+        setPendingSrsResult("fail");
+        // Do NOT call handleUpdateSrs here
+      } else {
+        await handleUpdateSrs("fail");
+      }
+      
       setAnswerState("incorrect");
 
       const facetId = currentItem.facet.id;
@@ -217,10 +265,18 @@ export default function ReviewPage() {
       setAiExplanation(explanation);
 
       if (result === "pass") {
-        await handleUpdateSrs("pass");
+        if (isNewAiQuestion(currentItem)) {
+          setPendingSrsResult("pass");
+        } else {
+          await handleUpdateSrs("pass");
+        }
         setAnswerState("correct");
       } else {
-        await handleUpdateSrs("fail");
+        if (isNewAiQuestion(currentItem)) {
+          setPendingSrsResult("fail");
+        } else {
+          await handleUpdateSrs("fail");
+        }
         setAnswerState("incorrect");
 
         const facetId = currentItem.facet.id;
@@ -244,11 +300,84 @@ export default function ReviewPage() {
   };
 
   const goToNextItem = () => {
+    // If it's a new AI question and we haven't shown feedback yet
+    const isNew = isNewAiQuestion(currentItem);
+    
+    if (isNew && pendingSrsResult) {
+      setShowFeedbackModal(true);
+      return;
+    }
+
+    advanceToNext();
+  };
+
+  const advanceToNext = () => {
     setUserAnswer("");
     setAnswerState("unanswered");
     setAiExplanation("");
+    setPendingSrsResult(null);
+    setShowFeedbackModal(false);
     // Use functional update to ensure we use the latest state
     setCurrentIndex((prevIndex) => prevIndex + 1);
+  };
+
+  const handleFeedbackKeep = async () => {
+    if (pendingSrsResult) {
+      await handleUpdateSrs(pendingSrsResult);
+    }
+    // Status is already 'active' by default, so no need to patch unless we want to be explicit
+    // But let's be safe and ensure it's active if it was somehow not
+    if (dynamicQuestionId) {
+        await updateQuestionStatus(dynamicQuestionId, "active");
+        
+        // Update local facet state so if it reappears, it's not "new"
+        if (currentItem) {
+            currentItem.facet.currentQuestionId = dynamicQuestionId;
+        }
+    } else {
+        console.warn("[ReviewPage] handleFeedbackKeep: No dynamicQuestionId to update");
+    }
+    advanceToNext();
+  };
+
+  const handleFeedbackRequestNew = async () => {
+    // Mark as inactive
+    if (dynamicQuestionId) {
+      await updateQuestionStatus(dynamicQuestionId, "inactive");
+    }
+    // Do NOT record SRS history (skip handleUpdateSrs)
+    // But we DO need to make sure this item stays in the queue?
+    // The requirement says: "Re-queue the review facet so it appears again later (with a fresh question)."
+    // If we just advance index, it's gone from this session (unless we re-add it?)
+    // But `reviewQueue` is static for the session usually.
+    // If we want it to appear *later*, we can just leave it alone.
+    // But we are advancing index.
+    // If we want it to appear *in this session* again, we should append it to queue?
+    // "Re-queue... so it appears again later". This could mean "next session".
+    // If we don't update SRS, `nextReviewAt` is still in the past. So it will be fetched next time.
+    // So advancing index is fine. It will just be skipped for now.
+    
+    advanceToNext();
+  };
+
+  const handleFeedbackReport = async () => {
+    // Mark as flagged
+    if (dynamicQuestionId) {
+      await updateQuestionStatus(dynamicQuestionId, "flagged");
+
+      // Update local facet state so if it reappears, it's not "new"
+      if (currentItem) {
+          currentItem.facet.currentQuestionId = dynamicQuestionId;
+      }
+    }
+    
+    // Record SRS tracking data based on the ACTUAL result (pass or fail)
+    // Just like "Keep", we respect the user's answer.
+    if (pendingSrsResult) {
+      await handleUpdateSrs(pendingSrsResult);
+    }
+
+    advanceToNext();
   };
 
   // --- Helper Functions ---
@@ -556,6 +685,13 @@ export default function ReviewPage() {
           </button>
         </div>
       )}
+
+      <QuestionFeedbackModal
+        isOpen={showFeedbackModal}
+        onKeep={handleFeedbackKeep}
+        onRequestNew={handleFeedbackRequestNew}
+        onReport={handleFeedbackReport}
+      />
     </main>
   );
 }
