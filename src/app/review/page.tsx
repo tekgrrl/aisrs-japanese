@@ -77,6 +77,7 @@ export default function ReviewPage() {
       try {
         setIsLoading(true);
         setError(null);
+        // TODO usenestjs backend service instead
         const response = await fetch("/api/review-facets?due=true");
         if (!response.ok) {
           throw new Error("Failed to fetch due review items");
@@ -159,6 +160,7 @@ export default function ReviewPage() {
     status: "active" | "flagged" | "inactive",
   ) => {
     try {
+      // TODO use nestjs backend service instead
       const res = await fetch(`/api/questions/${questionId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },

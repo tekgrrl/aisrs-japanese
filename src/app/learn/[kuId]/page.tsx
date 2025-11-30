@@ -94,6 +94,7 @@ export default function LearnItemPage() {
           lessonData.component_kanji.length > 0
         ) {
           const kanjiChars = lessonData.component_kanji.map((k) => k.kanji);
+          // TODO use backend service instead of calling Firestore directly
           const kanjiQuery = query(
             collection(db, KNOWLEDGE_UNITS_COLLECTION),
             where("content", "in", kanjiChars),
@@ -211,6 +212,7 @@ export default function LearnItemPage() {
     if (!ku) return;
 
     try {
+      // TODO use nestjs backend service instead
       const response = await fetch(`/api/lesson/${ku.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },

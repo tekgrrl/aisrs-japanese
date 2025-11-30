@@ -3,9 +3,6 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { KnowledgeUnit } from "@/types";
-import { db } from "@/lib/firebase-client"; // Import client Firestore
-import { collection, query, where, getDocs } from "firebase/firestore";
-import { KNOWLEDGE_UNITS_COLLECTION } from "@/lib/firebase-config";
 
 export default function LearnListPage() {
   const [learningItems, setLearningItems] = useState<KnowledgeUnit[]>([]);
@@ -13,26 +10,38 @@ export default function LearnListPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    const controller = new AbortController();
+
     const fetchLearningItems = async () => {
+      // TODO use backend service instead of calling Firestore directly
+
       try {
-        const q = query(
-          collection(db, KNOWLEDGE_UNITS_COLLECTION),
-          where("status", "==", "learning"),
+
+        const response = await fetch("http://localhost:3500/knowledge-units/get-all?status=learning", {
+          signal: controller.signal,
+        });
+
+        if (!response.ok) throw new Error(response.statusText);
+
+        const data = (await response.json()) as KnowledgeUnit[]; // Cast here
+
+        const items = data.map(
+          (thing: KnowledgeUnit) => ({ ...thing }) as KnowledgeUnit,
         );
 
-        const querySnapshot = await getDocs(q);
-        const items = querySnapshot.docs.map(
-          (doc) => ({ id: doc.id, ...doc.data() }) as KnowledgeUnit,
-        );
         setLearningItems(items);
       } catch (err: any) {
-        setError(err.message || "Failed to fetch learning items");
+        if (err.name === 'AbortError') {
+            return;
+        } 
+        setError(err.message || "Failed to fetch");
       } finally {
         setIsLoading(false);
       }
     };
 
     fetchLearningItems();
+    return () => controller.abort();
   }, []);
 
   const renderList = () => {

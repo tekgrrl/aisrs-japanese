@@ -16,17 +16,7 @@ export class LessonsService {
         private readonly geminiService: GeminiService,
     ) { }
 
-    async testConnection() {
-        const snapshot = await this.db.collection('lessons').limit(1).get();
-        return `Connected! Found ${snapshot.size} docs.`;
-    }
-
     async generateLesson(kuId: string) {
-        let logRef; // Firestore DocumentReference for the log entry
-        let startTime = performance.now(); // Start timing
-        let errorOccurred = false;
-        let capturedError: any = null;
-        let text: string | undefined; // Capture raw text for logging
 
         // 1. Fetch the KU
         const kuRef = this.db.collection(KNOWLEDGE_UNITS_COLLECTION).doc(kuId);

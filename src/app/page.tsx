@@ -96,7 +96,8 @@ export default function KnowledgeManagementPage() {
     }
 
     try {
-      const response = await fetch("/api/ku", {
+      // TODO needs nextjs rewrite
+      const response = await fetch("http://localhost:3500/knowledge-units", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

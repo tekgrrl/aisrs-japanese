@@ -42,11 +42,6 @@ export class ReviewsService {
         private readonly knowledgeUnitsService: KnowledgeUnitsService,
     ) { }
 
-    async testConnection() {
-        const snapshot = await this.db.collection('knowledge-units').limit(1).get();
-        return `Connected! Found ${snapshot.size} docs.`;
-    }
-
     async getByFacetId(facetId: string) {
         const doc = await this.db
             .collection(REVIEW_FACETS_COLLECTION)

@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { FIRESTORE_CONNECTION, KNOWLEDGE_UNITS_COLLECTION } from '../firebase/firebase.module';
 import { Firestore, Timestamp } from '@google-cloud/firestore';
 import { Inject } from '@nestjs/common';
@@ -6,22 +6,33 @@ import { CURRENT_USER_ID } from '../lib/constants';
 import { KnowledgeUnit } from '@/types';
 import { KnowledgeUnitType } from '@/types';
 import { NotFoundException } from '@nestjs/common';
+import { Query } from '@google-cloud/firestore';
 
 @Injectable()
 export class KnowledgeUnitsService {
+
     private readonly logger = new Logger(KnowledgeUnitsService.name);
 
     constructor(
         @Inject(FIRESTORE_CONNECTION) private readonly db: Firestore,
     ) { }
 
-    async getAll() {
+    async findAll({ status, type }: { status?: string, type?: string }) {
         try {
-            const snapshot = await this.db
-                .collection(KNOWLEDGE_UNITS_COLLECTION)
-                .where("userId", "==", CURRENT_USER_ID)
-                .orderBy("createdAt", "desc") // Order by creation time, newest first
-                .get();
+            this.logger.log(`GET /knowledge-units - Fetching units where status=${status} and type=${type}`);
+            let query: Query = this.db.collection(KNOWLEDGE_UNITS_COLLECTION)
+                .where("userId", "==", CURRENT_USER_ID);
+
+            if (status) {
+                query = query.where("status", "==", status);
+            }
+
+            if (type) {
+                query = query.where("type", "==", type);
+            }
+
+            const snapshot = await query.orderBy("createdAt", "desc").get();
+            this.logger.log(`GET /knowledge-units - Found ${snapshot.size} units`);
 
             if (snapshot.empty) {
                 this.logger.warn("No knowledge units found for user");
@@ -108,7 +119,7 @@ export class KnowledgeUnitsService {
         });
 
         return newRef.id;
-    } // END ensureKanjiStub
+    }
 
     async update(id: string, updates: Partial<any>) { // typed as 'any' or a DTO to allow flexible updates
         const ref = this.db.collection(KNOWLEDGE_UNITS_COLLECTION).doc(id);
@@ -122,4 +133,33 @@ export class KnowledgeUnitsService {
         await ref.update(updates);
         return { id, ...updates };
     }
+
+    async create(body: any) {
+        // Validate body (basic)
+        if (!body.type || !body.content) {
+            this.logger.warn("POST /knowledge-units - Validation failed", body);
+            throw new BadRequestException("Type and Content are required");
+        }
+
+        const newKuData = {
+            ...body,
+            relatedUnits: body.relatedUnits || [], // Ensure array exists
+            data: body.data || {}, // Ensure object exists
+            createdAt: Timestamp.now(), // Add Firestore timestamp
+            status: "learning",
+            facet_count: 0,
+            userId: CURRENT_USER_ID,
+        };
+
+        const newDocRef = await this.db
+            .collection(KNOWLEDGE_UNITS_COLLECTION)
+            .add(newKuData);
+
+        this.logger.log(`POST /knowledge-units - Created unit ${newDocRef.id}`);
+        return { id: newDocRef.id };
+    } // END create
+
+    async findOne(id: string) {
+        throw new Error('Method not implemented.');
+    } // END findOne
 }
