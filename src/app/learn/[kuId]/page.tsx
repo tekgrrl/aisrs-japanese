@@ -73,7 +73,7 @@ export default function LearnItemPage() {
         setKu(kuData);
 
         // 2. Fetch the Lesson for this kuDoc by kuDoc.id
-        const lessonResponse = await fetch("/api/generate-lesson", {
+        const lessonResponse = await fetch("http://localhost:3500/lessons/generate", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ kuId: kuDoc.id }),
@@ -179,7 +179,7 @@ export default function LearnItemPage() {
 
     try {
       console.log(JSON.stringify(facetsToCreatePayload));
-      const response = await fetch("/api/review-facets", {
+      const response = await fetch("http://localhost:3500/reviews/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

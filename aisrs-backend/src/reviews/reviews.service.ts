@@ -1,0 +1,273 @@
+import {
+    Injectable,
+    Inject,
+    Logger,
+    NotFoundException,
+    forwardRef,
+} from '@nestjs/common';
+import { FieldPath, FieldValue, Firestore } from 'firebase-admin/firestore';
+import {
+    FIRESTORE_CONNECTION,
+    REVIEW_FACETS_COLLECTION,
+    KNOWLEDGE_UNITS_COLLECTION,
+} from '../firebase/firebase.module';
+import { GeminiService } from '../gemini/gemini.service';
+import { QuestionsService } from '../questions/questions.service';
+import { CURRENT_USER_ID } from '@/lib/constants';
+import { FacetType } from '@/types';
+import { KnowledgeUnitsService } from '../knowledge-units/knowledge-units.service';
+
+@Injectable()
+export class ReviewsService {
+    private readonly logger = new Logger(ReviewsService.name);
+
+    // SRS intervals in hours (maps to srsStage)
+    private readonly INTERVALS = {
+        0: 10 / 60, // 10 minutes
+        1: 8, // 8 hours
+        2: 24, // 1 day
+        3: 72, // 3 days
+        4: 168, // 1 week
+        5: 336, // 2 weeks
+        6: 730, // 1 month (approx)
+        7: 2920, // 4 months
+        8: 8760, // 1 year
+    };
+
+    constructor(
+        @Inject(FIRESTORE_CONNECTION) private readonly db: Firestore,
+        private readonly geminiService: GeminiService,
+        @Inject(forwardRef(() => QuestionsService)) // <-- WRAP THIS
+        private readonly questionsService: QuestionsService,
+        private readonly knowledgeUnitsService: KnowledgeUnitsService,
+    ) { }
+
+    async testConnection() {
+        const snapshot = await this.db.collection('knowledge-units').limit(1).get();
+        return `Connected! Found ${snapshot.size} docs.`;
+    }
+
+    async getByFacetId(facetId: string) {
+        const doc = await this.db
+            .collection(REVIEW_FACETS_COLLECTION)
+            .doc(facetId)
+            .get();
+        if (!doc.exists) return null;
+        return doc.data();
+    }
+
+    async updateFacetSrs(facetId: string, result: 'pass' | 'fail') {
+        return this.db.runTransaction(async (transaction) => {
+            // 1. READ (Query with User ID enforcement)
+            // We query instead of getting by doc ref directly to enforce the user constraint at the read level
+            const query = this.db
+                .collection(REVIEW_FACETS_COLLECTION)
+                .where(FieldPath.documentId(), '==', facetId)
+                .where('userId', '==', CURRENT_USER_ID);
+
+            const snapshot = await query.get();
+
+            if (snapshot.empty) {
+                throw new NotFoundException('Facet not found');
+            }
+
+            const facetDoc = snapshot.docs[0];
+            const facetRef = facetDoc.ref; // Get the ref for the update step
+            const data = facetDoc.data();
+
+            // TODO: Add User Check here when Auth is ready
+            // if (data.userId !== currentUserId) throw ...
+
+            // 2. LOGIC (The State Machine)
+            const currentStage = data.srsStage || 0;
+            let nextStage = currentStage;
+
+            if (result === 'pass') {
+                // Advance 1 stage, max out at intervals length
+                nextStage = Math.min(
+                    currentStage + 1,
+                    Object.keys(this.INTERVALS).length,
+                );
+            } else {
+                // Penalty: Drop 2 stages, min 1 (unless it was already 0)
+                nextStage = currentStage === 0 ? 0 : Math.max(1, currentStage - 2);
+            }
+
+            // Calculate Date
+            const now = new Date();
+            const hoursToAdd = nextStage === 0 ? 0 : this.INTERVALS[nextStage];
+            const nextReview = new Date(now.getTime() + hoursToAdd * 60 * 60 * 1000);
+
+            // 3. WRITE (Facet)
+            this.logger.log(`Updating facet ${facetId} to stage ${nextStage}`);
+
+            transaction.update(facetRef, {
+                srsStage: nextStage,
+                nextReviewAt: nextReview.toISOString(), // Storing as ISO string for Firestore compatibility
+                lastReviewAt: now.toISOString(),
+                history: FieldValue.arrayUnion({
+                    stage: nextStage,
+                    timestamp: now.toISOString(),
+                    result,
+                }),
+                // Note: We aren't updating the 'history' array here yet.
+                // If you want that atomic, we need to duplicate the logic or pass the transaction.
+            });
+
+            // 4. WRITE (Knowledge Unit Propagation)
+            // If the item reached Mastered (final stage), we might want to update the KU.
+            if (nextStage === Object.keys(this.INTERVALS).length && data.kuId) {
+                const kuRef = this.db
+                    .collection(KNOWLEDGE_UNITS_COLLECTION)
+                    .doc(data.kuId);
+                // This is an optimistic update; strictly speaking we should read the KU first
+                // to check if ALL facets are mastered, but this is a safe heuristic for now.
+                transaction.update(kuRef, { status: 'mastered' });
+            }
+
+            this.logger.log(
+                `SRS Update [${facetId}]: ${result.toUpperCase()} | Stage ${currentStage} -> ${nextStage}`,
+            );
+
+            return {
+                success: true,
+                facetId,
+                newStage: nextStage,
+                nextReview: nextReview.toISOString(),
+            };
+        });
+    }
+
+    async updateFacetQuestion(facetId: string, questionId: string) {
+        const facetRef = this.db.collection(REVIEW_FACETS_COLLECTION).doc(facetId);
+        await facetRef.update({
+            currentQuestionId: questionId,
+            questionAttempts: 0,
+        });
+        this.logger.log(`Updated facet ${facetId} with new question ${questionId}`);
+    }
+
+    async evaluateAnswer(
+        userAnswer: string,
+        expectedAnswers: string[],
+        question: string,
+        topic: string,
+        questionId: string,
+    ) {
+        // 1. Local Check
+        const isLocalMatch = expectedAnswers.some(
+            (ans) => ans.toLowerCase() === userAnswer.toLowerCase(),
+        );
+
+        if (isLocalMatch) {
+            this.logger.log(`Local match passed for topic: ${topic}`);
+            this.questionsService.updateQuestionHistory(
+                questionId,
+                userAnswer,
+                'pass',
+            );
+            return {
+                result: 'pass',
+                explanation: 'Correct!',
+            };
+        }
+
+        // 2. AI Fallback
+        this.logger.log(`Local match failed for topic: ${topic}. Calling Gemini.`);
+
+        const systemPrompt = `You are an AISRS evaluator. A user is being quizzed.
+- The question was: "${question || 'N/A'}"
+- The topic was: "${topic || 'N/A'}"
+- The expected answer(s) are: "${JSON.stringify(expectedAnswers)}"
+- The user's answer is: "${userAnswer}"
+
+Your task is to evaluate if the user's answer is correct.
+1.  Read the "expected answer(s)". This may be a single answer (e.g., "Family") or a comma-separated list of possible correct answers (e.g., "ドク, トク, よむ").
+2.  Compare the user's answer to the list. The user is correct if their answer is *any one* of the items in the list.
+3.  Be lenient with hiragana vs katakana (e.g., if expected is "ドク" and user typed "どく", it's a pass).
+4.  Be lenient with extra punctuation or whitespace.
+5.  Provide your evaluation ONLY as a valid JSON object with the following schema:
+{
+  "result": "pass" | "fail",
+  "explanation": "A brief, one-sentence explanation for *why* the user passed or failed, referencing their answer."
+}
+Example for a pass: {"result": "pass", "explanation": "Correct! よむ is one of the kun'yomi readings."}
+Example for a fail: {"result": "fail", "explanation": "Incorrect. The expected readings were ドク, トク, or よむ."}
+`;
+
+        const schema = {
+            type: 'OBJECT',
+            properties: {
+                result: { type: 'STRING', enum: ['pass', 'fail'] },
+                explanation: { type: 'STRING' },
+            },
+            required: ['result', 'explanation'],
+        };
+
+        return this.geminiService.evaluateAnswer(
+            systemPrompt,
+            userAnswer,
+            expectedAnswers,
+            { userAnswer, expectedAnswers, question, topic },
+        );
+    } // END evaluateAnswer
+
+    async generateReviewFacets(
+        kuId: string,
+        facetsToCreate: { key: string; data?: any }[],
+    ) {
+        const batch = this.db.batch();
+        let count = 0;
+        const now = new Date();
+        let parentFacetCount = 0; // Correctly track parent's direct facets
+
+        for (const facet of facetsToCreate) {
+            const { key, data } = facet;
+            this.logger.log(`Generating review facet ${key} for KU ${kuId}`);
+            let targetKuId = kuId; // Default to the parent KU (Vocab)
+
+            // --- Handle Kanji Components ---
+            if (key.startsWith('Kanji-Component-')) {
+                // Extract char (assuming 'Kanji-Component-電' format)
+                const parts = key.split('-');
+                // Handle your specific logic for splitting (length check etc)
+                if (parts.length === 3) {
+                    const kanjiChar = parts[2];
+                    // Delegate the heavy lifting to the KU Service
+                    targetKuId = await this.knowledgeUnitsService.ensureKanjiStub(kanjiChar, data);
+                }
+            }
+
+            // --- Create the Facet (Batch) ---
+            // Now we just create the facet pointing to whichever ID we resolved (Vocab or Kanji)
+            const newFacetRef = this.db.collection(REVIEW_FACETS_COLLECTION).doc();
+            batch.set(newFacetRef, {
+                kuId: targetKuId,
+                facetType: key,
+                srsStage: 0,
+                nextReviewAt: now,
+                createdAt: now,
+                history: [],
+                userId: CURRENT_USER_ID,
+            });
+
+            count++;
+        }
+
+        if (count > 0) {
+            try {
+                await this.knowledgeUnitsService.update(kuId, {
+                    status: 'reviewing',
+                    // Atomically increment existing value by count
+                    facet_count: FieldValue.increment(count)
+                });
+                this.logger.log(`Updated parent KU ${kuId}: status=reviewing, facet_count+=${count}`);
+            } catch (e) {
+                this.logger.error(`Failed to update parent KU ${kuId}`, e);
+            }
+        }
+
+        await batch.commit();
+        return { success: true, count };
+    } // END generateReviewFacets
+}

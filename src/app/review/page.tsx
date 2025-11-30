@@ -49,7 +49,8 @@ export default function ReviewPage() {
     setError(null);
     try {
       const response = await fetch(
-        `/api/generate-question?topic=${encodeURIComponent(topic)}&facetId=${facetId}&kuId=${kuId}`,
+        `http://localhost:3500/questions/generate?topic=${encodeURIComponent(topic)}&facetId=${facetId}&kuId=${kuId}`,
+        // `/api/generate-question?topic=${encodeURIComponent(topic)}&facetId=${facetId}&kuId=${kuId}`,
       );
       if (!response.ok) {
         const errData = await response.json();
@@ -133,7 +134,7 @@ export default function ReviewPage() {
     if (!currentItem) return;
     try {
       const response = await fetch(
-        `/api/review-facets/${currentItem.facet.id}`,
+        `http://localhost:3500/reviews/facets/${currentItem.facet.id}`,
         {
           method: "PUT",
           headers: {
@@ -241,7 +242,7 @@ export default function ReviewPage() {
     }
 
     try {
-      const response = await fetch("/api/evaluate-answer", {
+      const response = await fetch("http://localhost:3500/reviews/evaluate", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

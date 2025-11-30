@@ -170,8 +170,6 @@ export async function GET(request: Request) {
       },
     };
     logRef = await db.collection(API_LOGS_COLLECTION).add(initialLogData);
-    logger.debug(`Created initial log entry: ${logRef.id}`);
-    // --- End Log ---
 
     // 3. Call Gemini API (using fetch as before)
     const apiKey = process.env.GEMINI_API_KEY;

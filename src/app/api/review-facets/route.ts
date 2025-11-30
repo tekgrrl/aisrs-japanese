@@ -154,8 +154,6 @@ export async function POST(request: Request) {
       facetsToCreate: { key: string; data?: any }[];
     };
 
-    logger.warn("Parsed request body:", { body });
-
     if (!kuId || !facetsToCreate || facetsToCreate.length === 0) {
       logger.debug("Missing kuId or facetsToCreate", { kuId, facetsToCreate });
       return NextResponse.json(

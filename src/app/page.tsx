@@ -52,7 +52,7 @@ export default function KnowledgeManagementPage() {
       setIsLoading(true);
 
       const [kuResponse, facetResponse] = await Promise.all([
-        fetch("/api/ku"),
+        fetch("http://localhost:3500/knowledge-units/get-all"),
         fetch("/api/review-facets"),
       ]);
 
