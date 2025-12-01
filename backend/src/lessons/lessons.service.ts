@@ -56,6 +56,7 @@ The lesson should be in English. Where you want to use Japanese text for example
 
 **Task 2: Lesson Generation**
 * Generate detailed explanations for meaning and reading.
+* If a word is a "suru noun", include explanations of the meaning of the suru form.
 * Generate context examples.
 * Analyze component Kanji.
 
@@ -65,6 +66,8 @@ For the \`partOfSpeech\` property, select one of:
 
 For the \`conjugation_type\` property, select one of (or null):
 * godan, ichidan, irregular, suru, i-adjective, na-adjective, null
+
+Do not explain the terms "kun'yomi" or "on'yomi", never use the term "sino-japanese"
 
 **Response Schema:**
 You MUST return a valid JSON object matching this schema:

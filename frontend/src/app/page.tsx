@@ -50,8 +50,8 @@ export default function KnowledgeManagementPage() {
       setIsLoading(true);
 
       const [kuResponse, facetResponse] = await Promise.all([
-        fetch("http://localhost:3500/knowledge-units/get-all"),
-        fetch("http://localhost:3500/reviews/facets"),
+        fetch("/api/knowledge-units/get-all"),
+        fetch("/api/reviews/facets"),
       ]);
 
       if (!kuResponse.ok) throw new Error("Failed to fetch knowledge units");
@@ -95,7 +95,7 @@ export default function KnowledgeManagementPage() {
 
     try {
       // TODO needs nextjs rewrite
-      const response = await fetch("http://localhost:3500/knowledge-units", {
+      const response = await fetch("/api/knowledge-units", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

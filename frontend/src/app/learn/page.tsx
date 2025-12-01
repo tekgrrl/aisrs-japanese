@@ -17,7 +17,7 @@ export default function LearnListPage() {
 
       try {
 
-        const response = await fetch("http://localhost:3500/knowledge-units/get-all?status=learning", {
+        const response = await fetch("/api/knowledge-units/get-all?status=learning", {
           signal: controller.signal,
         });
 

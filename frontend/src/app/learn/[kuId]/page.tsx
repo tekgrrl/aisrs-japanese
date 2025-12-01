@@ -50,7 +50,7 @@ export default function LearnItemPage() {
 
       try {
         // Most recent change here. Something broke
-        const kuResponse = await fetch(`http://localhost:3500/knowledge-units/${kuId}`);
+        const kuResponse = await fetch(`/api/knowledge-units/${kuId}`);
         
         if (!kuResponse.ok) {
            if (kuResponse.status === 404) {
@@ -64,7 +64,7 @@ export default function LearnItemPage() {
         setKu(kuData);
 
         // 2. Fetch the Lesson for this kuDoc by kuDoc.id
-        const lessonResponse = await fetch("http://localhost:3500/lessons/generate", {
+        const lessonResponse = await fetch("/api/lessons/generate", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ kuId: kuData.id }),
@@ -86,7 +86,7 @@ export default function LearnItemPage() {
         ) {
           const kanjiChars = lessonData.component_kanji.map((k) => k.kanji);
           // TODO use backend service instead of calling Firestore directly
-          const response = await fetch("http://localhost:3500/knowledge-units/get-all?status=learning&content=" + kanjiChars.join(","));
+          const response = await fetch("/api/knowledge-units/get-all?status=learning&content=" + kanjiChars.join(","));
 
           if (!response.ok) throw new Error(response.statusText);
 
@@ -175,7 +175,7 @@ export default function LearnItemPage() {
 
     try {
       console.log(JSON.stringify(facetsToCreatePayload));
-      const response = await fetch("http://localhost:3500/reviews/generate", {
+      const response = await fetch("/api/reviews/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -207,7 +207,7 @@ export default function LearnItemPage() {
     if (!ku) return;
 
     try {
-      const response = await fetch(`http://localhost:3500/lessons/${ku.id}`, {
+      const response = await fetch(`/api/lessons/${ku.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ section: sectionKey, content: newContent }),
