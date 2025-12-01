@@ -314,6 +314,7 @@ Example for a fail: {"result": "fail", "explanation": "Incorrect. The expected r
         }));
 
         // Filter out items where KU was deleted/missing to prevent frontend crashes
+        this.logger.log(`Found ${reviewItems.length} due reviews`);
         return reviewItems.filter(item => item !== null && item.ku !== null);
     } // END getDueReviews
 

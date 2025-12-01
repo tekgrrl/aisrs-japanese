@@ -19,7 +19,6 @@ export class KnowledgeUnitsService {
 
     async findAll({ status, type, content }: { status?: string, type?: string, content?: string[] }) {
         try {
-            this.logger.log(`GET /knowledge-units - Fetching units where status=${status} and type=${type} and content=${JSON.stringify(content)}`);
             let query: Query = this.db.collection(KNOWLEDGE_UNITS_COLLECTION)
                 .where("userId", "==", CURRENT_USER_ID);
 
@@ -36,7 +35,6 @@ export class KnowledgeUnitsService {
             }
 
             const snapshot = await query.orderBy("createdAt", "desc").get();
-            this.logger.log(`GET /knowledge-units - Found ${snapshot.size} units`);
 
             if (snapshot.empty) {
                 this.logger.warn("No knowledge units found for user");
