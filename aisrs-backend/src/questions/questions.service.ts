@@ -1,15 +1,15 @@
-import { Injectable, Inject, Logger, forwardRef } from '@nestjs/common';
+import { Injectable, Inject, Logger, forwardRef, NotFoundException } from '@nestjs/common';
 import { Firestore } from 'firebase-admin/firestore';
-import { 
-  FIRESTORE_CONNECTION, 
-  QUESTIONS_COLLECTION, 
-  REVIEW_FACETS_COLLECTION, 
-  Timestamp, 
-  FieldValue, 
+import {
+  FIRESTORE_CONNECTION,
+  QUESTIONS_COLLECTION,
+  REVIEW_FACETS_COLLECTION,
+  Timestamp,
+  FieldValue,
 } from '../firebase/firebase.module';
 import { BadRequestException } from '@nestjs/common';
 import { ReviewFacet, QuestionItem } from '@/types';
-import { GeminiService } from '../gemini/gemini.service'; 
+import { GeminiService } from '../gemini/gemini.service';
 import { ReviewsService } from '../reviews/reviews.service';
 import { CURRENT_USER_ID } from '@/lib/constants';
 
@@ -53,19 +53,19 @@ export class QuestionsService {
   private readonly logger = new Logger(QuestionsService.name);
 
   constructor(
-      @Inject(FIRESTORE_CONNECTION) private readonly db: Firestore,
-      private readonly geminiService: GeminiService,
-      @Inject(forwardRef(() => ReviewsService))
-      private readonly reviewsService: ReviewsService,
-      
-  ) {}
+    @Inject(FIRESTORE_CONNECTION) private readonly db: Firestore,
+    private readonly geminiService: GeminiService,
+    @Inject(forwardRef(() => ReviewsService))
+    private readonly reviewsService: ReviewsService,
+
+  ) { }
 
   async testConnection() {
-      const snapshot = await this.db.collection(QUESTIONS_COLLECTION).limit(1).get();
-      this.logger.log(`Found ${snapshot.size} questions`);
+    const snapshot = await this.db.collection(QUESTIONS_COLLECTION).limit(1).get();
+    this.logger.log(`Found ${snapshot.size} questions`);
   }
 
-    
+
   async updateQuestionHistory(questionId: string, userAnswer: string, result: string) {
     if (questionId) {
       try {
@@ -98,7 +98,7 @@ export class QuestionsService {
     } | undefined; // Capture parsed result
 
     if (!topic) {
-        throw new BadRequestException('Topic is required');
+      throw new BadRequestException('Topic is required');
     }
 
     // --- Persistence Logic ---
@@ -108,12 +108,12 @@ export class QuestionsService {
 
     if (facetId) {
       facetData = (await this.reviewsService.getByFacetId(facetId)) as ReviewFacet;
-      
+
       if (facetData) {
 
         if (
           facetData.currentQuestionId &&
-          (facetData.questionAttempts || 0) < 3          
+          (facetData.questionAttempts || 0) < 3
         ) {
           this.logger.log(
             `Reusing question ${facetData.currentQuestionId} for facet ${facetId} (attempts: ${facetData.questionAttempts})`,
@@ -168,60 +168,77 @@ export class QuestionsService {
       this.logger.error("AI response was empty.");
       throw new Error("AI response was empty.");
     }
-    
+
     // 4. Parse and validate (keeping existing robust parsing logic)
+    try {
+      parsedJson = JSON.parse(questionString);
+    } catch (parseError) {
+      this.logger.error("Failed to parse AI JSON response", {
+        questionString,
+        parseError,
+      });
+      throw new Error("Failed to parse AI JSON response");
+    }
+
+    if (!parsedJson) {
+      throw new Error(
+        "Evaluation result is missing after AI response parsing.",
+      );
+    }
+
+    // --- Save Generated Question ---
+    if (facetId) {
       try {
-        parsedJson = JSON.parse(questionString);
-      } catch (parseError) {
-        this.logger.error("Failed to parse AI JSON response", {
-          questionString,
-          parseError,
-        });
-        throw new Error("Failed to parse AI JSON response");
+        const newQuestionRef = this.db.collection(QUESTIONS_COLLECTION).doc();
+        const newQuestionItem: QuestionItem = {
+          id: newQuestionRef.id,
+          kuId: kuId || topic, // Use kuId if available, fallback to topic
+          data: {
+            question: parsedJson.question,
+            context: parsedJson.context,
+            answer: parsedJson.answer,
+            acceptedAlternatives: parsedJson.accepted_alternatives,
+            difficulty: "JLPT-N5", // TODO Need to get this value from the generate-question response eventually
+          },
+          createdAt: Timestamp.now(),
+          lastUsed: Timestamp.now(),
+          userId: CURRENT_USER_ID,
+          status: "active", // Default status
+        };
+
+        await newQuestionRef.set(newQuestionItem);
+        this.logger.log(`Saved new question: ${newQuestionRef.id}`);
+
+        // Update Facet
+        await this.reviewsService.updateFacetQuestion(facetId, newQuestionRef.id);
+        returnedQuestionId = newQuestionRef.id;
+      } catch (saveError) {
+        this.logger.error("Failed to save generated question", saveError);
+        // Don't fail the request if saving fails, just log it
       }
+    }
 
-      if (!parsedJson) {
-        throw new Error(
-          "Evaluation result is missing after AI response parsing.",
-        );
-      }
-    
-      // --- Save Generated Question ---
-      if ( facetId ) {
-        try {
-          const newQuestionRef = this.db.collection(QUESTIONS_COLLECTION).doc();
-          const newQuestionItem: QuestionItem = {
-            id: newQuestionRef.id,
-            kuId: kuId || topic, // Use kuId if available, fallback to topic
-            data: {
-              question: parsedJson.question,
-              context: parsedJson.context,
-              answer: parsedJson.answer,
-              acceptedAlternatives: parsedJson.accepted_alternatives,
-              difficulty: "JLPT-N5", // TODO Need to get this value from the generate-question response eventually
-            },
-            createdAt: Timestamp.now(),
-            lastUsed: Timestamp.now(),
-            userId: CURRENT_USER_ID,
-            status: "active", // Default status
-          };
-
-          await newQuestionRef.set(newQuestionItem);
-          this.logger.log(`Saved new question: ${newQuestionRef.id}`);
-
-          // Update Facet
-          await this.reviewsService.updateFacetQuestion(facetId, newQuestionRef.id);
-          returnedQuestionId = newQuestionRef.id;
-        } catch (saveError) {
-          this.logger.error("Failed to save generated question", saveError);
-          // Don't fail the request if saving fails, just log it
-        }
-      }
-
-      return {
-        ...parsedJson,
-        questionId: returnedQuestionId,
-      };
+    return {
+      ...parsedJson,
+      questionId: returnedQuestionId,
+    };
 
   } // end generateQuestion
+
+  async updateStatus(id: string, status: 'active' | 'flagged' | 'inactive') {
+    const docRef = this.db.collection(QUESTIONS_COLLECTION).doc(id);
+    const doc = await docRef.get();
+
+    if (!doc.exists) {
+      throw new NotFoundException('Question not found');
+    }
+
+    // Ideally check userId here too if questions are user-owned in your model
+    // if (doc.data()?.userId !== CURRENT_USER_ID) ...
+
+    await docRef.update({ status });
+
+    this.logger.log(`Updated question ${id} status to ${status}`);
+    return { id, status };
+  } // end updateStatus
 }

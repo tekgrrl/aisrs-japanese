@@ -1,5 +1,6 @@
 import { Controller, Get, Put, Param, Body, Query, Post, BadRequestException } from '@nestjs/common';
 import { KnowledgeUnitsService } from './knowledge-units.service';
+import { ParseArrayPipe } from '@nestjs/common/pipes';
 
 
 @Controller('knowledge-units')
@@ -11,9 +12,10 @@ export class KnowledgeUnitsController {
     @Get('get-all')
     async findAll(
         @Query('status') status?: string,
-        @Query('type') type?: string
+        @Query('type') type?: string,
+        @Query('content', new ParseArrayPipe({ items: String, separator: ',', optional: true })) content?: string[]
     ) {
-        return this.knowledgeUnitsService.findAll({ status, type });
+        return this.knowledgeUnitsService.findAll({ status, type, content });
     }
 
     @Put(':id')
@@ -21,13 +23,11 @@ export class KnowledgeUnitsController {
         return this.knowledgeUnitsService.update(id, body);
     }
 
-    // 2. Get Single Item (replaces direct DB fetch in /learn/[kuId])
     @Get(':id')
     async findOne(@Param('id') id: string) {
         return this.knowledgeUnitsService.findOne(id);
     }
 
-    // 3. Create (replaces POST /api/ku)
     @Post()
     async create(@Body() body: any) {
         if (!body.content || !body.type) {

@@ -17,9 +17,9 @@ export class KnowledgeUnitsService {
         @Inject(FIRESTORE_CONNECTION) private readonly db: Firestore,
     ) { }
 
-    async findAll({ status, type }: { status?: string, type?: string }) {
+    async findAll({ status, type, content }: { status?: string, type?: string, content?: string[] }) {
         try {
-            this.logger.log(`GET /knowledge-units - Fetching units where status=${status} and type=${type}`);
+            this.logger.log(`GET /knowledge-units - Fetching units where status=${status} and type=${type} and content=${JSON.stringify(content)}`);
             let query: Query = this.db.collection(KNOWLEDGE_UNITS_COLLECTION)
                 .where("userId", "==", CURRENT_USER_ID);
 
@@ -31,6 +31,10 @@ export class KnowledgeUnitsService {
                 query = query.where("type", "==", type);
             }
 
+            if (content) {
+                query = query.where("content", "in", content);
+            }
+
             const snapshot = await query.orderBy("createdAt", "desc").get();
             this.logger.log(`GET /knowledge-units - Found ${snapshot.size} units`);
 
@@ -39,14 +43,16 @@ export class KnowledgeUnitsService {
                 return [];
             }
 
+
             const kus: KnowledgeUnit[] = [];
             snapshot.forEach((doc) => {
                 const data = doc.data();
+                const ts = data.createdAt as Timestamp;
                 kus.push({
                     id: doc.id,
                     ...data,
                     // Convert Firestore Timestamp to string for client-side
-                    createdAt: (data.createdAt as Timestamp).toDate().toISOString(),
+                    createdAt: ts.toDate().toISOString(),
                     userId: data.userId || CURRENT_USER_ID, // Ensure userId is present
                 } as unknown as KnowledgeUnit);
             });
@@ -112,7 +118,7 @@ export class KnowledgeUnitsService {
             },
             status: 'learning',
             facet_count: 0,
-            createdAt: new Date().toISOString(), // Use ISO strings for consistency
+            createdAt: Timestamp.now(), // Use ISO strings for consistency
             relatedUnits: [],
             personalNotes: `Auto-generated component`,
             userId: CURRENT_USER_ID,
@@ -159,7 +165,28 @@ export class KnowledgeUnitsService {
         return { id: newDocRef.id };
     } // END create
 
-    async findOne(id: string) {
-        throw new Error('Method not implemented.');
-    } // END findOne
+    async findOne(id: string): Promise<KnowledgeUnit> {
+        const docRef = this.db.collection(KNOWLEDGE_UNITS_COLLECTION).doc(id);
+        const doc = await docRef.get();
+
+        if (!doc.exists) {
+            throw new NotFoundException(`Knowledge Unit ${id} not found`);
+        }
+
+        const data = doc.data();
+
+        // Enforce Data Isolation
+        if (data?.userId !== CURRENT_USER_ID) {
+            throw new NotFoundException(`Knowledge Unit ${id} not found`);
+        }
+
+        return {
+            id: doc.id,
+            ...data,
+            // Safe Timestamp conversion matching findAll logic
+            createdAt: typeof data.createdAt?.toDate === 'function'
+                ? data.createdAt.toDate().toISOString()
+                : data.createdAt,
+        } as unknown as KnowledgeUnit;
+    }
 }

@@ -1,8 +1,6 @@
 "use client";
 
 import React, { useState, useEffect, FormEvent } from "react";
-// Import from shared types file
-// Assuming '@/types' is a valid path alias in your project
 import { KnowledgeUnit, ReviewFacet } from "@/types";
 import Link from "next/link";
 
@@ -53,7 +51,7 @@ export default function KnowledgeManagementPage() {
 
       const [kuResponse, facetResponse] = await Promise.all([
         fetch("http://localhost:3500/knowledge-units/get-all"),
-        fetch("/api/review-facets"),
+        fetch("http://localhost:3500/reviews/facets"),
       ]);
 
       if (!kuResponse.ok) throw new Error("Failed to fetch knowledge units");

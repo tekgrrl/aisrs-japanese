@@ -1,9 +1,9 @@
-import { Controller, Get, Query, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Query, BadRequestException, Patch, Param, Body } from '@nestjs/common';
 import { QuestionsService } from './questions.service';
 
 @Controller('questions')
 export class QuestionsController {
-  constructor(private readonly questionsService: QuestionsService) {}
+  constructor(private readonly questionsService: QuestionsService) { }
 
   @Get('generate')
   async generate(
@@ -15,5 +15,17 @@ export class QuestionsController {
       throw new BadRequestException('Topic is required');
     }
     return this.questionsService.generateQuestion(topic, kuId, facetId);
+  }
+
+  @Patch(':id')
+  async updateStatus(
+    @Param('id') id: string,
+    @Body() body: { status: 'active' | 'flagged' | 'inactive' }
+  ) {
+    if (!body.status || !['active', 'flagged', 'inactive'].includes(body.status)) {
+      throw new BadRequestException('Valid status is required');
+    }
+
+    return this.questionsService.updateStatus(id, body.status);
   }
 }

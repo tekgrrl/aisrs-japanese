@@ -1,4 +1,4 @@
-import { Injectable, Inject, Logger } from '@nestjs/common';
+import { Injectable, Inject, Logger, NotFoundException } from '@nestjs/common';
 import { FIRESTORE_CONNECTION, LESSONS_COLLECTION, KNOWLEDGE_UNITS_COLLECTION } from '../firebase/firebase.module';
 import { Firestore } from 'firebase-admin/firestore';
 import { GeminiService } from '../gemini/gemini.service';
@@ -124,5 +124,56 @@ You MUST return a valid JSON object matching this schema:
 
         return lessonJson;
     }
+
+    async updateLesson(kuId: string, section: string, content: string) {
+        // 1. Find the lesson document
+        const snapshot = await this.db.collection(LESSONS_COLLECTION)
+            .where('kuId', '==', kuId)
+            .where('userId', '==', CURRENT_USER_ID)
+            .limit(1)
+            .get();
+
+        if (snapshot.empty) {
+            throw new NotFoundException('Lesson not found');
+        }
+
+        const doc = snapshot.docs[0];
+
+        // 2. Parse content if it looks like JSON (for array fields)
+        // This prevents saving "[{...}]" as a string literal in Firestore
+        let valueToSave: any = content;
+        try {
+            const trimmed = content.trim();
+            if ((trimmed.startsWith('{') && trimmed.endsWith('}')) ||
+                (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+                valueToSave = JSON.parse(content);
+            }
+        } catch (e) {
+            // If parse fails, assume it's just a regular string
+            valueToSave = content;
+        }
+
+        // 3. Update
+        await doc.ref.update({
+            [section]: valueToSave
+        });
+
+        return { success: true };
+    }
+
+    async findByKuId(kuId: string): Promise<Lesson | null> {
+        const snapshot = await this.db.collection(LESSONS_COLLECTION)
+            .where('kuId', '==', kuId)
+            .where('userId', '==', CURRENT_USER_ID)
+            .limit(1)
+            .get();
+
+        if (snapshot.empty) {
+            return null;
+        }
+
+        const doc = snapshot.docs[0];
+        return { id: doc.id, ...doc.data() } as unknown as Lesson;
+    } // END findByKuId
 }
 

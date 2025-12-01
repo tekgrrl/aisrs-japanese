@@ -15,7 +15,7 @@ export default function AdminPage() {
   useEffect(() => {
     const fetchKus = async () => {
       try {
-        const res = await fetch("/api/admin/knowledge-units");
+        const res = await fetch("http://localhost:3500/knowledge-units/get-all");
         const data = await res.json();
         setKnowledgeUnits(data);
       } catch (error) {

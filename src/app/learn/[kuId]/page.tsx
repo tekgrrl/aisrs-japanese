@@ -4,21 +4,10 @@ import React, { useState, useEffect, useRef } from "react"; // <-- Import useRef
 import { useRouter, useParams, useSearchParams } from "next/navigation";
 import {
   KnowledgeUnit,
-  FacetType,
   Lesson,
   VocabLesson,
   KanjiLesson,
 } from "@/types";
-import { db } from "@/lib/firebase-client";
-import {
-  doc,
-  getDoc,
-  query,
-  collection,
-  where,
-  getDocs,
-} from "firebase/firestore";
-import { KNOWLEDGE_UNITS_COLLECTION } from "@/lib/firebase-config";
 import { FuriganaText } from '@/components/FuriganaText';
 
 export default function LearnItemPage() {
@@ -60,23 +49,25 @@ export default function LearnItemPage() {
       setKanjiStatuses({});
 
       try {
-        // 1. Fetch the specific KU document
-        const kuRef = doc(db, KNOWLEDGE_UNITS_COLLECTION, kuId);
-        const kuDoc = await getDoc(kuRef);
-
-        if (!kuDoc.exists()) {
-          setError("Learning item not found.");
-          return;
+        // Most recent change here. Something broke
+        const kuResponse = await fetch(`http://localhost:3500/knowledge-units/${kuId}`);
+        
+        if (!kuResponse.ok) {
+           if (kuResponse.status === 404) {
+             setError("Learning item not found.");
+             return;
+           }
+           throw new Error("Failed to fetch Knowledge Unit");
         }
 
-        const kuData = { id: kuDoc.id, ...kuDoc.data() } as KnowledgeUnit;
+        const kuData = await kuResponse.json() as KnowledgeUnit;
         setKu(kuData);
 
         // 2. Fetch the Lesson for this kuDoc by kuDoc.id
         const lessonResponse = await fetch("http://localhost:3500/lessons/generate", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ kuId: kuDoc.id }),
+          body: JSON.stringify({ kuId: kuData.id }),
         });
 
         if (!lessonResponse.ok) {
@@ -95,18 +86,22 @@ export default function LearnItemPage() {
         ) {
           const kanjiChars = lessonData.component_kanji.map((k) => k.kanji);
           // TODO use backend service instead of calling Firestore directly
-          const kanjiQuery = query(
-            collection(db, KNOWLEDGE_UNITS_COLLECTION),
-            where("content", "in", kanjiChars),
-            where("type", "==", "Kanji"),
+          const response = await fetch("http://localhost:3500/knowledge-units/get-all?status=learning&content=" + kanjiChars.join(","));
+
+          if (!response.ok) throw new Error(response.statusText);
+
+          const data = (await response.json()) as KnowledgeUnit[]; // Cast here
+
+          const kanjiKus = data.map(
+            (thing: KnowledgeUnit) => ({ ...thing }) as KnowledgeUnit,
           );
-          const kanjiSnapshot = await getDocs(kanjiQuery);
 
           const statuses: Record<string, string> = {};
-          kanjiSnapshot.forEach((doc) => {
-            const kanjiKu = doc.data() as KnowledgeUnit;
+
+          kanjiKus.forEach((kanjiKu) => {
             statuses[kanjiKu.content] = kanjiKu.status;
           });
+
           setKanjiStatuses(statuses);
         }
       } catch (err: any) {
@@ -212,8 +207,7 @@ export default function LearnItemPage() {
     if (!ku) return;
 
     try {
-      // TODO use nestjs backend service instead
-      const response = await fetch(`/api/lesson/${ku.id}`, {
+      const response = await fetch(`http://localhost:3500/lessons/${ku.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ section: sectionKey, content: newContent }),

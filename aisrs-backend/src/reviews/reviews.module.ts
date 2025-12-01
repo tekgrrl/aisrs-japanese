@@ -5,15 +5,17 @@ import { GeminiModule } from 'src/gemini/gemini.module';
 import { forwardRef } from '@nestjs/common';
 import { QuestionsModule } from 'src/questions/questions.module';
 import { KnowledgeUnitsModule } from 'src/knowledge-units/knowledge-units.module';
+import { LessonsModule } from '@/lessons/lessons.module';
 
 @Module({
   imports: [
-    GeminiModule, 
+    GeminiModule,
     forwardRef(() => QuestionsModule),
     KnowledgeUnitsModule,
+    LessonsModule,
   ],
   controllers: [ReviewsController],
   providers: [ReviewsService],
   exports: [ReviewsService]
 })
-export class ReviewsModule {}
+export class ReviewsModule { }

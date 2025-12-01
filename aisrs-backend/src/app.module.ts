@@ -10,9 +10,10 @@ import { QuestionsModule } from './questions/questions.module';
 import { ApilogModule } from './apilog/apilog.module';
 import { LessonsModule } from './lessons/lessons.module';
 import { KnowledgeUnitsModule } from './knowledge-units/knowledge-units.module';
+import { StatsModule } from './stats/stats.module';
 
 @Module({
-  imports: [ReviewsModule, FirebaseModule, GeminiModule,ConfigModule.forRoot(), QuestionsModule, ApilogModule, LessonsModule, KnowledgeUnitsModule],
+  imports: [ReviewsModule, FirebaseModule, GeminiModule,ConfigModule.forRoot(), QuestionsModule, ApilogModule, LessonsModule, KnowledgeUnitsModule, StatsModule],
   controllers: [AppController],
   providers: [AppService, QuestionsService],
 })

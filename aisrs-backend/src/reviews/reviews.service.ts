@@ -14,8 +14,9 @@ import {
 import { GeminiService } from '../gemini/gemini.service';
 import { QuestionsService } from '../questions/questions.service';
 import { CURRENT_USER_ID } from '@/lib/constants';
-import { FacetType } from '@/types';
+import { FacetType, KnowledgeUnit, Lesson, ReviewFacet } from '@/types';
 import { KnowledgeUnitsService } from '../knowledge-units/knowledge-units.service';
+import { LessonsService } from '@/lessons/lessons.service';
 
 @Injectable()
 export class ReviewsService {
@@ -40,6 +41,7 @@ export class ReviewsService {
         @Inject(forwardRef(() => QuestionsService)) // <-- WRAP THIS
         private readonly questionsService: QuestionsService,
         private readonly knowledgeUnitsService: KnowledgeUnitsService,
+        private readonly lessonsService: LessonsService,
     ) { }
 
     async getByFacetId(facetId: string) {
@@ -223,14 +225,13 @@ Example for a fail: {"result": "fail", "explanation": "Incorrect. The expected r
 
             // --- Handle Kanji Components ---
             if (key.startsWith('Kanji-Component-')) {
-                // Extract char (assuming 'Kanji-Component-電' format)
                 const parts = key.split('-');
-                // Handle your specific logic for splitting (length check etc)
                 if (parts.length === 3) {
                     const kanjiChar = parts[2];
-                    // Delegate the heavy lifting to the KU Service
                     targetKuId = await this.knowledgeUnitsService.ensureKanjiStub(kanjiChar, data);
                 }
+                // skip the rest of the loop for Kanji Components
+                continue;
             }
 
             // --- Create the Facet (Batch) ---
@@ -265,4 +266,66 @@ Example for a fail: {"result": "fail", "explanation": "Incorrect. The expected r
         await batch.commit();
         return { success: true, count };
     } // END generateReviewFacets
+
+    async getDueReviews() {
+        const now = new Date();
+
+        const snapshot = await this.db.collection(REVIEW_FACETS_COLLECTION)
+            .where('userId', '==', CURRENT_USER_ID)
+            .where('nextReviewAt', '<=', now)
+            .orderBy('nextReviewAt', 'asc')
+            .get();
+
+        if (snapshot.empty) {
+            return [];
+        }
+
+        // Map in parallel to build the full ReviewItem objects
+        const reviewItems = await Promise.all(snapshot.docs.map(async (doc) => {
+            const facetData = doc.data();
+            const facet = { id: doc.id, ...facetData } as ReviewFacet;
+
+            if (!facet.kuId) {
+                this.logger.warn(`Skipping corrupted facet ${facet.id}: missing kuId`);
+                return null; // Return null so we can filter it out in the next step
+            }
+
+            // Fetch related KU
+            // (Assuming findOne handles the 404 gracefully or returns null, 
+            // you might want to try/catch here if data integrity is loose)
+            let ku: KnowledgeUnit | null = null;
+            try {
+                ku = await this.knowledgeUnitsService.findOne(facet.kuId);
+            } catch (e) {
+                this.logger.warn(`Orphaned facet ${facet.id}: KU ${facet.kuId} not found`);
+            }
+
+            // Fetch related Lesson
+            let lesson: Lesson | null = null;
+            if (ku) {
+                lesson = await this.lessonsService.findByKuId(ku.id);
+            }
+
+            return {
+                facet,
+                ku,
+                lesson
+            };
+        }));
+
+        // Filter out items where KU was deleted/missing to prevent frontend crashes
+        return reviewItems.filter(item => item !== null && item.ku !== null);
+    } // END getDueReviews
+
+    async getAllFacets() {
+        const snapshot = await this.db.collection(REVIEW_FACETS_COLLECTION)
+            .where('userId', '==', CURRENT_USER_ID)
+            .get();
+
+        if (snapshot.empty) {
+            return [];
+        }
+
+        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    }
 }

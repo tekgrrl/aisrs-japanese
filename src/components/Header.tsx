@@ -15,7 +15,7 @@ export default function Header() {
   // and can be safely used in useEffect dependency arrays.
   const fetchStats = useCallback(async () => {
     try {
-      const response = await fetch("/api/stats");
+      const response = await fetch("http://localhost:3500/stats");
       if (response.ok) {
         const data = await response.json();
         setStats(data);

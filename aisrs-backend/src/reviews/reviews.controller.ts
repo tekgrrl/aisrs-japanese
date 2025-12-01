@@ -1,4 +1,4 @@
-import { Controller, Post, Body, BadRequestException, Put, Param } from '@nestjs/common';
+import { Controller, Post, Body, BadRequestException, Put, Param, Get, Query } from '@nestjs/common';
 import { ReviewsService } from './reviews.service';
 
 @Controller('reviews')
@@ -43,5 +43,13 @@ export class ReviewsController {
 
     console.log(`Generating review facets for KU ${body.kuId}`);
     return this.reviewsService.generateReviewFacets(body.kuId, body.facetsToCreate);
+  }
+
+  @Get('facets')
+  async getFacets(@Query('due') due: string) {
+    if (due === 'true') {
+      return this.reviewsService.getDueReviews();
+    }
+    return this.reviewsService.getAllFacets();
   }
 }
