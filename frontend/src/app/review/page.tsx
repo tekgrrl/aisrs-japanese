@@ -49,7 +49,7 @@ export default function ReviewPage() {
     setError(null);
     try {
       const response = await fetch(
-        `http://localhost:3500/questions/generate?topic=${encodeURIComponent(topic)}&facetId=${facetId}&kuId=${kuId}`,
+        `/api/questions/generate?topic=${encodeURIComponent(topic)}&facetId=${facetId}&kuId=${kuId}`,
         // `/api/generate-question?topic=${encodeURIComponent(topic)}&facetId=${facetId}&kuId=${kuId}`,
       );
       if (!response.ok) {
@@ -78,7 +78,7 @@ export default function ReviewPage() {
         setIsLoading(true);
         setError(null);
         // TODO usenestjs backend service instead
-        const response = await fetch("http://localhost:3500/reviews/facets?due=true");
+        const response = await fetch("/api/reviews/facets?due=true");
         if (!response.ok) {
           throw new Error("Failed to fetch due review items");
         }
@@ -135,7 +135,7 @@ export default function ReviewPage() {
     if (!currentItem) return;
     try {
       const response = await fetch(
-        `http://localhost:3500/reviews/facets/${currentItem.facet.id}`,
+        `/api/reviews/facets/${currentItem.facet.id}`,
         {
           method: "PUT",
           headers: {
@@ -161,7 +161,7 @@ export default function ReviewPage() {
   ) => {
     try {
       // TODO use nestjs backend service instead
-      const res = await fetch(`http://localhost:3500/questions/${questionId}`, {
+      const res = await fetch(`/api/questions/${questionId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status }),
@@ -244,7 +244,7 @@ export default function ReviewPage() {
     }
 
     try {
-      const response = await fetch("http://localhost:3500/reviews/evaluate", {
+      const response = await fetch("/api/reviews/evaluate", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

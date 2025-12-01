@@ -9,7 +9,7 @@ You are building AISRS-Japanese, a specialized AI assistant for Japanese languag
 
 3. **Prioritize Code & Action:** You are a co-developer. Your default response should be to provide code, configuration, or concrete steps to move the project forward. All code must be complete and production-ready.
 
-4. **Respect the Architecture:** You must respect the established technical stack (Next.js 16+, React 19, TypeScript, Tailwind v4, Firestore Emulator) and project structure (App Router, `src/app/api/...`, `src/lib/...`, etc.).
+4. **Respect the Architecture:** You must respect the established technical stack: Next.js 16+ (Frontend), NestJS (Backend), React 19, TypeScript, Tailwind v4, Firestore Emulator. The project is split into independent `frontend` and `backend` directories. The backend handles all database access.
 
 5. **Manage Your Context:** Our chat history is long and complex. You must actively manage your context. If you become confused or your responses degrade, you must state this so we can reset.
 
@@ -112,45 +112,36 @@ Clicking on the Manage button allows the user to add new KUs and skim through ex
 
 ## Implementation
 
-- Stack is nodejs, firestore and the Gemini API at the backend. nextjs and tailwind at the frontend. Code is written in TypeScript from scratch.
+- **Stack**: NestJS (Backend), Next.js (Frontend), Firestore, and Gemini API.
+- **Structure**: The project is split into two independent applications: `frontend` and `backend`.
+- **Package Management**: `yarn` (used independently in root, frontend, and backend).
+- **Types**: Types are defined in `src/types` within each project.
 
-- Package management is yarn
+- **Backend (`/backend`)**: A NestJS application handling all business logic, DB access, and AI integration.
+    - **Modules**:
+        - `knowledge-units`: Manage KUs (CRUD).
+        - `reviews`: Manage review facets and SRS logic.
+        - `lessons`: Generate lessons using Gemini.
+        - `questions`: Generate and evaluate questions using Gemini.
+        - `stats`: Aggregated statistics.
+        - `apilog`: Logging.
+    - **API**: Exposes REST endpoints.
+    - **Database**: Exclusive access to Firestore.
 
-- Types are defined in `src/types/index.ts`
+- **Frontend (`/frontend`)**: A Next.js application (App Router).
+    - **Pages**:
+        - `learn`: List and view learning items.
+        - `review`: SRS review interface.
+        - `library`: View content resources.
+        - `manage`: Manage KUs.
+    - **API Integration**: Calls the NestJS backend. Old API routes in `src/app/api` have been removed.
+    - **Rewrites**: Uses Next.js rewrites (planned) or CORS to talk to the backend.
 
-- The backend is a bunch of API endpoints:
+- **Legacy**: `legacy-api` contains the old Next.js API routes for reference.
 
-- `evaluate-answer`: extracts `userAnswer`, `expectedAnswer`, `question`, `topic` from request and prompts Gemini for an evaluation
-
-- `generate-lesson`: generates a lesson for a given KU or Kanji component
-
-- `generate-question`: Takes a topic and prompts the Gemini API for a question and answer. 
-
-- `ku`: GET all KUs and POST new KU
-
-- `review-facets`: GET due facets and POST new facets
-
-- `review-facets/[kuId]`: Update an existing Review Facet's SRS data
-
-- `stats`: GET number of learning items and due review-facets
-
-- The frontend consists of:
-
-- `learn`: Interstitial used to present list of learning items to the user
-
-- `learn/[kuId]`: Used to present learning items to the user
-
-- `review`: Used to present reviews to the user
-
-- `library`: Access to the content library which is currently in the `content` directory at the top level of the app
-
-- Main page: `page.tsx`, `layout.tsx`, `globals.css`
-
-- Firestore schema As per `src/types/index.ts`
-
-- Gemini API:
-
-- Gemini chat has struggled with which version of the Gemini API to use. I've settled on`gemini-2.5-pro` for now. Flash is incapable of generating coherent lessons
+- **Gemini API**:
+    - Handled entirely by the backend `gemini` module.
+    - Model: `gemini-2.5-pro`. Flash is incapable of generating coherent lessons.
 
 **Previous Project Updates:**
 
@@ -181,6 +172,7 @@ Clicking on the Manage button allows the user to add new KUs and skim through ex
 
 * **Phase 7 (smarter SRS and learning paths):** TBD
 
+* **Phase 8 Refactor backend to use NestJS and remove all DB access and old API routes from frontend:** Complete
   
 
 **Phase 5 (Kanji Refactor):** on hold
