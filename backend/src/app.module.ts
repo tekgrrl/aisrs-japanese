@@ -1,0 +1,20 @@
+import { Module } from '@nestjs/common';
+import { AppController } from './app.controller';
+import { AppService } from './app.service';
+import { ReviewsModule } from './reviews/reviews.module';
+import { FirebaseModule } from './firebase/firebase.module';
+import { GeminiModule } from './gemini/gemini.module';
+import { ConfigModule } from '@nestjs/config';
+import { QuestionsService } from './questions/questions.service';
+import { QuestionsModule } from './questions/questions.module';
+import { ApilogModule } from './apilog/apilog.module';
+import { LessonsModule } from './lessons/lessons.module';
+import { KnowledgeUnitsModule } from './knowledge-units/knowledge-units.module';
+import { StatsModule } from './stats/stats.module';
+
+@Module({
+  imports: [ReviewsModule, FirebaseModule, GeminiModule,ConfigModule.forRoot(), QuestionsModule, ApilogModule, LessonsModule, KnowledgeUnitsModule, StatsModule],
+  controllers: [AppController],
+  providers: [AppService, QuestionsService],
+})
+export class AppModule {}

@@ -1,0 +1,52 @@
+{
+  "name": "aisrs",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "biome check",
+    "format": "biome format --write",
+    "test": "jest",
+    "test:e2e": "playwright test",
+    "emu": "firebase emulators:start --export-on-exit=./.firebase-data --import=./.firebase-data"
+  },
+  "dependencies": {
+    "@google/genai": "^1.27.0",
+    "@google/generative-ai": "^0.24.1",
+    "@nestjs/cli": "^11.0.13",
+    "better-auth": "^1.3.34",
+    "firebase": "^12.4.0",
+    "firebase-admin": "^13.6.0",
+    "global": "^4.4.0",
+    "gray-matter": "^4.0.3",
+    "js-yaml": "^4.1.1",
+    "kuroshiro": "^1.2.0",
+    "next": "16.0.0",
+    "react": "19.2.0",
+    "react-dom": "19.2.0",
+    "uuid": "^13.0.0",
+    "wanakana": "^5.3.1"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.2.0",
+    "@playwright/test": "^1.56.1",
+    "@tailwindcss/postcss": "^4",
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.0",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^24.10.1",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "@types/uuid": "^11.0.0",
+    "dotenv": "^17.2.3",
+    "jest": "^30.2.0",
+    "jest-environment-jsdom": "^30.2.0",
+    "node-mocks-http": "^1.17.2",
+    "tailwindcss": "^4",
+    "ts-jest": "^29.4.5",
+    "typescript": "^5"
+  }
+}
