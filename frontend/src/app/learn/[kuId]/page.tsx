@@ -85,7 +85,6 @@ export default function LearnItemPage() {
           lessonData.component_kanji.length > 0
         ) {
           const kanjiChars = lessonData.component_kanji.map((k) => k.kanji);
-          // TODO use backend service instead of calling Firestore directly
           const response = await fetch("/api/knowledge-units/get-all?status=learning&content=" + kanjiChars.join(","));
 
           if (!response.ok) throw new Error(response.statusText);
@@ -510,17 +509,19 @@ export default function LearnItemPage() {
                 Meaning
               </span>
             </label>
-            <label className="flex items-center p-4 bg-gray-200 dark:bg-gray-700 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 cursor-pointer">
-              <input
-                type="checkbox"
-                className="h-5 w-5 rounded bg-gray-300 dark:bg-gray-900 border-gray-400 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
-                checked={!!selectedFacets["Content-to-Reading"]}
-                onChange={() => handleCheckboxChange("Content-to-Reading")}
-              />
-              <span className="ml-3 text-lg text-gray-900 dark:text-white">
-                Reading
-              </span>
-            </label>
+            {ku?.data.reading !== ku?.content && (
+              <label className="flex items-center p-4 bg-gray-200 dark:bg-gray-700 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="h-5 w-5 rounded bg-gray-300 dark:bg-gray-900 border-gray-400 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
+                  checked={!!selectedFacets["Content-to-Reading"]}
+                  onChange={() => handleCheckboxChange("Content-to-Reading")}
+                />
+                <span className="ml-3 text-lg text-gray-900 dark:text-white">
+                  Reading
+                </span>
+              </label>
+            )}
 
             {/* --- REFACTOR: Conditional Component Kanji Display --- */}
             {lesson.component_kanji &&

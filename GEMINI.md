@@ -139,6 +139,11 @@ Clicking on the Manage button allows the user to add new KUs and skim through ex
 
 - **Legacy**: `legacy-api` contains the old Next.js API routes for reference.
 
+### Current Running Services
+* **Frontend:** `http://localhost:3000` (Next.js)
+* **Backend:** `http://localhost:3500` (NestJS)
+* **Firestore Emulator:** `http://localhost:8080`
+
 - **Gemini API**:
     - Handled entirely by the backend `gemini` module.
     - Model: `gemini-2.5-pro`. Flash is incapable of generating coherent lessons.
