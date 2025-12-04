@@ -37,7 +37,7 @@ interface UserStats {
 
   // Engagement
   currentStreak: number;
-  lastReviewDate: string; // ISO Date
+  lastReviewDate: Timestamp; // ISO Date
 
   // Performance
   totalReviews: number;
