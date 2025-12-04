@@ -7,7 +7,8 @@ export const KNOWLEDGE_UNITS_COLLECTION = "knowledge-units";
 export const REVIEW_FACETS_COLLECTION = "review-facets";
 export const LESSONS_COLLECTION = "lessons";
 export const API_LOGS_COLLECTION = "api-logs";
-export const QUESTIONS_COLLECTION = "questions"; 
+export const QUESTIONS_COLLECTION = "questions";
+export const USER_STATS_COLLECTION = 'user-stats';
 export const Timestamp = admin.firestore.Timestamp;
 export const FieldValue = admin.firestore.FieldValue;
 
@@ -30,4 +31,4 @@ export const FieldValue = admin.firestore.FieldValue;
   ],
   exports: [FIRESTORE_CONNECTION], // Export the provider so other modules can use it
 })
-export class FirebaseModule {}
+export class FirebaseModule { }

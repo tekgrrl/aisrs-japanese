@@ -5,11 +5,12 @@ import {
     NotFoundException,
     forwardRef,
 } from '@nestjs/common';
-import { FieldPath, FieldValue, Firestore } from 'firebase-admin/firestore';
+import { FieldPath, FieldValue, Firestore, Timestamp } from 'firebase-admin/firestore';
 import {
     FIRESTORE_CONNECTION,
     REVIEW_FACETS_COLLECTION,
     KNOWLEDGE_UNITS_COLLECTION,
+    USER_STATS_COLLECTION,
 } from '../firebase/firebase.module';
 import { GeminiService } from '../gemini/gemini.service';
 import { QuestionsService } from '../questions/questions.service';
@@ -75,8 +76,24 @@ export class ReviewsService {
             // TODO: Add User Check here when Auth is ready
             // if (data.userId !== currentUserId) throw ...
 
+            const statsRef = this.db.collection(USER_STATS_COLLECTION).doc(CURRENT_USER_ID);
+            const statsDoc = await transaction.get(statsRef);
+
+            const statsDocData = statsDoc.data();
+
+            const currentStats = statsDocData ? statsDocData : {
+                reviewForecast: {},
+                hourlyForecast: {},
+                currentStreak: 0,
+                lastReviewDate: null,
+                totalReviews: 0,
+                passedReviews: 0
+            };
+
             // 2. LOGIC (The State Machine)
             const currentStage = data.srsStage || 0;
+            const oldNextReview = data.nextReviewAt ? new Date(data.nextReviewAt) : new Date(); // Fallback if missing
+
             let nextStage = currentStage;
 
             if (result === 'pass') {
@@ -95,7 +112,53 @@ export class ReviewsService {
             const hoursToAdd = nextStage === 0 ? 0 : this.INTERVALS[nextStage];
             const nextReview = new Date(now.getTime() + hoursToAdd * 60 * 60 * 1000);
 
-            // 3. WRITE (Facet)
+            // Forecast Updates (Bucket logic)
+            const oldKeys = this.getDateKeys(oldNextReview);
+            const newKeys = this.getDateKeys(nextReview);
+
+            // Decrement old bucket (if it was in the future)
+            if (oldNextReview > now) {
+                const oldDayCount = (currentStats.reviewForecast[oldKeys.dayKey] || 0) - 1;
+                currentStats.reviewForecast[oldKeys.dayKey] = Math.max(0, oldDayCount);
+
+                const oldHourCount = (currentStats.hourlyForecast[oldKeys.hourKey] || 0) - 1;
+                currentStats.hourlyForecast[oldKeys.hourKey] = Math.max(0, oldHourCount);
+            }
+
+            // Increment new bucket
+            currentStats.reviewForecast[newKeys.dayKey] = (currentStats.reviewForecast[newKeys.dayKey] || 0) + 1;
+            currentStats.hourlyForecast[newKeys.hourKey] = (currentStats.hourlyForecast[newKeys.hourKey] || 0) + 1;
+
+            // Streak Logic
+            const todayKey = this.getDateKeys(now).dayKey;
+            let newStreak = currentStats.currentStreak;
+
+            if (currentStats.lastReviewDate) {
+                const lastDate = new Date(currentStats.lastReviewDate);
+                const lastKey = this.getDateKeys(lastDate).dayKey;
+
+                if (lastKey !== todayKey) {
+                    // Check if it was yesterday
+                    const yesterday = new Date(now);
+                    yesterday.setDate(yesterday.getDate() - 1);
+                    const yesterdayKey = this.getDateKeys(yesterday).dayKey;
+
+                    if (lastKey === yesterdayKey) {
+                        newStreak += 1; // Kept the streak alive
+                    } else {
+                        newStreak = 1; // Streak broken, reset
+                    }
+                }
+                // If lastKey == todayKey, do nothing (already counted for today)
+            } else {
+                newStreak = 1; // First review ever
+            }
+
+            // Accuracy Stats
+            const newTotal = (currentStats.totalReviews || 0) + 1;
+            const newPassed = (currentStats.passedReviews || 0) + (result === 'pass' ? 1 : 0);
+
+            // WRITE (Facet)
             this.logger.log(`Updating facet ${facetId} to stage ${nextStage}`);
 
             transaction.update(facetRef, {
@@ -111,9 +174,21 @@ export class ReviewsService {
                 // If you want that atomic, we need to duplicate the logic or pass the transaction.
             });
 
+            // Write User Stats
+            // Using set with merge: true handles both "New Doc" and "Update Doc"
+            transaction.set(statsRef, {
+                userId: CURRENT_USER_ID,
+                reviewForecast: currentStats.reviewForecast,
+                hourlyForecast: currentStats.hourlyForecast,
+                currentStreak: newStreak,
+                lastReviewDate: now.toISOString(),
+                totalReviews: newTotal,
+                passedReviews: newPassed
+            }, { merge: true });
+
             // 4. WRITE (Knowledge Unit Propagation)
             // If the item reached Mastered (final stage), we might want to update the KU.
-            if (nextStage === Object.keys(this.INTERVALS).length && data.kuId) {
+            if (nextStage === Object.keys(this.INTERVALS).length - 1 && data.kuId) {
                 const kuRef = this.db
                     .collection(KNOWLEDGE_UNITS_COLLECTION)
                     .doc(data.kuId);
@@ -215,7 +290,7 @@ Example for a fail: {"result": "fail", "explanation": "Incorrect. The expected r
     ) {
         const batch = this.db.batch();
         let count = 0;
-        const now = new Date();
+        const now = Timestamp.now();
         let parentFacetCount = 0; // Correctly track parent's direct facets
 
         for (const facet of facetsToCreate) {
@@ -268,7 +343,7 @@ Example for a fail: {"result": "fail", "explanation": "Incorrect. The expected r
     } // END generateReviewFacets
 
     async getDueReviews() {
-        const now = new Date();
+        const now = Timestamp.now();
 
         const snapshot = await this.db.collection(REVIEW_FACETS_COLLECTION)
             .where('userId', '==', CURRENT_USER_ID)
@@ -277,6 +352,7 @@ Example for a fail: {"result": "fail", "explanation": "Incorrect. The expected r
             .get();
 
         if (snapshot.empty) {
+            this.logger.log(`No due reviews found for user ${CURRENT_USER_ID}`);
             return [];
         }
 
@@ -328,5 +404,18 @@ Example for a fail: {"result": "fail", "explanation": "Incorrect. The expected r
         }
 
         return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    }
+
+    // Helper to generate bucket keys
+    private getDateKeys(date: Date) {
+        const yyyy = date.getFullYear();
+        const mm = String(date.getMonth() + 1).padStart(2, '0');
+        const dd = String(date.getDate()).padStart(2, '0');
+        const hh = String(date.getHours()).padStart(2, '0');
+
+        return {
+            dayKey: `${yyyy}-${mm}-${dd}`,
+            hourKey: `${yyyy}-${mm}-${dd}-${hh}`
+        };
     }
 }

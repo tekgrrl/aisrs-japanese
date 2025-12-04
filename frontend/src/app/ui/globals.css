@@ -3,6 +3,10 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  
+  /* Shodo Light Mode (Rice Paper / Sumi Ink) */
+  --shodo-paper: #F9F7F2;
+  --shodo-ink: #2B2523;
 }
 
 @theme inline {
@@ -10,12 +14,24 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+
+  /* Expose Shodo variables to Tailwind.
+     This automatically creates utilities like:
+     bg-shodo-paper, text-shodo-ink, border-shodo-paper, etc.
+  */
+  --color-shodo-paper: var(--shodo-paper);
+  --color-shodo-ink: var(--shodo-ink);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
     --background: #0a0a0a;
     --foreground: #ededed;
+
+    /* Shodo Dark Mode (Inverted) */
+    /* Paper becomes dark charcoal, Ink becomes off-white */
+    --shodo-paper: #1a1a1a; 
+    --shodo-ink: #F9F7F2;
   }
 }
 

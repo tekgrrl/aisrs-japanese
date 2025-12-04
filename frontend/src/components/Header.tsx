@@ -8,9 +8,9 @@ import { useState, useEffect, useCallback } from "react";
  * Now with a listener to refresh stats dynamically.
  */
 export default function Header() {
-  const [stats, setStats] = useState({ learnCount: 0, reviewCount: 0 });
+  const [stats, setStats] = useState({ learnCount: 0, reviewsDue: 0 });
 
-  console.log("Re-running component code");
+  console.log("Fetching stats...");
   // Wrap fetchStats in useCallback so it's a stable function
   // and can be safely used in useEffect dependency arrays.
   const fetchStats = useCallback(async () => {
@@ -18,6 +18,7 @@ export default function Header() {
       const response = await fetch("/api/stats");
       if (response.ok) {
         const data = await response.json();
+        console.log("Fetched stats:", data);
         setStats(data);
       }
     } catch (error) {
@@ -81,7 +82,7 @@ export default function Header() {
             href="/review"
             className="bg-gray-700 px-4 py-2 rounded-md hover:bg-gray-600 text-white"
           >
-            Review ({stats.reviewCount})
+            Review ({stats.reviewsDue})
           </Link>
           <Link
             href="/"
