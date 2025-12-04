@@ -28,6 +28,29 @@ export interface ApiLog {
   };
 }
 
+interface UserStats {
+  userId: string;
+
+  // Forecasts (Bucket Counts)
+  reviewForecast: Record<string, number>; // "YYYY-MM-DD": count
+  hourlyForecast: Record<string, number>; // "YYYY-MM-DD-HH": count
+
+  // Engagement
+  currentStreak: number;
+  lastReviewDate: string; // ISO Date
+
+  // Performance
+  totalReviews: number;
+  passedReviews: number;
+
+  // Progression (by Level)
+  levelProgress: {
+    n5: { total: number, mastered: number },
+    n4: { total: number, mastered: number },
+    // ...
+  }
+}
+
 export interface VocabLesson {
   kuId?: string;
   type: "Vocab";
@@ -77,7 +100,7 @@ export type PartOfSpeech =
   | "noun-suru"
   | "counter"
   | "adverb"
-  | "auxiliary-verb"    
+  | "auxiliary-verb"
   | "prefix"
   | "suffix"
   | "conjunction";
@@ -121,8 +144,8 @@ export interface ReviewFacet {
   kuId: string; // ID of the parent KnowledgeUnit
   facetType: FacetType;
   srsStage: number; // 0 (new) to 8 (mastered)
-  nextReviewAt: string; // ISO string
-  lastReviewAt?: string; // ISO string
+  nextReviewAt: Timestamp; // ISO string
+  lastReviewAt?: Timestamp; // ISO string
   history?: Array<{
     timestamp: string;
     result: "pass" | "fail";
