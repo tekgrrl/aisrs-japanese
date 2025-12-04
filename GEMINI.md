@@ -253,7 +253,7 @@ This summary captures critical technical lessons and design choices from the rec
 
 * **Root Cause:** The `PUT /api/review-facets/[id]` endpoint was converting `Date` objects to ISO strings (`.toISOString()`) before saving to Firestore. This created a data type mismatch, as the query endpoint used a proper `Date` object for comparison against a `string` field.
 
-* **Decision:** All date/time fields (`nextReviewAt`, `createdAt`, `lastReviewAt`) **must** be saved as native JavaScript `Date` objects in server-side code. Firestore will automatically convert them to the correct Timestamp type. Never save dates as strings.
+* **Decision:** All date/time fields (`nextReviewAt`, `createdAt`, `lastReviewAt`) **must** be saved as Firebase/Firestore Timestamp objects in server-side code. Never save dates as strings.
 
 
 2. **`firebase-admin` SDK Incompatibility in API Routes:**
