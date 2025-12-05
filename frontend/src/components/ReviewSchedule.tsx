@@ -2,29 +2,21 @@ import React from 'react';
 import { ChevronRight } from 'lucide-react';
 
 interface ReviewScheduleProps {
-  hourlyForecast?: Record<string, number>;
+  next24HoursCount: number;
+  schedule: {
+    date: string;
+    isToday: boolean;
+    count: number;
+    runningTotal: number;
+    label: string;
+  }[];
   reviewForecast?: Record<string, number>;
   reviewsDue: number;
 }
 
-export default function ReviewSchedule({ hourlyForecast = {}, reviewForecast = {}, reviewsDue }: ReviewScheduleProps) {
-  // 1. Calculate Next 24 Hours Count
-  const calculateNext24Hours = () => {
-    const now = new Date();
-    let count = 0;
-    for (let i = 0; i < 24; i++) {
-      const d = new Date(now.getTime() + i * 60 * 60 * 1000);
-      const yyyy = d.getFullYear();
-      const mm = String(d.getMonth() + 1).padStart(2, '0');
-      const dd = String(d.getDate()).padStart(2, '0');
-      const hh = String(d.getHours()).padStart(2, '0');
-      const key = `${yyyy}-${mm}-${dd}-${hh}`;
-      count += hourlyForecast[key] || 0;
-    }
-    return count;
-  };
+export default function ReviewSchedule({ next24HoursCount, schedule, reviewForecast = {}, reviewsDue }: ReviewScheduleProps) {
 
-  const next24HoursCount = calculateNext24Hours();
+  console.log(`schedule: ${JSON.stringify(schedule)}`);
 
   // 2. Generate Next 5 Days Data
   const generateDailyData = () => {
@@ -39,30 +31,40 @@ export default function ReviewSchedule({ hourlyForecast = {}, reviewForecast = {
     
     let maxCount = 0;
 
+    if (!schedule || schedule.length === 0) {
+      return [];
+    }
+    
+    // ... logic that assumes schedule has content ...
+    // Actually, looking at the code, the loop builds `days` array using `now` and `reviewForecast` BUT tries to READ from `schedule` at index `i`.
+    // The previous version CALCULATED the schedule. The NEW version expects it passed in. 
+    // If the valid data isn't ready, we should arguably return empty or loading.
+    
+    // First pass to calculate cumulative totals and find maxCount
+    const tempDays = [];
+    let currentTotal = reviewsDue;
+    
     for (let i = 0; i < 5; i++) {
-      const d = new Date(now);
-      d.setDate(now.getDate() + i);
-      
-      const yyyy = d.getFullYear();
-      const mm = String(d.getMonth() + 1).padStart(2, '0');
-      const dd = String(d.getDate()).padStart(2, '0');
-      const key = `${yyyy}-${mm}-${dd}`;
-      
-      const count = reviewForecast[key] || 0;
-      if (count > maxCount) maxCount = count;
-
-      const addedToday = reviewForecast[key] || 0;
-      cumulativeTotal += addedToday;
-
-      const dayName = d.toLocaleDateString('en-US', { weekday: 'short' });
-      
-      days.push({
-        day: dayName,
-        added: addedToday,
-        total: cumulativeTotal,
-        isActive: addedToday > 0
+      currentTotal += schedule[i].count;
+      tempDays.push({
+        day: schedule[i].label,
+        added: schedule[i].count,
+        total: currentTotal,
+        isActive: schedule[i].count > 0
       });
     }
+
+    // Find max value for scaling (using total since that's what the bar likely usually represents in this context, 
+    // or if it represents added, use added. User implementation uses 'total' in the previous map, so let's stick to total for scaling logic 
+    // or arguably added if it's a diff chart. But user text says "(+N) Total". Let's assume bar is total backlog size.
+    // Actually, typically forecast bars show the *added* amount per day. 
+    // But WaniKani's forecast graph usually shows the backlog *accumulating*.
+    // Let's use the maximum total to scale the bars.
+    
+    // Actually, looking at the previous user code `(day.total / maxCount)`, it seems they want the bar to represent the total.
+    maxCount = Math.max(...tempDays.map(d => d.total), 1); // Avoid div by zero
+
+    days.push(...tempDays);
 
     // Calculate bar widths relative to maxCount
     return days.map(day => ({
@@ -121,9 +123,9 @@ export default function ReviewSchedule({ hourlyForecast = {}, reviewForecast = {
                       </div>
                     </div>
 
-                    {/* Count Stats */}
-                    <div className="text-[#6b7079] flex shrink-0 w-[40px] justify-end items-center text-sm font-bold">
-                      {day.total}
+                    {/* Count Stats - Increased width for (+N) Total format */}
+                    <div className="text-[#6b7079] flex shrink-0 w-[70px] justify-end items-center text-sm font-bold whitespace-nowrap">
+                      <span className="text-xs font-normal mr-1 text-gray-400">(+{day.added})</span> {day.total}
                     </div>
                   </div>
                 ))}
