@@ -5,11 +5,31 @@ import Lessons from "@/components/Lessons";
 import Reviews from "@/components/Reviews";
 import ReviewSchedule from "@/components/ReviewSchedule";
 
+interface DashboardStats {
+  learnCount: number;
+  next24HoursCount: number;
+  reviewCount: number;
+  reviewsDue: number;
+  schedule: {
+    date: string;
+    isToday: boolean;
+    count: number;
+    runningTotal: number;
+    label: string;
+  }[];
+  streak: number;
+  hourlyForecast?: Record<string, number>;
+  reviewForecast?: Record<string, number>;
+}
+
 export default function DashboardPage() {
-  const [stats, setStats] = useState({ 
+  const [stats, setStats] = useState<DashboardStats>({ 
     learnCount: 0, 
+    next24HoursCount: 0,
     reviewCount: 0,
     reviewsDue: 0,
+    schedule: [],
+    streak: 0,
     hourlyForecast: {},
     reviewForecast: {}
   });
@@ -57,7 +77,7 @@ export default function DashboardPage() {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [fetchStats]);
-
+  console.log(`stats: ${JSON.stringify(stats)}`);  
   return (
     <div className="container mx-auto max-w-6xl px-4 py-8">
       <h1 className="text-3xl font-bold mb-8 text-center text-gray-800 dark:text-white">Dashboard</h1>
@@ -74,8 +94,8 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 gap-8">
         <div className="h-full">
           <ReviewSchedule 
-            hourlyForecast={stats.hourlyForecast} 
-            reviewForecast={stats.reviewForecast} 
+            next24HoursCount={stats.next24HoursCount}
+            schedule={stats.schedule} 
             reviewsDue={stats.reviewsDue}
           />
         </div>

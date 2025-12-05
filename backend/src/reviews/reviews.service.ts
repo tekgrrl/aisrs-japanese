@@ -18,6 +18,7 @@ import { CURRENT_USER_ID } from '@/lib/constants';
 import { FacetType, KnowledgeUnit, Lesson, ReviewFacet } from '@/types';
 import { KnowledgeUnitsService } from '../knowledge-units/knowledge-units.service';
 import { LessonsService } from '@/lessons/lessons.service';
+import { StatsService } from '../stats/stats.service';
 
 @Injectable()
 export class ReviewsService {
@@ -43,6 +44,7 @@ export class ReviewsService {
         private readonly questionsService: QuestionsService,
         private readonly knowledgeUnitsService: KnowledgeUnitsService,
         private readonly lessonsService: LessonsService,
+        private readonly statsService: StatsService,
     ) { }
 
     async getByFacetId(facetId: string) {
@@ -74,22 +76,6 @@ export class ReviewsService {
             // TODO: Add User Check here when Auth is ready
             // if (data.userId !== currentUserId) throw ...
 
-            const statsRef = this.db.collection(USER_STATS_COLLECTION).doc(CURRENT_USER_ID);
-            const statsDoc = await transaction.get(statsRef);
-
-            // 1. Get the current stats or initialize empty stats if none exist
-            const statsDocData = statsDoc.data();
-
-            const currentStats = statsDocData ? statsDocData : {
-                reviewForecast: {},
-                hourlyForecast: {},
-                currentStreak: 0,
-                lastReviewDate: null,
-                totalReviews: 0,
-                passedReviews: 0
-            };
-
-
             // 2. Determine the new SRS stage and time of next review
             const currentSrsStage = facetData.srsStage || 0;
             // TODO: Seems like these dates are coerced to Timestamps by Firestore. Need to confirm
@@ -112,56 +98,14 @@ export class ReviewsService {
             const hoursToAdd = nextSrsStage === 0 ? 0 : this.INTERVALS[nextSrsStage];
             const nextReviewDate = new Date(now.getTime() + hoursToAdd * 60 * 60 * 1000);
 
-            // Bucketize the hourly and daily forecast
-            const oldBuckets = this.getDateBuckets(oldNextReviewDate);
-            const newBuckets = this.getDateBuckets(nextReviewDate);
-
-            this.logger.log(`Old buckets: ${JSON.stringify(oldBuckets)}`);
-            this.logger.log(`New buckets: ${JSON.stringify(newBuckets)}`);
-
-            // The idea is that the review was in one bucket, we need to decrement the count for that bucket
-            // Decrement old bucket (if it was in the future)
-            // How could the original nextReviewAt data be in the future?
-            if (oldNextReviewDate > now) {
-                const oldDayCount = (currentStats.reviewForecast[oldBuckets.dayKey] || 0) - 1;
-                currentStats.reviewForecast[oldBuckets.dayKey] = Math.max(0, oldDayCount);
-
-                const oldHourCount = (currentStats.hourlyForecast[oldBuckets.hourKey] || 0) - 1;
-                currentStats.hourlyForecast[oldBuckets.hourKey] = Math.max(0, oldHourCount);
-            }
-
-            // Increment new bucket
-            currentStats.reviewForecast[newBuckets.dayKey] = (currentStats.reviewForecast[newBuckets.dayKey] || 0) + 1;
-            currentStats.hourlyForecast[newBuckets.hourKey] = (currentStats.hourlyForecast[newBuckets.hourKey] || 0) + 1;
-
-            // Streak Logic
-            const todayKey = this.getDateBuckets(now).dayKey;
-            let newStreak = currentStats.currentStreak;
-
-            if (currentStats.lastReviewDate) {
-                const lastDate = new Date(currentStats.lastReviewDate);
-                const lastKey = this.getDateBuckets(lastDate).dayKey;
-
-                if (lastKey !== todayKey) {
-                    // Check if it was yesterday
-                    const yesterday = new Date(now);
-                    yesterday.setDate(yesterday.getDate() - 1);
-                    const yesterdayKey = this.getDateBuckets(yesterday).dayKey;
-
-                    if (lastKey === yesterdayKey) {
-                        newStreak += 1; // Kept the streak alive
-                    } else {
-                        newStreak = 1; // Streak broken, reset
-                    }
-                }
-                // If lastKey == todayKey, do nothing (already counted for today)
-            } else {
-                newStreak = 1; // First review ever
-            }
-
-            // Accuracy Stats
-            const newTotal = (currentStats.totalReviews || 0) + 1;
-            const newPassed = (currentStats.passedReviews || 0) + (result === 'pass' ? 1 : 0);
+            // Calculate and update Stats via StatsService
+            await this.statsService.updateReviewScheduleStats(
+                CURRENT_USER_ID,
+                oldNextReviewDate,
+                nextReviewDate,
+                result,
+                transaction
+            );
 
             // WRITE (Facet)
             this.logger.log(`Updating facet ${facetId} to stage ${nextSrsStage}`);
@@ -178,22 +122,6 @@ export class ReviewsService {
                 // Note: We aren't updating the 'history' array here yet.
                 // If you want that atomic, we need to duplicate the logic or pass the transaction.
             });
-
-            // Write User Stats
-            // Using set with merge: true handles both "New Doc" and "Update Doc"
-            this.logger.log(`reviewForecast = ${JSON.stringify(currentStats.reviewForecast)}`);
-
-            // TODO: For reviewForecast, this updates all the buckets in the DB including those in the past. 
-            // But the reviewForecast numbers are definitely off
-            transaction.set(statsRef, {
-                userId: CURRENT_USER_ID,
-                reviewForecast: currentStats.reviewForecast,
-                hourlyForecast: currentStats.hourlyForecast,
-                currentStreak: newStreak,
-                lastReviewDate: now,
-                totalReviews: newTotal,
-                passedReviews: newPassed
-            }, { merge: true });
 
             // 4. WRITE (Knowledge Unit Propagation)
             // If the item reached Mastered (final stage), we might want to update the KU.
@@ -416,16 +344,4 @@ Example for a fail: {"result": "fail", "explanation": "Incorrect. The expected r
         return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     }
 
-    // Helper to generate bucket keys
-    private getDateBuckets(date: Date) {
-        const yyyy = date.getFullYear();
-        const mm = String(date.getMonth() + 1).padStart(2, '0');
-        const dd = String(date.getDate()).padStart(2, '0');
-        const hh = String(date.getHours()).padStart(2, '0');
-
-        return {
-            dayKey: `${yyyy}-${mm}-${dd}`,
-            hourKey: `${yyyy}-${mm}-${dd}-${hh}`
-        };
-    }
 }
