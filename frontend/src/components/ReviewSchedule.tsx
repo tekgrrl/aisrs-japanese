@@ -4,9 +4,10 @@ import { ChevronRight } from 'lucide-react';
 interface ReviewScheduleProps {
   hourlyForecast?: Record<string, number>;
   reviewForecast?: Record<string, number>;
+  reviewsDue: number;
 }
 
-export default function ReviewSchedule({ hourlyForecast = {}, reviewForecast = {} }: ReviewScheduleProps) {
+export default function ReviewSchedule({ hourlyForecast = {}, reviewForecast = {}, reviewsDue }: ReviewScheduleProps) {
   // 1. Calculate Next 24 Hours Count
   const calculateNext24Hours = () => {
     const now = new Date();
@@ -33,6 +34,8 @@ export default function ReviewSchedule({ hourlyForecast = {}, reviewForecast = {
     // Usually "Upcoming" implies future days. Let's show next 5 days including today if relevant, 
     // or just next 5 days. WaniKani usually shows "Next 24h" then a breakdown.
     // Let's do next 5 days starting from today.
+
+    let cumulativeTotal = reviewsDue;
     
     let maxCount = 0;
 
@@ -48,12 +51,16 @@ export default function ReviewSchedule({ hourlyForecast = {}, reviewForecast = {
       const count = reviewForecast[key] || 0;
       if (count > maxCount) maxCount = count;
 
+      const addedToday = reviewForecast[key] || 0;
+      cumulativeTotal += addedToday;
+
       const dayName = d.toLocaleDateString('en-US', { weekday: 'short' });
       
       days.push({
         day: dayName,
-        total: count,
-        isActive: count > 0
+        added: addedToday,
+        total: cumulativeTotal,
+        isActive: addedToday > 0
       });
     }
 

@@ -56,8 +56,6 @@ export class ReviewsService {
 
     async updateFacetSrs(facetId: string, result: 'pass' | 'fail') {
         return this.db.runTransaction(async (transaction) => {
-            // 1. READ (Query with User ID enforcement)
-            // We query instead of getting by doc ref directly to enforce the user constraint at the read level
             const query = this.db
                 .collection(REVIEW_FACETS_COLLECTION)
                 .where(FieldPath.documentId(), '==', facetId)
@@ -70,8 +68,8 @@ export class ReviewsService {
             }
 
             const facetDoc = snapshot.docs[0];
-            const facetRef = facetDoc.ref; // Get the ref for the update step
-            const data = facetDoc.data();
+            const facetRef = facetDoc.ref;
+            const facetData = facetDoc.data() as ReviewFacet;
 
             // TODO: Add User Check here when Auth is ready
             // if (data.userId !== currentUserId) throw ...
@@ -79,6 +77,7 @@ export class ReviewsService {
             const statsRef = this.db.collection(USER_STATS_COLLECTION).doc(CURRENT_USER_ID);
             const statsDoc = await transaction.get(statsRef);
 
+            // 1. Get the current stats or initialize empty stats if none exist
             const statsDocData = statsDoc.data();
 
             const currentStats = statsDocData ? statsDocData : {
@@ -90,58 +89,64 @@ export class ReviewsService {
                 passedReviews: 0
             };
 
-            // 2. LOGIC (The State Machine)
-            const currentStage = data.srsStage || 0;
-            const oldNextReview = data.nextReviewAt ? new Date(data.nextReviewAt) : new Date(); // Fallback if missing
 
-            let nextStage = currentStage;
+            // 2. Determine the new SRS stage and time of next review
+            const currentSrsStage = facetData.srsStage || 0;
+            // TODO: Seems like these dates are coerced to Timestamps by Firestore. Need to confirm
+            const oldNextReviewDate = facetData.nextReviewAt ? facetData.nextReviewAt.toDate() : new Date();
+
+            let nextSrsStage: number;
 
             if (result === 'pass') {
                 // Advance 1 stage, max out at intervals length
-                nextStage = Math.min(
-                    currentStage + 1,
+                nextSrsStage = Math.min(
+                    currentSrsStage + 1,
                     Object.keys(this.INTERVALS).length,
                 );
             } else {
                 // Penalty: Drop 2 stages, min 1 (unless it was already 0)
-                nextStage = currentStage === 0 ? 0 : Math.max(1, currentStage - 2);
+                nextSrsStage = currentSrsStage === 0 ? 0 : Math.max(1, currentSrsStage - 2);
             }
 
-            // Calculate Date
             const now = new Date();
-            const hoursToAdd = nextStage === 0 ? 0 : this.INTERVALS[nextStage];
-            const nextReview = new Date(now.getTime() + hoursToAdd * 60 * 60 * 1000);
+            const hoursToAdd = nextSrsStage === 0 ? 0 : this.INTERVALS[nextSrsStage];
+            const nextReviewDate = new Date(now.getTime() + hoursToAdd * 60 * 60 * 1000);
 
-            // Forecast Updates (Bucket logic)
-            const oldKeys = this.getDateKeys(oldNextReview);
-            const newKeys = this.getDateKeys(nextReview);
+            // Bucketize the hourly and daily forecast
+            const oldBuckets = this.getDateBuckets(oldNextReviewDate);
+            const newBuckets = this.getDateBuckets(nextReviewDate);
 
+            this.logger.log(`Old buckets: ${JSON.stringify(oldBuckets)}`);
+            this.logger.log(`New buckets: ${JSON.stringify(newBuckets)}`);
+
+            // The idea is that the review was in one bucket, we need to decrement the count for that bucket
             // Decrement old bucket (if it was in the future)
-            if (oldNextReview > now) {
-                const oldDayCount = (currentStats.reviewForecast[oldKeys.dayKey] || 0) - 1;
-                currentStats.reviewForecast[oldKeys.dayKey] = Math.max(0, oldDayCount);
+            // How could the original nextReviewAt data be in the future?
+            if (oldNextReviewDate > now) {
+                const oldDayCount = (currentStats.reviewForecast[oldBuckets.dayKey] || 0) - 1;
+                currentStats.reviewForecast[oldBuckets.dayKey] = Math.max(0, oldDayCount);
 
-                const oldHourCount = (currentStats.hourlyForecast[oldKeys.hourKey] || 0) - 1;
-                currentStats.hourlyForecast[oldKeys.hourKey] = Math.max(0, oldHourCount);
+                const oldHourCount = (currentStats.hourlyForecast[oldBuckets.hourKey] || 0) - 1;
+                currentStats.hourlyForecast[oldBuckets.hourKey] = Math.max(0, oldHourCount);
             }
 
             // Increment new bucket
-            currentStats.reviewForecast[newKeys.dayKey] = (currentStats.reviewForecast[newKeys.dayKey] || 0) + 1;
-            currentStats.hourlyForecast[newKeys.hourKey] = (currentStats.hourlyForecast[newKeys.hourKey] || 0) + 1;
+            currentStats.reviewForecast[newBuckets.dayKey] = (currentStats.reviewForecast[newBuckets.dayKey] || 0) + 1;
+            currentStats.hourlyForecast[newBuckets.hourKey] = (currentStats.hourlyForecast[newBuckets.hourKey] || 0) + 1;
 
             // Streak Logic
-            const todayKey = this.getDateKeys(now).dayKey;
+            const todayKey = this.getDateBuckets(now).dayKey;
             let newStreak = currentStats.currentStreak;
 
             if (currentStats.lastReviewDate) {
                 const lastDate = new Date(currentStats.lastReviewDate);
-                const lastKey = this.getDateKeys(lastDate).dayKey;
+                const lastKey = this.getDateBuckets(lastDate).dayKey;
 
                 if (lastKey !== todayKey) {
                     // Check if it was yesterday
                     const yesterday = new Date(now);
                     yesterday.setDate(yesterday.getDate() - 1);
-                    const yesterdayKey = this.getDateKeys(yesterday).dayKey;
+                    const yesterdayKey = this.getDateBuckets(yesterday).dayKey;
 
                     if (lastKey === yesterdayKey) {
                         newStreak += 1; // Kept the streak alive
@@ -159,15 +164,15 @@ export class ReviewsService {
             const newPassed = (currentStats.passedReviews || 0) + (result === 'pass' ? 1 : 0);
 
             // WRITE (Facet)
-            this.logger.log(`Updating facet ${facetId} to stage ${nextStage}`);
+            this.logger.log(`Updating facet ${facetId} to stage ${nextSrsStage}`);
 
             transaction.update(facetRef, {
-                srsStage: nextStage,
-                nextReviewAt: nextReview.toISOString(), // Storing as ISO string for Firestore compatibility
-                lastReviewAt: now.toISOString(),
+                srsStage: nextSrsStage,
+                nextReviewAt: nextReviewDate,
+                lastReviewAt: now,
                 history: FieldValue.arrayUnion({
-                    stage: nextStage,
-                    timestamp: now.toISOString(),
+                    stage: nextSrsStage,
+                    timestamp: now,
                     result,
                 }),
                 // Note: We aren't updating the 'history' array here yet.
@@ -176,36 +181,40 @@ export class ReviewsService {
 
             // Write User Stats
             // Using set with merge: true handles both "New Doc" and "Update Doc"
+            this.logger.log(`reviewForecast = ${JSON.stringify(currentStats.reviewForecast)}`);
+
+            // TODO: For reviewForecast, this updates all the buckets in the DB including those in the past. 
+            // But the reviewForecast numbers are definitely off
             transaction.set(statsRef, {
                 userId: CURRENT_USER_ID,
                 reviewForecast: currentStats.reviewForecast,
                 hourlyForecast: currentStats.hourlyForecast,
                 currentStreak: newStreak,
-                lastReviewDate: now.toISOString(),
+                lastReviewDate: now,
                 totalReviews: newTotal,
                 passedReviews: newPassed
             }, { merge: true });
 
             // 4. WRITE (Knowledge Unit Propagation)
             // If the item reached Mastered (final stage), we might want to update the KU.
-            if (nextStage === Object.keys(this.INTERVALS).length - 1 && data.kuId) {
+            if (nextSrsStage === Object.keys(this.INTERVALS).length - 1 && facetData.kuId) {
                 const kuRef = this.db
                     .collection(KNOWLEDGE_UNITS_COLLECTION)
-                    .doc(data.kuId);
+                    .doc(facetData.kuId);
                 // This is an optimistic update; strictly speaking we should read the KU first
                 // to check if ALL facets are mastered, but this is a safe heuristic for now.
                 transaction.update(kuRef, { status: 'mastered' });
             }
 
             this.logger.log(
-                `SRS Update [${facetId}]: ${result.toUpperCase()} | Stage ${currentStage} -> ${nextStage}`,
+                `SRS Update [${facetId}]: ${result.toUpperCase()} | Stage ${currentSrsStage} -> ${nextSrsStage}`,
             );
 
             return {
                 success: true,
                 facetId,
-                newStage: nextStage,
-                nextReview: nextReview.toISOString(),
+                newStage: nextSrsStage,
+                nextReview: nextReviewDate,
             };
         });
     }
@@ -256,9 +265,10 @@ export class ReviewsService {
 Your task is to evaluate if the user's answer is correct.
 1.  Read the "expected answer(s)". This may be a single answer (e.g., "Family") or a comma-separated list of possible correct answers (e.g., "ドク, トク, よむ").
 2.  Compare the user's answer to the list. The user is correct if their answer is *any one* of the items in the list.
-3.  Be lenient with hiragana vs katakana (e.g., if expected is "ドク" and user typed "どく", it's a pass).
-4.  Be lenient with extra punctuation or whitespace.
-5.  Provide your evaluation ONLY as a valid JSON object with the following schema:
+3.  If you feel that the answer is correct but not in the list, return a pass with an explanation.  
+4.  Be lenient with hiragana vs katakana (e.g., if expected is "ドク" and user typed "どく", it's a pass).
+5.  Be lenient with extra punctuation or whitespace.
+6.  Provide your evaluation ONLY as a valid JSON object with the following schema:
 {
   "result": "pass" | "fail",
   "explanation": "A brief, one-sentence explanation for *why* the user passed or failed, referencing their answer."
@@ -407,7 +417,7 @@ Example for a fail: {"result": "fail", "explanation": "Incorrect. The expected r
     }
 
     // Helper to generate bucket keys
-    private getDateKeys(date: Date) {
+    private getDateBuckets(date: Date) {
         const yyyy = date.getFullYear();
         const mm = String(date.getMonth() + 1).padStart(2, '0');
         const dd = String(date.getDate()).padStart(2, '0');

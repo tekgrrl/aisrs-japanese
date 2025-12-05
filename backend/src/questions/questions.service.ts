@@ -20,6 +20,7 @@ Your task is to create a single, context-based question to test the user's under
 You can generate questions in any of the following forms:
 - Verb conjugation. if the word is a verb, conjugate the verb to a specific form e.g.: Give the past potential form of the verb in question
 - Match up the Vocab in question with a particle to give a particular meaning in a sentence that you specify, you can represent the particle with a blank '[____]'
+- Translate a complete sentence from Japanese to English that includes the Vocab being tested
 - A context-based, fill-in-the-blank style question with a single blank '[____]'
 
 You MUST return ONLY a valid JSON object with the following schema:

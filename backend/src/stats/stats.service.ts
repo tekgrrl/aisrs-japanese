@@ -50,6 +50,33 @@ export class StatsService {
         const userStatsDocData = userStatsDoc.data();
         const userStats = userStatsDocData ? userStatsDocData : {};
 
+        // Helper to generate keys (matching ReviewsService logic)
+        const now = new Date();
+        const yyyy = now.getFullYear();
+        const mm = String(now.getMonth() + 1).padStart(2, '0');
+        const dd = String(now.getDate()).padStart(2, '0');
+        const hh = String(now.getHours()).padStart(2, '0');
+
+        const currentDayKey = `${yyyy}-${mm}-${dd}`;
+        const currentHourKey = `${yyyy}-${mm}-${dd}-${hh}`;
+
+        // Filter Forecasts
+        const rawReviewForecast = userStats.reviewForecast || {};
+        const filteredReviewForecast = Object.keys(rawReviewForecast)
+            .filter(key => key >= currentDayKey)
+            .reduce((obj, key) => {
+                obj[key] = rawReviewForecast[key];
+                return obj;
+            }, {});
+
+        const rawHourlyForecast = userStats.hourlyForecast || {};
+        const filteredHourlyForecast = Object.keys(rawHourlyForecast)
+            .filter(key => key >= currentHourKey)
+            .reduce((obj, key) => {
+                obj[key] = rawHourlyForecast[key];
+                return obj;
+            }, {});
+
         return {
             learnCount: learnSnapshot.data().count,
             reviewCount: reviewingSnapshot.data().count + reviewsSnapshot.data().count, // Total active items
@@ -57,8 +84,8 @@ export class StatsService {
 
             // Include the detailed breakdown for your widgets
             srsCounts: userStats.levelProgress || {},
-            reviewForecast: userStats.reviewForecast || {},
-            hourlyForecast: userStats.hourlyForecast || {},
+            reviewForecast: filteredReviewForecast,
+            hourlyForecast: filteredHourlyForecast,
             streak: userStats.currentStreak || 0
         };
     }

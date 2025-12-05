@@ -76,6 +76,7 @@ export default function DashboardPage() {
           <ReviewSchedule 
             hourlyForecast={stats.hourlyForecast} 
             reviewForecast={stats.reviewForecast} 
+            reviewsDue={stats.reviewsDue}
           />
         </div>
       </div>
