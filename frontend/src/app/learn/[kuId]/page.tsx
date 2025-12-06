@@ -502,6 +502,17 @@ export default function LearnItemPage() {
               <input
                 type="checkbox"
                 className="h-5 w-5 rounded bg-gray-300 dark:bg-gray-900 border-gray-400 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
+                checked={!!selectedFacets["Definition-to-Content"]} // the !! makes sure that the evaluation is boolean and not undefined or null
+                onChange={() => handleCheckboxChange("Definition-to-Content")}
+              />
+              <span className="ml-3 text-lg text-gray-900 dark:text-white">
+                Content
+              </span>
+            </label>
+            <label className="flex items-center p-4 bg-gray-200 dark:bg-gray-700 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 cursor-pointer">
+              <input
+                type="checkbox"
+                className="h-5 w-5 rounded bg-gray-300 dark:bg-gray-900 border-gray-400 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
                 checked={!!selectedFacets["Content-to-Definition"]} // the !! makes sure that the evaluation is boolean and not undefined or null
                 onChange={() => handleCheckboxChange("Content-to-Definition")}
               />
