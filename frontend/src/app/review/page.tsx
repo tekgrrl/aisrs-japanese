@@ -37,6 +37,8 @@ export default function ReviewPage() {
 
   const currentItem = reviewQueue[currentIndex];
 
+  const reviewCount = reviewQueue.length;
+
   const lastFetchedIndex = useRef<number | null>(null);
 
   // --- Fetch Dynamic Question Logic ---
@@ -73,6 +75,7 @@ export default function ReviewPage() {
 
   // --- Data Fetching ---
   useEffect(() => {
+    console.log("component mounted");
     const fetchDueItems = async () => {
       try {
         setIsLoading(true);
@@ -83,7 +86,7 @@ export default function ReviewPage() {
           throw new Error("Failed to fetch due review items");
         }
         const data: ReviewItem[] = await response.json();
-        setReviewQueue(data);
+        setReviewQueue(shuffleArray(data));
       } catch (err) {
         if (err instanceof Error) setError(err.message);
         else setError("An unknown error occurred");
@@ -128,6 +131,16 @@ export default function ReviewPage() {
       setDynamicQuestionId(null);
     }
   }, [currentItem, currentIndex]); // Re-run whenever the currentItem OR the index changes
+
+  function shuffleArray<T>(array: T[]): T[] {
+    // Create a copy to avoid mutating the original state directly
+    const newArray = [...array];
+    for (let i = newArray.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
+    }
+    return newArray;
+  }
 
   // --- Core SRS Logic ---
 
@@ -406,7 +419,6 @@ export default function ReviewPage() {
   };
 
   const getQuestionType = (item: ReviewItem): string => {
-    console.log(`facetType = ${item.facet.facetType}`); // TODO This is wrong here for Kanji
     switch (item.facet.facetType) {
       case "AI-Generated-Question":
         return `AI Quiz`;
@@ -439,7 +451,6 @@ export default function ReviewPage() {
 
   const getExpectedAnswer = (item: ReviewItem): string[] => {
     const { ku, facet } = item;
-    console.log(`item = ${JSON.stringify(item)}`);
 
     // 1. Handle AI-Generated questions first
     if (facet.facetType === "AI-Generated-Question") {
@@ -483,8 +494,8 @@ export default function ReviewPage() {
       }
       if (facet.facetType === "Content-to-Reading") {
         // Kanji "reading" is a combination of all onyomi and kunyomi
-        const onyomi = lesson?.reading_onyomi?.map((r) => r.reading) || [];
-        const kunyomi = lesson?.reading_kunyomi?.map((r) => r.reading) || [];
+        const onyomi = lesson?.onyomi || [];
+        const kunyomi = lesson?.kunyomi || [];
         const allReadings = [...onyomi, ...kunyomi];
 
         if (allReadings.length > 0) {
@@ -499,16 +510,19 @@ export default function ReviewPage() {
     // --- KANJI COMPONENT LOGIC ---
     if (facet.facetType === "Kanji-Component-Meaning") {
       const lesson = item.lesson as KanjiLesson | undefined;
-      return [lesson?.meaning || ku.data?.definition || ""];
+      // FIX: Check ku.data.meaning, NOT ku.data.definition
+      const meaningStr = lesson?.meaning || ku.data?.meaning || ""; 
+      
+      return meaningStr.split(',').map(s => s.trim()).filter(s => s);
     }
     if (facet.facetType === "Kanji-Component-Reading") {
       const lesson = item.lesson as KanjiLesson | undefined;
 
-      const onyomi = lesson?.reading_onyomi?.map((r) => r.reading) || [];
+      const onyomi = lesson?.onyomi || [];
       if (onyomi.length > 0) {
         return onyomi;
       }
-      return ku.data?.onyomi || [];
+      return lesson?.onyomi || [];
     }
 
     // Fallback for any other combo
@@ -549,7 +563,6 @@ export default function ReviewPage() {
   }
 
   const questionType = getQuestionType(currentItem);
-  console.log(`QuestionType = ${questionType}`);
   const questionText = getQuestion(currentItem);
   const isDynamicLoading =
     currentItem.facet.facetType === "AI-Generated-Question" &&
@@ -559,7 +572,7 @@ export default function ReviewPage() {
     <main className="container mx-auto max-w-2xl p-8">
       <header className="mb-6">
         <span className="text-lg text-gray-400">
-          Item {currentIndex + 1} of {reviewQueue.length}
+          Item {currentIndex + 1} of {reviewCount}
         </span>
       </header>
 
@@ -593,7 +606,7 @@ export default function ReviewPage() {
 
               {/* Main Question Text */}
               <p
-                className={`${currentItem.facet.facetType === "AI-Generated-Question" ? "text-2xl" : "text-5xl"} font-bold text-white break-words`}
+                className={`${currentItem.facet.facetType === "AI-Generated-Question" || currentItem.facet.facetType === "Definition-to-Content" ? "text-2xl" : "text-5xl"} font-bold text-white break-words`}
               >
                 {questionText || "[Question not loaded]"}
               </p>

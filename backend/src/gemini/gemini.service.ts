@@ -1,12 +1,12 @@
-import { 
-  Injectable, 
-  Logger, 
-  OnModuleInit, 
-  InternalServerErrorException, 
+import {
+  Injectable,
+  Logger,
+  OnModuleInit,
+  InternalServerErrorException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { GoogleGenAI } from '@google/genai';
-import { ApiLog, Lesson } from '@/types';  
+import { ApiLog, Lesson } from '@/types';
 import { Timestamp } from 'firebase-admin/firestore';
 import { ApilogService } from '../apilog/apilog.service';
 import { performance } from "perf_hooks"; // For timing
@@ -21,7 +21,7 @@ export class GeminiService implements OnModuleInit {
   constructor(
     private configService: ConfigService,
     private apilogService: ApilogService,
-  ) {}
+  ) { }
 
   onModuleInit() {
     const apiKey = this.configService.get<string>('GEMINI_API_KEY');
@@ -35,7 +35,7 @@ export class GeminiService implements OnModuleInit {
   }
 
   async evaluateAnswer(
-    systemPrompt: string, 
+    systemPrompt: string,
     userAnswer: string,
     expectedAnswers: string[],
     // New optional argument for structured logging
@@ -56,14 +56,14 @@ export class GeminiService implements OnModuleInit {
         input_topic: logContext?.topic,
       },
     };
-    
+
     const logRef = await this.apilogService.startLog(initialLogData);
     let startTime = performance.now();
     let errorOccurred = false;
     let capturedError: any;
     let evaluationResult:
-    | { result: "pass" | "fail"; explanation: string }
-    | undefined;
+      | { result: "pass" | "fail"; explanation: string }
+      | undefined;
 
     try {
       const response = await this.client.models.generateContent({
@@ -118,7 +118,7 @@ export class GeminiService implements OnModuleInit {
       return evaluationResult;
 
     } catch (error) {
-      errorOccurred = true; 
+      errorOccurred = true;
       capturedError = error;
 
       this.logger.error('Gemini Service Error:', error);
@@ -157,33 +157,33 @@ export class GeminiService implements OnModuleInit {
         const durationMs = (endTime - startTime) / 1000; // Convert to seconds
         const updateData: Partial<ApiLog> = {
           durationMs,
-      };
-
-      if (errorOccurred) {
-        updateData.status = "error";
-        let errorDetails: any = {};
-        if (capturedError instanceof Error) {
-          errorDetails = {
-            message: capturedError.message,
-            stack: capturedError.stack,
-          };
-        } else {
-          try {
-            errorDetails = { rawError: JSON.stringify(capturedError, null, 2) };
-          } catch {
-            errorDetails = { rawError: "Unstringifiable error" };
-          }
-        }
-        updateData.errorData = errorDetails;
-      } else {
-        updateData.status = "success";
-        // Assuming success means we got 'evaluationResult'
-        // We might want to add raw text logging here too if needed
-        updateData.responseData = {
-          // rawText: aiJsonText, // Uncomment if raw text needed
-          parsedJson: evaluationResult, // Log the parsed result
         };
-      }
+
+        if (errorOccurred) {
+          updateData.status = "error";
+          let errorDetails: any = {};
+          if (capturedError instanceof Error) {
+            errorDetails = {
+              message: capturedError.message,
+              stack: capturedError.stack,
+            };
+          } else {
+            try {
+              errorDetails = { rawError: JSON.stringify(capturedError, null, 2) };
+            } catch {
+              errorDetails = { rawError: "Unstringifiable error" };
+            }
+          }
+          updateData.errorData = errorDetails;
+        } else {
+          updateData.status = "success";
+          // Assuming success means we got 'evaluationResult'
+          // We might want to add raw text logging here too if needed
+          updateData.responseData = {
+            // rawText: aiJsonText, // Uncomment if raw text needed
+            parsedJson: evaluationResult, // Log the parsed result
+          };
+        }
         try {
           await this.apilogService.completeLog(logRef, updateData);
           this.logger.debug("API log completed successfully");
@@ -243,15 +243,15 @@ export class GeminiService implements OnModuleInit {
       } else {
         // If no brackets, it's definitely not JSON
         this.logger.error("AI response did not contain a valid JSON object.", {
-        rawText: text,
+          rawText: text,
         });
         throw new Error("AI response did not contain a valid JSON object.");
       }
 
       return lessonString;
-    
+
     } catch (error) {
-      errorOccurred = true; 
+      errorOccurred = true;
       capturedError = error;
 
       this.logger.error('Gemini Service Error:', error);
@@ -289,30 +289,30 @@ export class GeminiService implements OnModuleInit {
         const durationMs = (endTime - startTime) / 1000; // Convert to seconds
         const updateData: Partial<ApiLog> = {
           durationMs,
-      };
-
-      if (errorOccurred) {
-        updateData.status = "error";
-        let errorDetails: any = {};
-        if (capturedError instanceof Error) {
-          errorDetails = {
-            message: capturedError.message,
-            stack: capturedError.stack,
-          };
-        } else {
-          try {
-            errorDetails = { rawError: JSON.stringify(capturedError, null, 2) };
-          } catch {
-            errorDetails = { rawError: "Unstringifiable error" };
-          }
-        }
-        updateData.errorData = errorDetails;
-      } else {
-        updateData.status = "success"
-        updateData.responseData = {
-          parsedJson: lessonString || null,
         };
-      }
+
+        if (errorOccurred) {
+          updateData.status = "error";
+          let errorDetails: any = {};
+          if (capturedError instanceof Error) {
+            errorDetails = {
+              message: capturedError.message,
+              stack: capturedError.stack,
+            };
+          } else {
+            try {
+              errorDetails = { rawError: JSON.stringify(capturedError, null, 2) };
+            } catch {
+              errorDetails = { rawError: "Unstringifiable error" };
+            }
+          }
+          updateData.errorData = errorDetails;
+        } else {
+          updateData.status = "success"
+          updateData.responseData = {
+            parsedJson: lessonString || null,
+          };
+        }
         try {
           await this.apilogService.completeLog(logRef, updateData);
           this.logger.debug("API log completed successfully");
@@ -321,12 +321,12 @@ export class GeminiService implements OnModuleInit {
         }
       }
     }
-    
+
   }
 
   async generateQuestionAI(
-    userMessage: string, 
-    systemPrompt: string, 
+    userMessage: string,
+    systemPrompt: string,
     logContext?: Record<string, any>
   ) {
     let startTime = performance.now();
@@ -352,7 +352,7 @@ export class GeminiService implements OnModuleInit {
     };
 
     const logRef = await this.apilogService.startLog(initialLogData);
-    
+
 
     try {
       const response = await this.client.models.generateContent({
@@ -387,8 +387,8 @@ export class GeminiService implements OnModuleInit {
 
       return aiJsonText; // Success
 
-    } catch(error) {
-      errorOccurred = true; 
+    } catch (error) {
+      errorOccurred = true;
       capturedError = error;
 
       this.logger.error('Gemini Service Error:', error);
@@ -465,6 +465,103 @@ export class GeminiService implements OnModuleInit {
       }
       // --- End Log ---
     }// end try/catch
-    
+
   } // end generateQuestion
+
+  async generateKanjiDetails(kanji: string) {
+    const systemPrompt = `You are a Japanese Kanji expert. Provide metadata for the kanji: ${kanji}.`;
+    const userMessage = `Generate a valid JSON object matching the Kanji Alive API structure for the character ${kanji}.`;
+
+    const schema = {
+      type: 'OBJECT',
+      properties: {
+        kanji: {
+          type: 'OBJECT',
+          properties: {
+            meaning: { type: 'OBJECT', properties: { english: { type: 'STRING' } } },
+            strokes: { type: 'OBJECT', properties: { count: { type: 'INTEGER' }, images: { type: 'ARRAY', items: { type: 'STRING' } } } },
+            onyomi: { type: 'OBJECT', properties: { katakana: { type: 'STRING' } } },
+            kunyomi: { type: 'OBJECT', properties: { hiragana: { type: 'STRING' } } },
+          }
+        },
+        radical: {
+          type: 'OBJECT',
+          properties: {
+            character: { type: 'STRING' },
+            meaning: { type: 'OBJECT', properties: { english: { type: 'STRING' } } },
+            image: { type: 'STRING' }
+          }
+        }
+      },
+      required: ['kanji', 'radical']
+    };
+
+    let startTime = performance.now();
+    let errorOccurred = false;
+    let capturedError: any;
+    let aiJsonText: string | undefined;
+    let parsedJson: any;
+
+    const initialLogData: ApiLog = {
+      timestamp: new Date(), // using Date for now, assume conversion handled by service
+      route: 'gemini-generate-kanji',
+      status: "pending",
+      modelUsed: this.modelName,
+      requestData: {
+        userMessage,
+        systemPrompt,
+        topic: kanji,
+        source: 'kanji-fallback'
+      },
+    };
+
+    const logRef = await this.apilogService.startLog(initialLogData);
+
+    try {
+      const response = await this.client.models.generateContent({
+        model: this.modelName,
+        contents: [{ parts: [{ text: userMessage }] }],
+        config: {
+          responseMimeType: 'application/json',
+          responseSchema: schema,
+          systemInstruction: { parts: [{ text: systemPrompt }] },
+        },
+      });
+
+      if (!response) throw new Error('No response from Gemini');
+
+      aiJsonText = response.text;
+      if (!aiJsonText) throw new Error('Empty response text from Gemini');
+
+      parsedJson = JSON.parse(aiJsonText);
+      return parsedJson;
+
+    } catch (error: any) {
+      errorOccurred = true;
+      capturedError = error;
+      throw error;
+    } finally {
+      if (logRef) {
+        const endTime = performance.now();
+        const durationMs = endTime - startTime;
+
+        const updateData: any = { durationMs };
+
+        if (errorOccurred) {
+          updateData.status = 'error';
+          updateData.errorData = { message: capturedError?.message || 'Unknown error' };
+        } else {
+          updateData.status = 'success';
+          updateData.responseData = {
+            rawText: aiJsonText,
+            parsedJson: parsedJson
+          };
+        }
+
+        this.apilogService.completeLog(logRef, updateData).catch(err =>
+          console.error('Failed to update log', err)
+        );
+      }
+    }
+  }
 }

@@ -32,94 +32,122 @@ export default function LearnItemPage() {
     {},
   );
 
+  const fetchVocabLesson = async (ku: KnowledgeUnit) => {
+    setIsLoading(true);
+    setError(null);
+    setKu(null);
+    setLesson(null);
+    setKanjiStatuses({});
+
+    try {
+      // Most recent change here. Something broke
+      const kuResponse = await fetch(`/api/knowledge-units/${kuId}`);
+      
+      if (!kuResponse.ok) {
+          if (kuResponse.status === 404) {
+            setError("Learning item not found.");
+            return;
+          }
+          throw new Error("Failed to fetch Knowledge Unit");
+      }
+
+      const kuData = await kuResponse.json() as KnowledgeUnit;
+      setKu(kuData);
+
+      // 2. Fetch the Lesson for this kuDoc by kuDoc.id
+      const lessonResponse = await fetch("/api/lessons/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kuId: kuData.id }),
+      });
+
+      if (!lessonResponse.ok) {
+        const err = await lessonResponse.json();
+        throw new Error(err.error || "Failed to generate lesson");
+      }
+
+      const lessonData = (await lessonResponse.json()) as Lesson;
+      setLesson(lessonData);
+      
+      if (
+        lessonData.type === "Vocab" &&
+        lessonData.component_kanji &&
+        lessonData.component_kanji.length > 0
+      ) {
+        const kanjiChars = lessonData.component_kanji.map((k) => k.kanji);
+        const response = await fetch("/api/knowledge-units/get-all?status=learning&content=" + kanjiChars.join(","));
+
+        if (!response.ok) throw new Error(response.statusText);
+
+        const data = (await response.json()) as KnowledgeUnit[]; // Cast here
+
+        const kanjiKus = data.map(
+          (thing: KnowledgeUnit) => ({ ...thing }) as KnowledgeUnit,
+        );
+
+        const statuses: Record<string, string> = {};
+
+        kanjiKus.forEach((kanjiKu) => {
+          statuses[kanjiKu.content] = kanjiKu.status;
+        });
+
+        setKanjiStatuses(statuses);
+      }
+    } catch (err: any) {
+      setError(err.message || "An unknown error occurred");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const fetchKanjiLesson = async (ku: KnowledgeUnit) => {
+    // Calls your new KanjiService endpoint
+    const response = await fetch(
+      `/api/kanji/details?char=${encodeURIComponent(ku.content)}&kuId=${ku.id}`
+    );
+
+    if (!response.ok) throw new Error("Failed to fetch Kanji details");
+
+    const data = await response.json();
+    console.log(`data = ${JSON.stringify(data)}`);
+    setLesson(data as KanjiLesson); 
+  };
+    
+    
   useEffect(() => {
-    // --- FIX: Add gate to prevent double-fetch ---
     if (process.env.NODE_ENV === "development" && fetchRef.current) {
       return; // Already fetched, do nothing on the second mount
     }
-    // --- END FIX ---
 
-    const fetchLessonAndKanjiStatus = async () => {
-      if (!kuId) return; // TODO is this part of normal flow? Maybe empty learning item queue?
-
+    const initPage = async () => {
+      if (!kuId) return;
       setIsLoading(true);
-      setError(null);
-      setKu(null);
-      setLesson(null);
-      setKanjiStatuses({});
 
       try {
-        // Most recent change here. Something broke
-        const kuResponse = await fetch(`/api/knowledge-units/${kuId}`);
+        // 1. Fetch KU Identity First (Shared)
+        // (Ideally use your new backend GET /knowledge-units/:id here)
+        const kuRes = await fetch(`/api/knowledge-units/${kuId}`);
+        if (!kuRes.ok) throw new Error("KU not found");
         
-        if (!kuResponse.ok) {
-           if (kuResponse.status === 404) {
-             setError("Learning item not found.");
-             return;
-           }
-           throw new Error("Failed to fetch Knowledge Unit");
-        }
-
-        const kuData = await kuResponse.json() as KnowledgeUnit;
+        const kuData = await kuRes.json() as KnowledgeUnit;
         setKu(kuData);
 
-        // 2. Fetch the Lesson for this kuDoc by kuDoc.id
-        const lessonResponse = await fetch("/api/lessons/generate", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ kuId: kuData.id }),
-        });
-
-        if (!lessonResponse.ok) {
-          const err = await lessonResponse.json();
-          throw new Error(err.error || "Failed to generate lesson");
+        // 2. Branch Logic
+        if (kuData.type === 'Vocab') {
+          await fetchVocabLesson(kuData); 
+        } else if (kuData.type === 'Kanji') {
+          await fetchKanjiLesson(kuData);
         }
 
-        const lessonData = (await lessonResponse.json()) as Lesson;
-        setLesson(lessonData);
-
-        // The expression in the if statement is an example of TypeScript `type narrowing`
-        if (
-          lessonData.type === "Vocab" &&
-          lessonData.component_kanji &&
-          lessonData.component_kanji.length > 0
-        ) {
-          const kanjiChars = lessonData.component_kanji.map((k) => k.kanji);
-          const response = await fetch("/api/knowledge-units/get-all?status=learning&content=" + kanjiChars.join(","));
-
-          if (!response.ok) throw new Error(response.statusText);
-
-          const data = (await response.json()) as KnowledgeUnit[]; // Cast here
-
-          const kanjiKus = data.map(
-            (thing: KnowledgeUnit) => ({ ...thing }) as KnowledgeUnit,
-          );
-
-          const statuses: Record<string, string> = {};
-
-          kanjiKus.forEach((kanjiKu) => {
-            statuses[kanjiKu.content] = kanjiKu.status;
-          });
-
-          setKanjiStatuses(statuses);
-        }
       } catch (err: any) {
-        setError(err.message || "An unknown error occurred");
+        setError(err.message);
       } finally {
         setIsLoading(false);
       }
     };
 
-    if (kuId) {
-      fetchLessonAndKanjiStatus();
-      // --- FIX: Set ref to true after first fetch ---
-      if (process.env.NODE_ENV === "development") {
-        fetchRef.current = true;
-      }
-      // --- END FIX ---
-    } else {
-      setIsLoading(false);
-    }
+    initPage();
+    if (process.env.NODE_ENV === "development") fetchRef.current = true;
   }, [kuId]);
 
   /*
@@ -151,11 +179,10 @@ export default function LearnItemPage() {
       setIsSubmitting(false);
       return;
     }
-
-    // --- New: Construct detailed payload ---
+    console.log(`selectedFacetKeys = ${selectedFacetKeys}, type = ${lesson.type}`);
     const facetsToCreatePayload = selectedFacetKeys.map((key) => {
       if (key.startsWith("Kanji-Component-") && lesson.type === "Vocab") {
-        const kanjiChar = key.split("-")[2];
+        const kanjiChar = key.split("-")[2]; // gets us the Kanji char. Example: Kanji-Component-食
         const kanjiData = (lesson as VocabLesson).component_kanji?.find(
           (k) => k.kanji === kanjiChar,
         );
@@ -170,16 +197,16 @@ export default function LearnItemPage() {
       }
       return { key: key };
     });
-    // --- End New ---
+    
 
     try {
-      console.log(JSON.stringify(facetsToCreatePayload));
+      console.log(`facetsToCreatePayload = ${JSON.stringify(facetsToCreatePayload)}`);
       const response = await fetch("/api/reviews/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           kuId: ku.id,
-          facetsToCreate: facetsToCreatePayload, // Send new payload
+          facetsToCreate: facetsToCreatePayload,
         }),
       });
 
@@ -391,23 +418,20 @@ export default function LearnItemPage() {
           Radicals
         </h2>
         <ul className="flex flex-wrap gap-4">
-          {lesson.radicals && lesson.radicals.length > 0 ? (
-            lesson.radicals.map((r, i) => (
-              <li
-                key={`${r.radical}-${i}`}
-                className="p-4 bg-gray-200 dark:bg-gray-700 rounded-md text-center"
-              >
-                <span className="text-3xl text-gray-900 dark:text-white">
-                  {r.radical}
-                </span>
-                <p className="text-md text-gray-600 dark:text-gray-400">
-                  {r.meaning}
-                </p>
-              </li>
-            ))
+          {lesson.radical ? (
+            <li
+              className="p-4 bg-gray-200 dark:bg-gray-700 rounded-md text-center"
+            >
+              <span className="text-3xl text-gray-900 dark:text-white">
+                {lesson.radical.character}
+              </span>
+              <p className="text-md text-gray-600 dark:text-gray-400">
+                {lesson.radical.meaning}
+              </p>
+            </li>
           ) : (
             <p className="text-gray-500 dark:text-gray-400 italic">
-              No radicals provided.
+              No radical provided.
             </p>
           )}
         </ul>
@@ -417,7 +441,7 @@ export default function LearnItemPage() {
           Meaning Mnemonic
         </h2>
         <p className="text-lg text-gray-700 dark:text-gray-300 italic">
-          {lesson.mnemonic_meaning}
+          {lesson.personalMnemonic}
         </p>
       </div>
       <div className="bg-gray-100 dark:bg-gray-800 p-6 rounded-lg shadow-lg mb-8">
@@ -430,18 +454,15 @@ export default function LearnItemPage() {
               On'yomi (Katakana)
             </h3>
             <ul className="space-y-2">
-              {lesson.reading_onyomi && lesson.reading_onyomi.length > 0 ? (
-                lesson.reading_onyomi.map((r, i) => (
+              {lesson.onyomi && lesson.onyomi.length > 0 ? (
+                lesson.onyomi.map((r, i) => (
                   <li
-                    key={`${r.reading}-${i}`}
+                    key={`${r}-${i}`}
                     className="p-3 bg-gray-200 dark:bg-gray-700 rounded-md"
                   >
                     <span className="text-2xl text-gray-900 dark:text-white">
-                      {r.reading}
+                      {r}
                     </span>
-                    <p className="text-md text-gray-600 dark:text-gray-400">
-                      e.g., {r.example}
-                    </p>
                   </li>
                 ))
               ) : (
@@ -456,18 +477,15 @@ export default function LearnItemPage() {
               Kun'yomi (Hiragana)
             </h3>
             <ul className="space-y-2">
-              {lesson.reading_kunyomi && lesson.reading_kunyomi.length > 0 ? (
-                lesson.reading_kunyomi.map((r, i) => (
+              {lesson.kunyomi && lesson.kunyomi.length > 0 ? (
+                lesson.kunyomi.map((r, i) => (
                   <li
-                    key={`${r.reading}-${i}`}
+                    key={`${r}-${i}`}
                     className="p-3 bg-gray-200 dark:bg-gray-700 rounded-md"
                   >
                     <span className="text-2xl text-gray-900 dark:text-white">
-                      {r.reading}
+                      {r}
                     </span>
-                    <p className="text-md text-gray-600 dark:text-gray-400">
-                      e.g., {r.example}
-                    </p>
                   </li>
                 ))
               ) : (
@@ -484,7 +502,7 @@ export default function LearnItemPage() {
           Reading Mnemonic
         </h2>
         <p className="text-lg text-gray-700 dark:text-gray-300 italic">
-          {lesson.mnemonic_reading}
+          {lesson.personalMnemonic}
         </p>
       </div>
     </>

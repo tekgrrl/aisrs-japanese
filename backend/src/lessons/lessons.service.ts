@@ -44,7 +44,50 @@ export class LessonsService {
         this.logger.log(`No existing lesson for KU ${kuId}. Generating new lesson`);
         // let jsonSchema: any;
 
-        const VOCAB_USER_PROMPT = `You are an expert Japanese tutor. You will be asked to generate a lesson for the Japanese word: ${ku.content}.
+        let userMessage: string;
+
+        if (ku.type === "Kanji") {
+            const KANJI_USER_PROMPT = `You are an expert Japanese tutor. You will be asked to generate a lesson for the Japanese Kanji: ${ku.content}.
+
+The lesson should be in English. Where you want to use Japanese text for examples, explanations, meanings and readings do so but do not include Romaji.
+
+**Task 1: Detailed breakdown**
+* Provide the **Meanings**, **On'yomi**, **Kun'yomi** readings.
+* Identify the **Radical** (character, meaning).
+* **Stroke Count**.
+
+**Task 2: Mnemonics**
+* Generate a **Meaning Mnemonic**.
+* Generate a **Reading Mnemonic**.
+
+**Task 3: Related Vocabulary**
+* Provide 3-5 related vocabulary words (Content + Reading).
+
+**Response Schema:**
+You MUST return a valid JSON object matching this schema:
+{
+  "type": "Kanji",
+  "kanji": "The Kanji character",
+  "meaning": "Core meaning(s)",
+  "onyomi": ["reading (katakana)"],
+  "kunyomi": ["reading (hiragana)"],
+  "strokeCount": 0,
+  "strokeImages": [],
+  "radical": {
+    "character": "Radical char",
+    "meaning": "Radical meaning",
+    "image": "",
+    "animation": []
+  },
+  "mnemonic_meaning": "Story...",
+  "mnemonic_reading": "Story...",
+  "relatedVocab": [
+    { "id": "", "content": "Word", "reading": "Reading" }
+  ]
+}`;
+            userMessage = KANJI_USER_PROMPT;
+        } else {
+            const VOCAB_USER_PROMPT = `You are an expert Japanese tutor. You will be asked to generate a lesson for the Japanese word: ${ku.content}.
 
 The lesson should be in English. Where you want to use Japanese text for examples, explanations, meanings and readings do so but do not include Romaji.
 
@@ -95,8 +138,8 @@ You MUST return a valid JSON object matching this schema:
     }
   ]
 }`;
-
-        const userMessage = VOCAB_USER_PROMPT;
+            userMessage = VOCAB_USER_PROMPT;
+        }
 
         const lessonString = await this.geminiService.generateLesson(
             userMessage,
