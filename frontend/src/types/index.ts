@@ -53,6 +53,8 @@ export interface VocabLesson {
   kuId?: string;
   type: "Vocab";
   vocab: string;
+  definitions: string[];
+  definition?: string; // Deprecated, kept for backward compatibility
   partOfSpeech: PartOfSpeech;
   meaning_explanation: string;
   reading_explanation: string;

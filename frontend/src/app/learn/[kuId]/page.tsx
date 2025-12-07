@@ -337,6 +337,24 @@ export default function LearnItemPage() {
         sectionKey="meaning_explanation"
         onSave={handleSaveSection}
       />
+      
+      {/* Definitions Section */}
+      <div className="bg-gray-100 dark:bg-gray-800 p-6 rounded-lg shadow-lg mb-8">
+        <h2 className="text-2xl font-semibold mb-4 text-gray-900 dark:text-white">
+          Definitions
+        </h2>
+        <ul className="list-disc list-inside space-y-2">
+            {(lesson.definitions || (lesson.definition ? [lesson.definition] : [])).map((def, i) => (
+                <li key={i} className="text-lg text-gray-700 dark:text-gray-300">
+                    {def}
+                </li>
+            ))}
+            {(!lesson.definitions || lesson.definitions.length === 0) && !lesson.definition && (
+                <p className="text-gray-500 dark:text-gray-400 italic">No definitions available.</p>
+            )}
+        </ul>
+      </div>
+
       <EditableSection
         title="Reading"
         content={lesson.reading_explanation}
