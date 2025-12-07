@@ -314,6 +314,10 @@ export default function ReviewPage() {
     }
   };
 
+  const handleSkip = () => {
+    advanceToNext();
+  };
+
   const goToNextItem = () => {
     // If it's a new AI question and we haven't shown feedback yet
     const isNew = isNewAiQuestion(currentItem);
@@ -641,6 +645,15 @@ export default function ReviewPage() {
             className="w-full mt-4 px-6 py-4 bg-blue-600 text-white text-xl font-semibold rounded-md shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-800 disabled:bg-gray-500 disabled:cursor-wait"
           >
             {answerState === "evaluating" ? "Evaluating..." : "Submit Answer"}
+          </button>
+          
+          <button
+            type="button"
+            onClick={handleSkip}
+            disabled={answerState !== "unanswered" || isDynamicLoading}
+            className="w-full mt-4 px-6 py-3 bg-gray-500 text-white text-lg font-semibold rounded-md shadow-md hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 focus:ring-offset-gray-800 disabled:bg-gray-800 disabled:text-gray-500"
+          >
+            Skip
           </button>
         </form>
       </div>

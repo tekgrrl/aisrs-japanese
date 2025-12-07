@@ -93,7 +93,7 @@ The lesson should be in English. Where you want to use Japanese text for example
 
 **Task 1: Metadata Extraction**
 * Provide the standard **Kana Reading**.
-* Provide a **Concise Definition** (comma-separated, max 3-5 words) suitable for a dictionary entry or flashcard.
+* Provide a list of **Concise Definitions** (suitable for valid acceptable answers in a quiz).
 * Identify the **Part of Speech**.
 * Identify the **Conjugation Type** (if applicable).
 
@@ -118,7 +118,7 @@ You MUST return a valid JSON object matching this schema:
   "type": "Vocab",
   "vocab": "The canonical Japanese word",
   "reading": "The canonical kana reading (e.g. ぜったい)",
-  "definition": "Concise dictionary definition (e.g. absolutely, unconditionally)",
+  "definitions": ["definition 1", "definition 2"],
   "partOfSpeech": "The selected part of speech string",
   "conjugation_type": "The selected conjugation type or null",
   
@@ -157,6 +157,38 @@ You MUST return a valid JSON object matching this schema:
             lessonJson = JSON.parse(lessonString) as Lesson;
             lessonJson.kuId = kuId;
             (lessonJson as any).userId = CURRENT_USER_ID;
+
+            // --- MERGE USER DEFINITIONS (if Vocab) ---
+            // Rely on the KnowledgeUnit type, which is the source of truth
+            if (ku.type === "Vocab") {
+                const userDefinitions = ku.data.definition
+                    ? ku.data.definition.split(',').map((s: string) => s.trim()).filter((s: string) => s.length > 0)
+                    : [];
+
+                // Ensure definitions array exists
+                if (!Array.isArray((lessonJson as any).definitions)) {
+                    (lessonJson as any).definitions = [];
+                }
+
+                const aiDefinitions = (lessonJson as any).definitions || [];
+
+                // Deduplicate (case-insensitive)
+                const combined = [...userDefinitions, ...aiDefinitions];
+                const uniqueDefinitions = combined.reduce<string[]>((acc, curr) => {
+                    if (!acc.some(d => d.toLowerCase() === curr.toLowerCase())) {
+                        acc.push(curr);
+                    }
+                    return acc;
+                }, []);
+
+                (lessonJson as any).definitions = uniqueDefinitions;
+
+                // Backward compatibility for definition field
+                if ((lessonJson as any).definitions.length > 0) {
+                    (lessonJson as any).definition = (lessonJson as any).definitions.join(', ');
+                }
+            }
+
         } catch (parseError) {
             this.logger.error("Failed to parse AI JSON response for lesson", {
                 lessonString,
@@ -167,6 +199,8 @@ You MUST return a valid JSON object matching this schema:
 
         // --- SAVE TO 'lessons' collection ---
         await lessonDbRef.set(lessonJson);
+
+
 
         return lessonJson;
     }
