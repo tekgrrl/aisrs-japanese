@@ -8,15 +8,17 @@ import {
   FieldValue,
 } from '../firebase/firebase.module';
 import { BadRequestException } from '@nestjs/common';
-import { ReviewFacet, QuestionItem } from '@/types';
+import { ReviewFacet, QuestionItem, KnowledgeUnit } from '@/types';
 import { GeminiService } from '../gemini/gemini.service';
 import { ReviewsService } from '../reviews/reviews.service';
+import { KnowledgeUnitsService } from '../knowledge-units/knowledge-units.service';
 import { CURRENT_USER_ID } from '@/lib/constants';
 
 // --- System Prompt ---
 const systemPrompt = `You are an expert Japanese tutor and quiz generator. 
-You will be prompted with a single piece of Japanese Vocab: a word or grammar concept (the 'topic'). 
-Your task is to create a single, context-based question to test the user's understanding of that word or grammar concept. 
+You will be prompted with a single piece of Japanese Vocab: a word or grammar concept (the 'topic') and an optional reading and meaning. 
+Your task is to create a single, context-based question to test the user's understanding of that word or grammar concept.
+If a reading and/or meaning are provided, you MUST generate a question where the topic matches those specific constraints. Do not generate questions for alternative readings or meanings of the same word.
 You can generate questions in any of the following forms:
 - Verb conjugation. if the word is a verb, conjugate the verb to a specific form e.g.: Give the past potential form of the verb in question
 - Match up the Vocab in question with a particle to give a particular meaning in a sentence that you specify, you can represent the particle with a blank '[____]'
@@ -58,6 +60,7 @@ export class QuestionsService {
     private readonly geminiService: GeminiService,
     @Inject(forwardRef(() => ReviewsService))
     private readonly reviewsService: ReviewsService,
+    private readonly knowledgeUnitsService: KnowledgeUnitsService,
 
   ) { }
 
@@ -102,8 +105,16 @@ export class QuestionsService {
       throw new BadRequestException('Topic is required');
     }
 
+    let reading: string | undefined;
+    let meaning: string | undefined;
+    if (kuId) {
+      const kuData = await this.knowledgeUnitsService.findOne(kuId);
+      reading = kuData.data?.reading;
+      // Use 'meaning' (Kanji) or 'definition' (Vocab) depending on what's available
+      meaning = kuData.data?.meaning || kuData.data?.definition;
+    }
+
     // --- Persistence Logic ---
-    let facetRef;
     let facetData: ReviewFacet | undefined;
     let returnedQuestionId: string | null = null;
 
@@ -159,7 +170,10 @@ export class QuestionsService {
 
     const runningListSummary = "No weak points identified yet."; // TODO: re-implement running list
 
-    const userMessage = `Topic: ${topic}\nRunning List: ${runningListSummary}`;
+    let userMessage = `Topic: ${topic}`;
+    if (reading) userMessage += `\nReading: ${reading}`;
+    if (meaning) userMessage += `\nMeaning: ${meaning}`;
+    userMessage += `\n`;
 
     // TODO: What to do about the empty LogContext argument?
     const questionString = await this.geminiService.generateQuestionAI(userMessage, systemPrompt, {});

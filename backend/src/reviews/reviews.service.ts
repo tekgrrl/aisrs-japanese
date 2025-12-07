@@ -237,13 +237,13 @@ Example for a fail: {"result": "fail", "explanation": "Incorrect. The expected r
             let targetKuId = kuId; // Default to the parent KU (Vocab)
 
             // --- Handle Kanji Components ---
-            if (key.startsWith('Kanji-Component-')) {
+            if (key.startsWith('Kanji-Component-') && key !== 'Kanji-Component-Meaning' && key !== 'Kanji-Component-Reading') {
                 const parts = key.split('-');
                 if (parts.length === 3) {
                     const kanjiChar = parts[2];
                     targetKuId = await this.knowledgeUnitsService.ensureKanjiStub(kanjiChar, data);
                 }
-                // skip the rest of the loop for Kanji Components
+                // At this point we should have a KU for the Kanji Component, so skip the rest of the loop
                 continue;
             }
 

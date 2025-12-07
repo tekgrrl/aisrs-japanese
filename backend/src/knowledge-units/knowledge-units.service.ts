@@ -90,6 +90,32 @@ export class KnowledgeUnitsService {
         }
     }
 
+    async findByKanjiComponent(kanjiChar: string): Promise<KnowledgeUnit[]> {
+        // Note: Firestore doesn't support substring search (LIKE %char%).
+        // If you don't have a 'components' array on Vocab KUs, you have to do a client-side filter
+        // or rely on the fact that you might have stored this relationship.
+
+        // Hack for now: Fetch all Vocab and filter in memory (fine for small datasets < 1000 docs)
+        // Better long term: Add an array field `containedKanji` to Vocab KUs.
+
+        const snapshot = await this.db.collection(KNOWLEDGE_UNITS_COLLECTION)
+            .where('userId', '==', CURRENT_USER_ID)
+            .where('type', '==', 'Vocab')
+            .get();
+
+        const matches: KnowledgeUnit[] = [];
+
+        snapshot.forEach(doc => {
+            const data = doc.data();
+            if (data.content && data.content.includes(kanjiChar)) {
+                // Rehydrate logic...
+                matches.push({ id: doc.id, ...data } as unknown as KnowledgeUnit);
+            }
+        });
+
+        return matches;
+    }
+
     async ensureKanjiStub(char: string, metadata: any): Promise<string> {
         // 1. Try to find existing
         const existing = await this.findByContent(char, 'Kanji');

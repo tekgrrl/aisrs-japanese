@@ -11,9 +11,10 @@ import { ApilogModule } from './apilog/apilog.module';
 import { LessonsModule } from './lessons/lessons.module';
 import { KnowledgeUnitsModule } from './knowledge-units/knowledge-units.module';
 import { StatsModule } from './stats/stats.module';
+import { KanjiModule } from './kanji/kanji.module';
 
 @Module({
-  imports: [ReviewsModule, FirebaseModule, GeminiModule,ConfigModule.forRoot(), QuestionsModule, ApilogModule, LessonsModule, KnowledgeUnitsModule, StatsModule],
+  imports: [ReviewsModule, FirebaseModule, GeminiModule,ConfigModule.forRoot(), QuestionsModule, ApilogModule, LessonsModule, KnowledgeUnitsModule, StatsModule, KanjiModule],
   controllers: [AppController],
   providers: [AppService, QuestionsService],
 })

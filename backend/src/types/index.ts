@@ -16,6 +16,8 @@ export interface ApiLog {
     input_topic?: string | null;
     content?: string | null;
     kuId?: string | null;
+    topic?: string | null;
+    source?: string | null;
   };
   responseData?: {
     rawText?: string; // The raw text from the AI
@@ -72,12 +74,44 @@ export interface KanjiLesson {
   kuId?: string;
   type: "Kanji";
   kanji: string;
-  meaning: string;
-  reading_onyomi?: { reading: string; example: string }[];
-  reading_kunyomi?: { reading: string; example: string }[];
-  radicals?: { radical: string; meaning: string }[];
+  meaning: string; // "eat, food"
+
+  // Readings (Flattened from API)
+  onyomi: string[];
+  kunyomi: string[];
+
+  // Visuals (From API)
+  strokeCount: number;
+  strokeImages: string[]; // Array of SVGs from 'kanji.strokes.images'
+
+  // The Classifier (From API)
+  radical?: {
+    character: string;
+    meaning: string;
+    image: string; // SVG url
+    animation?: string[]; // Optional: radical animation frames
+  };
+
+  references?: {
+    grade: number;
+    kodansha: number;
+    classic_nelson: number;
+  }
+
+  // User Data (From Firestore/DB)
+  personalMnemonic?: string;
+
+  // Mnemonics from AI
   mnemonic_meaning: string;
   mnemonic_reading: string;
+
+  // Context (From your DB)
+  // This replaces the static "examples" string
+  relatedVocab: {
+    id: string;
+    content: string;
+    reading: string;
+  }[];
 }
 
 export type Lesson = VocabLesson | KanjiLesson;

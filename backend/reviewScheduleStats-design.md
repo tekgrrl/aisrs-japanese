@@ -52,5 +52,51 @@ Which means we need to also supply the learnCount in the response. Streak is not
 
 We do not need to use the same implementation. We can modify the Dashboard component however we need, so we should decide on the best way to implement this and not the try to fit it into the existing implementation.
 
-### Other implementation notes
+### New Stats:
+
+{
+    "learnCount": 0,
+    "reviewCount": 25,
+    "reviewsDue": 2,
+    "next24HoursCount": 56,
+    "schedule": [
+        {
+            "date": "2025-12-05",
+            "isToday": true,
+            "count": 41,
+            "runningTotal": 43,
+            "label": "Today"
+        },
+        {
+            "date": "2025-12-06",
+            "isToday": false,
+            "count": 15,
+            "runningTotal": 58,
+            "label": "Sat"
+        },
+        {
+            "date": "2025-12-07",
+            "isToday": false,
+            "count": 1,
+            "runningTotal": 59,
+            "label": "Sun"
+        },
+        {
+            "date": "2025-12-08",
+            "isToday": false,
+            "count": 0,
+            "runningTotal": 59,
+            "label": "Mon"
+        },
+        {
+            "date": "2025-12-09",
+            "isToday": false,
+            "count": 0,
+            "runningTotal": 59,
+            "label": "Tue"
+        }
+    ],
+    "srsCounts": {},
+    "streak": 1
+}
 
