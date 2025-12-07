@@ -1,13 +1,18 @@
 import { Controller, Post, Body, BadRequestException, Put, Param, Get, Query } from '@nestjs/common';
 import { ReviewsService } from './reviews.service';
+import { Logger } from '@nestjs/common';
 
 @Controller('reviews')
 export class ReviewsController {
+  private readonly logger = new Logger(ReviewsController.name);
+
   constructor(private readonly reviewsService: ReviewsService) { }
 
   @Post('evaluate')
   async evaluate(@Body() body: { userAnswer: string; expectedAnswers: string[]; question: string; topic: string; questionId: string }) {
     const { userAnswer, expectedAnswers, question, topic, questionId } = body;
+
+    this.logger.log(`body ${JSON.stringify(body)}`);
 
     if (
       userAnswer == null ||

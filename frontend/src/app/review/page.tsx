@@ -75,7 +75,6 @@ export default function ReviewPage() {
 
   // --- Data Fetching ---
   useEffect(() => {
-    console.log("component mounted");
     const fetchDueItems = async () => {
       try {
         setIsLoading(true);
@@ -486,16 +485,15 @@ export default function ReviewPage() {
       }
     } else if (ku.type === "Kanji") {
       // --- KANJI LOGIC ---
-      const lesson = item.lesson as KanjiLesson | undefined;
       if (facet.facetType === "Content-to-Definition") {
         // Kanji "definition" is the 'meaning' field from the lesson
-        const kanjiDefinitionString = ku.data?.meaning || lesson?.meaning || "";
+        const kanjiDefinitionString = ku.data?.meaning || "";
         return kanjiDefinitionString.split(",").map((answer) => answer.trim());
       }
       if (facet.facetType === "Content-to-Reading") {
         // Kanji "reading" is a combination of all onyomi and kunyomi
-        const onyomi = lesson?.onyomi || [];
-        const kunyomi = lesson?.kunyomi || [];
+        const onyomi = ku.data?.onyomi || [];
+        const kunyomi = ku.data?.kunyomi || [];
         const allReadings = [...onyomi, ...kunyomi];
 
         if (allReadings.length > 0) {
@@ -508,21 +506,15 @@ export default function ReviewPage() {
     }
 
     // --- KANJI COMPONENT LOGIC ---
-    if (facet.facetType === "Kanji-Component-Meaning") {
-      const lesson = item.lesson as KanjiLesson | undefined;
-      // FIX: Check ku.data.meaning, NOT ku.data.definition
-      const meaningStr = lesson?.meaning || ku.data?.meaning || ""; 
+    if (facet.facetType === "Kanji-Component-Meaning") {  
+
+      const meaningStr = ku.data?.meaning || ""; 
       
       return meaningStr.split(',').map(s => s.trim()).filter(s => s);
     }
     if (facet.facetType === "Kanji-Component-Reading") {
-      const lesson = item.lesson as KanjiLesson | undefined;
 
-      const onyomi = lesson?.onyomi || [];
-      if (onyomi.length > 0) {
-        return onyomi;
-      }
-      return lesson?.onyomi || [];
+      return ku.data?.onyomi || [];
     }
 
     // Fallback for any other combo

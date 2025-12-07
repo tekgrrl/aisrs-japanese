@@ -49,7 +49,8 @@ Rules:
 14. The answer field should contain the single most natural form for the sentence.
 15: Ambiguity Prevention: If other distinct words (synonyms) could grammatically and logically fit the blank, use the English context to disambiguate by including the closest English translation of the target word.
 16. The context field MAY be used for verb/grammar questions if the politeness level or specific nuance is important.
-17. Do not add any text before or after the JSON object.`;
+17. Do not add any text before or after the JSON object.
+18. If the question requires conjugation of a verb and the answer is not the base form, provide the base form of the verb in the context.`;
 
 @Injectable()
 export class QuestionsService {
