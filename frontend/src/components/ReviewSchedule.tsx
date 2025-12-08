@@ -79,14 +79,14 @@ export default function ReviewSchedule({ next24HoursCount, schedule, reviewForec
     <div className="flex items-center justify-center p-4 font-sans h-full">
       <div className="w-full max-w-lg">
         <div className="flex justify-center h-full">
-          <div className="bg-white text-[#333333] font-sans w-full max-w-[480px] relative flex flex-col overflow-hidden rounded-2xl border border-[#cad0d6] shadow-sm h-full">
+          <div className="bg-shodo-paper text-shodo-ink font-sans w-full max-w-[480px] relative flex flex-col overflow-hidden rounded-2xl border-2 border-shodo-ink/10 shadow-sm h-full">
             <div className="flex flex-col grow pb-3">
               
               {/* Header Section */}
-              <div className="bg-[#d2e8ff] flex flex-wrap items-center gap-3 mb-3 px-4 py-4 border-b border-[#cad0d6]">
-                <div className="text-[#6b7079] flex flex-col grow shrink-0 items-start gap-1">
+              <div className="bg-shodo-ink/5 flex flex-wrap items-center gap-3 mb-3 px-4 py-4 border-b border-shodo-ink/10">
+                <div className="text-shodo-ink/60 flex flex-col grow shrink-0 items-start gap-1">
                   <div className="text-sm font-medium uppercase tracking-wide">Next 24 Hours</div>
-                  <div className="text-[#333333] font-bold text-[24px] leading-none">
+                  <div className="text-shodo-ink font-bold text-[24px] leading-none">
                     {next24HoursCount === 0 ? 'No Reviews' : `${next24HoursCount} Reviews`}
                   </div>
                 </div>
@@ -109,23 +109,23 @@ export default function ReviewSchedule({ next24HoursCount, schedule, reviewForec
                     }`}
                   >
                     {/* Day Label */}
-                    <div className="text-right shrink-0 w-[40px] text-sm font-medium text-[#999999]">
+                    <div className="text-right shrink-0 w-[40px] text-sm font-medium text-shodo-ink/80">
                       {day.day}
                     </div>
 
                     {/* Progress Bar Container */}
                     <div className="flex grow justify-start items-center gap-1 h-full px-2">
-                      <div className="w-full bg-[#f4f4f4] rounded-full h-2 overflow-hidden">
+                      <div className="w-full bg-shodo-ink/10 rounded-full h-2 overflow-hidden">
                          <div 
-                          className={`h-full rounded-full ${day.isActive ? 'bg-[#88cc00]' : 'bg-transparent'}`}
+                          className={`h-full rounded-full ${day.isActive ? 'bg-shodo-accent' : 'bg-transparent'}`}
                           style={{ width: day.barWidth }}
                         />
                       </div>
                     </div>
 
                     {/* Count Stats - Increased width for (+N) Total format */}
-                    <div className="text-[#6b7079] flex shrink-0 w-[70px] justify-end items-center text-sm font-bold whitespace-nowrap">
-                      <span className="text-xs font-normal mr-1 text-gray-400">(+{day.added})</span> {day.total}
+                    <div className="text-shodo-ink/60 flex shrink-0 w-[70px] justify-end items-center text-sm font-bold whitespace-nowrap">
+                      <span className="text-xs font-normal mr-1 text-shodo-ink/80">(+{day.added})</span> {day.total}
                     </div>
                   </div>
                 ))}

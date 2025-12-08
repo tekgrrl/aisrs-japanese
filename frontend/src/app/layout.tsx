@@ -17,7 +17,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${inter.className} bg-gray-900 text-gray-100`}>
+      <body className={`${inter.className} bg-shodo-paper text-shodo-ink`}>
         {/* The Header component provides navigation for all pages */}
         <Header />
         {children}
