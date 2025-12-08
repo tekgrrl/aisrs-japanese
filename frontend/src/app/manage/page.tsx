@@ -129,33 +129,6 @@ export default function KnowledgeManagementPage() {
     }
   };
 
-  // --- New Facet Generation Handling ---
-  /*  const handleGenerateFacets = async (kuId: string) => {
-    setGeneratingFacetKuId(kuId);
-    setError(null);
-    try {
-      const response = await fetch('/api/review-facets', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ kuId }),
-      });
-
-      if (!response.ok) {
-        const errData = await response.json();
-        throw new Error(errData.error || 'Failed to generate facets');
-      }
-
-      await fetchData();
-    } catch (err) {
-      if (err instanceof Error) setError(err.message);
-      else setError('An unknown error occurred');
-    } finally {
-      setGeneratingFacetKuId(null);
-    }
-  }; */
-
   // --- Render Logic ---
   const renderKuList = () => {
     if (isLoading) {
@@ -176,13 +149,6 @@ export default function KnowledgeManagementPage() {
       <ul className="space-y-4">
         {kus.map((ku) => {
           const kuFacets = facets.filter((f) => f.kuId === ku.id);
-          /* const isGenerating = generatingFacetKuId === ku.id;
-
-          let generateButtonText = 'Generate Default Facets';
-          if (ku.type === 'Grammar' || ku.type === 'Concept') {
-            generateButtonText = 'Generate AI Quiz Facet';
-          } */
-
           return (
             <li key={ku.id} className="p-4 bg-gray-700 rounded-lg shadow">
               <div className="flex items-center justify-between mb-2">
