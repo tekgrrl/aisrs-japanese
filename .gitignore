@@ -60,3 +60,6 @@ playwright/.auth/
 # content library
 content/
 scripts/kanji-alive.js
+
+# firebase
+backend/service-account-secret-key.json

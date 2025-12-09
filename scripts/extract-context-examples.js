@@ -75,7 +75,8 @@ ${ex.translation}
     });
 
     const outputContent = `---\n${yamlBlock}---\n${body}`;
-    const outputFilename = `${data.content}-example-${indexStr}.md`;
+    const content = data.content ? data.content.replace(/^〜/, '') : "thing";
+    const outputFilename = `${content}-example-${indexStr}.md`;
     const outputPath = path.join(OUTPUT_DIR, outputFilename);
 
     // Check collision to avoid overwriting if running multiple times

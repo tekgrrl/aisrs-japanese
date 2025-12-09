@@ -6,7 +6,7 @@ const yaml = require("js-yaml");
 // --- CONFIGURATION ---
 if (!admin.apps.length) {
   admin.initializeApp({
-    projectId: "aisrs-app",
+    projectId: "aisrs-japanese-dev",
   });
 }
 
@@ -23,7 +23,7 @@ async function exportQuestions() {
   console.log("Fetching Questions...");
   // Adjust collection name based on where you actually stored them
   // (e.g., 'generated_questions' or 'questions')
-  const snapshot = await db.collection("generated_questions").get();
+  const snapshot = await db.collection("questions").get();
 
   if (snapshot.empty) {
     console.log("No Questions found.");
@@ -33,16 +33,21 @@ async function exportQuestions() {
   // Group by Topic to generate sequential IDs (topic-q01, topic-q02)
   const questionsByTopic = {};
 
-  snapshot.forEach((doc) => {
+  const docs = snapshot.docs;
+
+  for (const doc of docs) {
     const data = doc.data();
-    // Fallback to 'unknown' if topic is missing, or handle appropriately
-    const topic = data.topic || data.topicId || "unknown";
+    const kuId = data.kuId;
+    
+    // Now the loop will actually pause here until this resolves
+    const kuSnapshot = await db.collection("knowledge-units").doc(kuId).get();
+    const topic = kuSnapshot.data()?.content || "unknown"; // Added safety check ?.
 
     if (!questionsByTopic[topic]) {
       questionsByTopic[topic] = [];
     }
     questionsByTopic[topic].push(data);
-  });
+  }
 
   let count = 0;
 
