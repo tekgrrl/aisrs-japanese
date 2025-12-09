@@ -53,6 +53,7 @@ async function exportLessons() {
     const frontMatter = {
       id: lessonId,
       topicId: topicId,
+      content: data.vocab,
       type: data.type || "Vocab",
       title: `${data.vocab} Lesson 1`, // Default title
 

@@ -17,9 +17,9 @@ export interface TopicMetadata {
   linkagePattern?: string;
   isStructural?: boolean;
   kanjiFormat?: string;
-  
+
   relatedUnits?: string[];
-  availableLessons?: string[]; 
+  availableLessons?: string[];
   contextualSentences?: string[];
   components?: any[];
 }
@@ -33,7 +33,7 @@ export interface LessonContent {
 
 export interface ContextExample {
   id: string;
-  type: 'sentence'; 
+  type: 'sentence';
   title?: string;
   translation: string;
   content: string;
@@ -61,7 +61,7 @@ class FileSystemContentService implements ContentService {
   private indexCache: Map<string, { filePath: string; type: 'topic' | 'lesson' | 'sentence' }> | null = null;
 
   constructor() {
-    this.contentDir = path.join(process.cwd(), 'content');
+    this.contentDir = path.join(process.cwd(), '../content');
   }
 
   /**
@@ -71,14 +71,14 @@ class FileSystemContentService implements ContentService {
     if (this.indexCache) return this.indexCache;
 
     const index = new Map<string, { filePath: string; type: 'topic' | 'lesson' | 'sentence' }>();
-    
+
     // Refactored to manual recursion to avoid Node version/Type issues with 'recursive: true'
     const scanDir = (dir: string, type: 'topic' | 'lesson' | 'sentence') => {
       // console.info(`directory = ${dir}`);
       if (!fs.existsSync(dir)) return;
-      
+
       const entries = fs.readdirSync(dir, { withFileTypes: true });
-      
+
       for (const entry of entries) {
         const fullPath = path.join(dir, entry.name);
         if (entry.isDirectory()) {
@@ -107,6 +107,7 @@ class FileSystemContentService implements ContentService {
   }
 
   private async readFile<T>(id: string, expectedType: 'topic' | 'lesson' | 'sentence'): Promise<T | null> {
+    console.info(`Reading file for ${id} of type ${expectedType}`);
     const index = await this.getIndex();
     const entry = index.get(id);
 
@@ -159,7 +160,7 @@ class FileSystemContentService implements ContentService {
   async getLessonsForTopic(topicId: string): Promise<LessonContent[]> {
     const topic = await this.getTopic(topicId);
     const linkedLessonIds = topic?.availableLessons || [];
-    
+
     const lessons: LessonContent[] = [];
 
     // 1. Explicit links from Topic
@@ -186,7 +187,7 @@ class FileSystemContentService implements ContentService {
   async getSentencesForTopic(topicId: string): Promise<ContextExample[]> {
     const topic = await this.getTopic(topicId);
     const linkedSentenceIds = topic?.contextualSentences || [];
-    
+
     const sentences: ContextExample[] = [];
     const seenIds = new Set<string>();
 
