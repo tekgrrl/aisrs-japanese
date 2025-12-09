@@ -90,6 +90,12 @@ export default function Header() {
           >
             Manage
           </Link>
+          <Link
+            href="/library"
+            className="px-4 py-2 rounded-md text-shodo-ink font-medium hover:bg-shodo-ink/5 transition-colors duration-200"
+          >
+            Library
+          </Link>
         </div>
       </nav>
     </header>
