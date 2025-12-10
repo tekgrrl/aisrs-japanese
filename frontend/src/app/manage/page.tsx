@@ -3,6 +3,7 @@
 import React, { useState, useEffect, FormEvent } from "react";
 import { KnowledgeUnit, ReviewFacet } from "@/types";
 import Link from "next/link";
+import EditKnowledgeUnitModal from "@/components/EditKnowledgeUnitModal";
 
 const kuTypes: KnowledgeUnit["type"][] = [
   "Vocab",
@@ -23,10 +24,15 @@ export default function KnowledgeManagementPage() {
   const [newKuContent, setNewKuContent] = useState("");
   const [newKuReading, setNewKuReading] = useState("");
   const [newKuDefinition, setNewKuDefinition] = useState("");
-  const [newKuNotes, setNewKuNotes] = useState("");
+  const [newKuNotes, setNewKuNotes] = useState(""); // Personal Notes
+  const [newUserNotes, setNewUserNotes] = useState(""); // User Notes (Context)
   const [generatingFacetKuId, setGeneratingFacetKuId] = useState<string | null>(
     null,
   );
+
+  // --- Edit Modal State ---
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editingKu, setEditingKu] = useState<KnowledgeUnit | null>(null);
 
   // --- VALIDATION ---
   // Derived state to determine if the form is valid.
@@ -105,6 +111,7 @@ export default function KnowledgeManagementPage() {
           content: newKuContent,
           data: kuData,
           personalNotes: newKuNotes,
+          userNotes: newUserNotes,
         }),
       });
 
@@ -118,6 +125,7 @@ export default function KnowledgeManagementPage() {
       setNewKuReading("");
       setNewKuDefinition("");
       setNewKuNotes("");
+      setNewUserNotes("");
 
       await fetchData(); // Refetch all data
 
@@ -126,6 +134,35 @@ export default function KnowledgeManagementPage() {
     } catch (err) {
       if (err instanceof Error) setError(err.message);
       else setError("An unknown error occurred");
+    }
+  };
+
+  // --- Edit Handler ---
+  const handleEditClick = (ku: KnowledgeUnit) => {
+    setEditingKu(ku);
+    setIsEditModalOpen(true);
+  };
+
+  const handleSaveKu = async (id: string, updates: Partial<KnowledgeUnit>) => {
+    try {
+      // TODO needs nextjs rewrite
+      const response = await fetch(`/api/knowledge-units/${id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(updates),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to update unit");
+      }
+
+      await fetchData(); // Refetch all data to show updates
+      window.dispatchEvent(new CustomEvent("refreshStats"));
+    } catch (err) {
+      console.error(err);
+      alert("Failed to save changes"); // Simple alert for now
     }
   };
 
@@ -166,6 +203,13 @@ export default function KnowledgeManagementPage() {
                 <span className="font-mono text-sm bg-gray-900 text-gray-100 px-2 py-1 rounded ml-2 flex-shrink-0">
                   {ku.type}
                 </span>
+
+                <button
+                  onClick={() => handleEditClick(ku)}
+                  className="ml-2 text-sm px-3 py-1 bg-gray-600 hover:bg-gray-500 text-white rounded transition-colors"
+                >
+                  Edit
+                </button>
               </div>
 
               {ku.data && ku.data.reading && (
@@ -326,6 +370,26 @@ export default function KnowledgeManagementPage() {
           {/* --- Common Fields --- */}
           <div>
             <label
+              htmlFor="kuUserNotes"
+              className="block text-sm font-medium text-gray-300 mb-1 flex items-center gap-2"
+            >
+              User Notes
+              <span className="text-[10px] bg-blue-600 text-white px-1.5 py-0.5 rounded-full font-normal normal-case">
+                AI Context
+              </span>
+            </label>
+            <textarea
+              id="kuUserNotes"
+              value={newUserNotes}
+              onChange={(e) => setNewUserNotes(e.target.value)}
+              rows={2}
+              placeholder="Context instructions for Gemini (e.g., 'Focus on polite forms')..."
+              className="w-full p-3 bg-gray-700 border-gray-600 text-white rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+            />
+          </div>
+
+          <div>
+            <label
               htmlFor="kuNotes"
               className="block text-sm font-medium text-gray-300 mb-1"
             >
@@ -359,6 +423,13 @@ export default function KnowledgeManagementPage() {
         </h2>
         {renderKuList()}
       </div>
+
+      <EditKnowledgeUnitModal
+        isOpen={isEditModalOpen}
+        onClose={() => setIsEditModalOpen(false)}
+        onSave={handleSaveKu}
+        knowledgeUnit={editingKu}
+      />
     </main>
   );
 }
