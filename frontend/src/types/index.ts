@@ -150,6 +150,7 @@ export interface KnowledgeUnit {
     [key: string]: any;
   };
   personalNotes: string;
+  userNotes?: string;
   relatedUnits: string[]; // Array of other KnowledgeUnit IDs
   createdAt: Timestamp; // Added for sorting
   status: "learning" | "reviewing";
