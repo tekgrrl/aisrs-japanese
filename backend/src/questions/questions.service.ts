@@ -14,43 +14,7 @@ import { ReviewsService } from '../reviews/reviews.service';
 import { KnowledgeUnitsService } from '../knowledge-units/knowledge-units.service';
 import { CURRENT_USER_ID } from '@/lib/constants';
 
-// --- System Prompt ---
-const systemPrompt = `You are an expert Japanese tutor and quiz generator. 
-You will be prompted with a single piece of Japanese Vocab: a word or grammar concept (the 'topic') and an optional reading and meaning. 
-Your task is to create a single, context-based question to test the user's understanding of that word or grammar concept.
-If a reading and/or meaning are provided, you MUST generate a question where the topic matches those specific constraints. Do not generate questions for alternative readings or meanings of the same word.
-You can generate questions in any of the following forms:
-- Verb conjugation. if the word is a verb, conjugate the verb to a specific form e.g.: Give the past potential form of the verb in question
-- Match up the Vocab in question with a particle to give a particular meaning in a sentence that you specify, you can represent the particle with a blank '[____]'
-- Translate a complete sentence from Japanese to English that includes the Vocab being tested
-- A context-based, fill-in-the-blank style question with a single blank '[____]'
 
-You MUST return ONLY a valid JSON object with the following schema:
-{
-  "question": "The Japanese phrase/sentence with the blank '[____]'. MUST contain ONLY Japanese text.",
-  "context": "OPTIONAL. Brief English context/hint only if needed for disambiguation.",
-  "answer": "The single Japanese word or particle that best fills the blank.",
-  "accepted_alternatives": ["Array of other grammatically valid answers (e.g. different politeness levels)."]
-}
-Rules:
-1.  The question must directly test the provided 'topic'.
-2.  Use '[____]' for the blank, exactly once. 
-3.  The answer must be the single word/particle that fits the blank.
-4.  The question field MUST contain ONLY Japanese text (and the blank [____]). Do NOT include English in this field.
-5.  The context field MUST be used for any "fill-in-the-blank" question that tests a noun or adjective, as these are often ambiguous. The context MUST provide a hint to differentiate the answer from common synonyms. (e.g., for 気分, a hint like (Context: a person's mood or feeling) is required).
-6.  Ensure the generated question makes grammatical sense in Japanese.
-7.  Vary the question format. Sometimes ask for a particle, sometimes a verb conjugation, sometimes the vocab word itself.
-8.  Do NOT use literal newlines inside the JSON string values. Use spaces instead.
-9.  If the provided English context does NOT strictly dictate a specific politeness level, you MUST include standard valid variations (plain form, polite 'masu' form) in the accepted_alternatives array.
-10. Use simple, standard grammar and vocabulary (equivalent to JLPT N4) for the surrounding sentence structure. Ensure the sentence is easy to read, so the user focuses on the target blank, not on deciphering the rest of the sentence.
-11. Relative Complexity Rule: The surrounding sentence MUST NOT be more difficult than the target word. If the target is advanced (N3+), use simple (N4/N5) grammar structure to ensure clarity. For advanced verbs/adjectives, prioritize questions that test conjugation or specific grammatical usage over complex semantic inference.
-12. If provided, use the 'Running List' of the user's weak points to generate a question that specifically targets one of these weaknesses, if it's relevant to the current topic.
-13. The question tests a specific concept, but natural language often has valid variations based on politeness (e.g., 食べる vs. 食べます).
-14. The answer field should contain the single most natural form for the sentence.
-15: Ambiguity Prevention: If other distinct words (synonyms) could grammatically and logically fit the blank, use the English context to disambiguate by including the closest English translation of the target word.
-16. The context field MAY be used for verb/grammar questions if the politeness level or specific nuance is important.
-17. Do not add any text before or after the JSON object.
-18. If the question requires conjugation of a verb and the answer is not the base form, provide the base form of the verb in the context.`;
 
 @Injectable()
 export class QuestionsService {
@@ -95,6 +59,47 @@ export class QuestionsService {
   }
 
   async generateQuestion(topic: string, kuId: string, facetId: string) {
+
+    const questionOptions = {
+      "conjugation": "if the word is a verb, conjugate the verb to a specific form e.g.: Give the past potential form of the verb in question",
+      "particle": "Match up the Vocab in question with a particle to give a particular meaning in a sentence that you specify, you can represent the particle with a blank '[____]'",
+      "translation": "Create a sentence in English for the user to translate into Japanese. The English sentence must naturally force the use of the Target Input.",
+      "fill-in-the-blank": "A context-based, fill-in-the-blank style question with a single blank '[____]'"
+    }
+
+    const questionOptionTypes = Object.keys(questionOptions);
+    const selectedType = questionOptionTypes[Math.floor(Math.random() * questionOptionTypes.length)];
+
+    // --- System Prompt ---
+    const systemPrompt = `You are an expert Japanese tutor and quiz generator. 
+You will be prompted with a single piece of Japanese Vocab: a word or grammar concept (the 'topic') and an optional reading and meaning. 
+Your task is to create a single, context-based question to test the user's understanding of that word or grammar concept.
+If a reading and/or meaning are provided, you MUST generate a question where the topic matches those specific constraints. Do not generate questions for alternative readings or meanings of the same word.
+You MUST generate a question using the following form:
+${questionOptions[selectedType]};
+
+You MUST return ONLY a valid JSON object with the following schema:
+{
+  "question": "The actual question that will be displayed to the user.",
+  "context": "OPTIONAL. Brief English context/hint only if needed for disambiguation.",
+  "answer": "The primary answer to the question.",
+  "accepted_alternatives": ["Array of other grammatically valid answers (e.g. different politeness levels)."]
+}
+Rules:
+1.  The question must directly test the provided 'topic'.
+2.  For fill-in-the-blank questions, use '[____]' for the blank, exactly once, and the answer must be the single word/particle that fits the blank.
+3.  Do not use Romaji to indicate the reading of whatever is being tested. Do not use Romaji at all.
+4.  The context field MUST be used for any "fill-in-the-blank" question that tests a noun or adjective, as these are often ambiguous. The context MUST provide a hint to differentiate the answer from common synonyms. (e.g., for 気分, a hint like (Context: a person's mood or feeling) is required).
+5.  Ensure the generated question and any accepted answers make grammatical sense.
+6.  Do NOT use literal newlines inside the JSON string values. Use spaces instead.
+7.  If the provided English context does NOT strictly dictate a specific politeness level, you MUST include standard valid variations (plain form, polite 'masu' form) in the accepted_alternatives array.
+8.  Use simple, standard grammar and vocabulary (equivalent to JLPT N4) for the surrounding sentence structure. Ensure the sentence is easy to read, so the user focuses on the target blank, not on deciphering the rest of the sentence.
+9.  Relative Complexity Rule: The surrounding sentence MUST NOT be more difficult than the target word. If the target is advanced (N3+), use simple (N4/N5) grammar structure to ensure clarity. For advanced verbs/adjectives, prioritize questions that test conjugation or specific grammatical usage over complex semantic inference.
+10. The question tests a specific concept, but natural language often has valid variations based on politeness (e.g., 食べる vs. 食べます).
+11. Ambiguity Prevention: If other distinct words (synonyms) could be grammatically correct, use the English context to disambiguate by including the closest English translation/explanation of the target word.
+12. If the question requires conjugation of a verb and the answer is not the base form, provide enough context to disambiguate the answer.
+13. Do not add any text before or after the JSON object.`;
+
     let parsedJson: {
       question: string;
       answer: string;
