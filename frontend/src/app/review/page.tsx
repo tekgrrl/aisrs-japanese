@@ -6,6 +6,8 @@ import { ReviewItem, ReviewFacet, VocabLesson, KanjiLesson } from "@/types";
 import * as wanakana from "wanakana";
 import { logger } from "@/lib/logger";
 import { QuestionFeedbackModal } from "@/components/QuestionFeedbackModal";
+import EditKnowledgeUnitModal from "@/components/EditKnowledgeUnitModal";
+import { KnowledgeUnit } from "@/types";
 
 type AnswerState = "unanswered" | "evaluating" | "correct" | "incorrect";
 
@@ -33,7 +35,12 @@ export default function ReviewPage() {
 
   // --- Feedback Modal State ---
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+
   const [pendingSrsResult, setPendingSrsResult] = useState<"pass" | "fail" | null>(null);
+
+  // --- Edit Modal State ---
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editingKu, setEditingKu] = useState<KnowledgeUnit | null>(null);
 
   const currentItem = reviewQueue[currentIndex];
 
@@ -338,6 +345,57 @@ export default function ReviewPage() {
     setShowFeedbackModal(false);
     // Use functional update to ensure we use the latest state
     setCurrentIndex((prevIndex) => prevIndex + 1);
+  };
+
+  // --- Edit Handlers ---
+  const handleEditClick = () => {
+    if (currentItem) {
+      setEditingKu(currentItem.ku);
+      setIsEditModalOpen(true);
+    }
+  };
+
+  const handleSaveKu = async (id: string, updates: Partial<KnowledgeUnit>) => {
+    try {
+      // 1. Update backend
+      // TODO needs nextjs rewrite
+      const response = await fetch(`/api/knowledge-units/${id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(updates),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to update unit");
+      }
+
+      const updatedKu = await response.json(); // Assuming backend returns the updated KU
+
+      // 2. Update local state (reviewQueue) to reflect changes immediately
+      setReviewQueue((prevQueue) =>
+        prevQueue.map((item) => {
+          if (item.ku.id === id) {
+            // Merge updates into the KU
+            return {
+              ...item,
+              ku: {
+                ...item.ku,
+                ...updates,
+                 ...updatedKu, 
+              },
+            };
+          }
+          return item;
+        })
+      );
+      
+      window.dispatchEvent(new CustomEvent("refreshStats"));
+    } catch (err) {
+      console.error(err);
+      alert("Failed to save changes"); // Simple alert for now
+    }
   };
 
   const handleFeedbackKeep = async () => {
@@ -691,21 +749,37 @@ export default function ReviewPage() {
             <div className="mt-4">
               <Link
                 href={`/learn/${currentItem.ku.id}?source=review`}
-                className="inline-block px-4 py-2 bg-blue-600 text-white font-semibold rounded-md hover:bg-blue-700"
+                className="inline-block px-4 py-2 bg-[#0A5C36] text-white font-semibold rounded-md hover:bg-[#084a2b]"
               >
                 Review lesson on {currentItem.ku.content}
               </Link>
             </div>
+
           )}
 
-          <button
-            onClick={goToNextItem}
-            className="mt-6 w-full px-6 py-3 bg-gray-600 text-white font-semibold rounded-md shadow-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 focus:ring-offset-gray-800"
-          >
-            Next
-          </button>
+          <div className="mt-6 flex gap-4">
+             <button
+              onClick={handleEditClick}
+              className="px-4 py-3 bg-gray-600 text-white font-semibold rounded-md shadow-md hover:bg-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 focus:ring-offset-gray-800"
+            >
+              Edit KU
+            </button>
+            <button
+              onClick={goToNextItem}
+              className="flex-1 px-6 py-3 bg-blue-600 text-white font-semibold rounded-md shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-800"
+            >
+              Next
+            </button>
+          </div>
         </div>
       )}
+
+      <EditKnowledgeUnitModal
+        isOpen={isEditModalOpen}
+        onClose={() => setIsEditModalOpen(false)}
+        onSave={handleSaveKu}
+        knowledgeUnit={editingKu}
+      />
 
       <QuestionFeedbackModal
         isOpen={showFeedbackModal}
