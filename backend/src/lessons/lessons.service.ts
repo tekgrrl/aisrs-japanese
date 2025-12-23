@@ -102,6 +102,7 @@ The lesson should be in English. Where you want to use Japanese text for example
 * If a word is a "suru noun", include explanations of the meaning of the suru form.
 * Generate context examples.
 * Analyze component Kanji.
+* Do not explain what "rendaku" means.
 
 **Constraints:**
 For the \`partOfSpeech\` property, select one of:
