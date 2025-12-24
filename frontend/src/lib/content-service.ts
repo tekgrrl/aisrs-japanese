@@ -74,7 +74,6 @@ class FileSystemContentService implements ContentService {
 
     // Refactored to manual recursion to avoid Node version/Type issues with 'recursive: true'
     const scanDir = (dir: string, type: 'topic' | 'lesson' | 'sentence') => {
-      // console.info(`directory = ${dir}`);
       if (!fs.existsSync(dir)) return;
 
       const entries = fs.readdirSync(dir, { withFileTypes: true });
@@ -90,6 +89,8 @@ class FileSystemContentService implements ContentService {
             const { data } = matter(fileContent);
             if (data.id) {
               index.set(data.id, { filePath: fullPath, type });
+            } else {
+              console.error(`No ID found in frontmatter for ${fullPath}`);
             }
           } catch (e) {
             console.error(`Failed to parse frontmatter for ${fullPath}`, e);
@@ -107,7 +108,6 @@ class FileSystemContentService implements ContentService {
   }
 
   private async readFile<T>(id: string, expectedType: 'topic' | 'lesson' | 'sentence'): Promise<T | null> {
-    console.info(`Reading file for ${id} of type ${expectedType}`);
     const index = await this.getIndex();
     const entry = index.get(id);
 
@@ -151,7 +151,6 @@ class FileSystemContentService implements ContentService {
         }
       }
     }
-    console.info(`topics = ${JSON.stringify(topics)}`);
     return topics;
   }
 
@@ -180,7 +179,6 @@ class FileSystemContentService implements ContentService {
       }
     }
 
-    // console.info(`lessons = ${JSON.stringify(lessons)}`);
     return lessons;
   }
 

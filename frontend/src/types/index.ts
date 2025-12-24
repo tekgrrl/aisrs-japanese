@@ -125,7 +125,7 @@ export type PartOfSpeech =
   | "transitive-verb"
   | "intransitive-verb"
   | "i-adjective"
-  | "na-adjective"
+  | "na-  "
   | "noun"
   | "noun-prenominal"
   | "proper-noun"
@@ -135,7 +135,9 @@ export type PartOfSpeech =
   | "auxiliary-verb"
   | "prefix"
   | "suffix"
-  | "conjunction";
+  | "conjunction"
+  | "grammar"
+  | "expresssion";
 
 export interface KnowledgeUnit {
   id: string;
