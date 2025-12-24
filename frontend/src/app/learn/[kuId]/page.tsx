@@ -8,7 +8,8 @@ import {
   VocabLesson,
   KanjiLesson,
 } from "@/types";
-import { FuriganaText } from '@/components/FuriganaText';
+import VocabLessonView from "@/components/lessons/VocabLessonView";
+import KanjiLessonView from "@/components/lessons/KanjiLessonView";
 
 export default function LearnItemPage() {
   const router = useRouter();
@@ -252,279 +253,6 @@ export default function LearnItemPage() {
     }
   };
 
-  type EditableSectionProps = {
-    title: string;
-    content: string; // Or whatever type 'content' is
-    sectionKey: string;
-    onSave: (sectionKey: string, newContent: string) => Promise<void>;
-  };
-
-  // A simple component to manage its own edit state
-  function EditableSection({
-    title,
-    content,
-    sectionKey,
-    onSave,
-  }: EditableSectionProps) {
-    const [isEditing, setIsEditing] = useState(false);
-    const [draft, setDraft] = useState(String(content));
-
-    const handleSave = () => {
-      onSave(sectionKey, draft); // Call the main save handler
-      setIsEditing(false); // Close the editor
-    };
-
-    const handleEdit = () => {
-      setDraft(String(content)); // Reset draft on edit
-      setIsEditing(true);
-    };
-
-    if (isEditing) {
-      // --- EDITING VIEW ---
-      return (
-        <div className="bg-gray-700 p-4 rounded-lg mb-8 border border-blue-500">
-          <h2 className="text-2xl font-semibold mb-4 text-white">{title}</h2>
-          <textarea
-            className="w-full h-48 p-2 font-mono text-sm bg-gray-900 text-white rounded-md"
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-          />
-          <div className="flex justify-end space-x-2 mt-2">
-            <button
-              onClick={() => setIsEditing(false)}
-              className="px-4 py-2 bg-gray-600 rounded-md"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleSave}
-              className="px-4 py-2 bg-blue-600 rounded-md"
-            >
-              Save
-            </button>
-          </div>
-        </div>
-      );
-    }
-
-    // --- DEFAULT VIEW ---
-    return (
-      <div className="bg-gray-100 dark:bg-gray-800 p-6 rounded-lg shadow-lg mb-8 relative">
-        <button
-          onClick={handleEdit}
-          className="absolute top-2 right-2 px-3 py-1 bg-gray-200 text-xs rounded-md"
-        >
-          Edit
-        </button>
-        <h2 className="text-2xl font-semibold mb-4 text-gray-900 dark:text-white">
-          {title}
-        </h2>
-        {/* This just displays the raw content. You'd format this better. */}
-        <p className="text-lg text-gray-700 dark:text-gray-300">
-          {String(content)}
-        </p>
-      </div>
-    );
-  }
-  // --- Type-Aware Render Functions (With FULL dark mode classes) ---
-
-  const renderVocabLesson = (lesson: VocabLesson) => (
-    <>
-      {/* --- NEW: Editable string sections --- */}
-      <EditableSection
-        title="Meaning"
-        content={lesson.meaning_explanation}
-        sectionKey="meaning_explanation"
-        onSave={handleSaveSection}
-      />
-      
-      {/* Definitions Section */}
-      <div className="bg-gray-100 dark:bg-gray-800 p-6 rounded-lg shadow-lg mb-8">
-        <h2 className="text-2xl font-semibold mb-4 text-gray-900 dark:text-white">
-          Definitions
-        </h2>
-        <ul className="list-disc list-inside space-y-2">
-            {(lesson.definitions || (lesson.definition ? [lesson.definition] : [])).map((def, i) => (
-                <li key={i} className="text-lg text-gray-700 dark:text-gray-300">
-                    {def}
-                </li>
-            ))}
-            {(!lesson.definitions || lesson.definitions.length === 0) && !lesson.definition && (
-                <p className="text-gray-500 dark:text-gray-400 italic">No definitions available.</p>
-            )}
-        </ul>
-      </div>
-
-      <EditableSection
-        title="Reading"
-        content={lesson.reading_explanation}
-        sectionKey="reading_explanation"
-        onSave={handleSaveSection}
-      />
-      <div className="bg-gray-100 dark:bg-gray-800 p-6 rounded-lg shadow-lg mb-8">
-        <h2 className="text-2xl font-semibold mb-4 text-gray-900 dark:text-white">
-          Context Examples
-        </h2>
-        <ul className="space-y-4">
-          {lesson.context_examples && lesson.context_examples.length > 0 ? (
-            lesson.context_examples.map((ex, i) => (
-              <li key={i} className="p-4 bg-gray-200 dark:bg-gray-700 rounded-md">
-                {/* Japanese Sentence with Furigana */}
-                <p className="text-2xl text-gray-900 dark:text-white mb-1">
-                  <FuriganaText text={ex.sentence} />
-                </p>
-                
-                {/* English Translation (remains plain text) */}
-                <p className="text-md text-gray-600 dark:text-gray-400">
-                  {ex.translation}
-                </p>
-              </li>
-            ))
-          ) : (
-            <p className="text-gray-500 dark:text-gray-400 italic">
-              No context examples provided.
-            </p>
-          )}
-        </ul>
-      </div>
-      <div className="bg-gray-100 dark:bg-gray-800 p-6 rounded-lg shadow-lg mb-8">
-        <h2 className="text-2xl font-semibold mb-4 text-gray-900 dark:text-white">
-          Component Kanji
-        </h2>
-        <ul className="space-y-2">
-          {lesson.component_kanji && lesson.component_kanji.length > 0 ? (
-            lesson.component_kanji.map((k, i) => (
-              <li
-                key={`${k.kanji}-${i}`}
-                className="flex items-center space-x-4 p-3 bg-gray-200 dark:bg-gray-700 rounded-md"
-              >
-                <span className="text-3xl text-gray-900 dark:text-white">
-                  {k.kanji}
-                </span>
-                <div>
-                  <p className="text-lg text-gray-700 dark:text-gray-300">
-                    {k.reading}
-                  </p>
-                  <p className="text-md text-gray-600 dark:text-gray-400">
-                    {k.meaning}
-                  </p>
-                </div>
-              </li>
-            ))
-          ) : (
-            <p className="text-gray-500 dark:text-gray-400 italic">
-              No component kanji provided.
-            </p>
-          )}
-        </ul>
-      </div>
-    </>
-  );
-
-  const renderKanjiLesson = (lesson: KanjiLesson) => (
-    <>
-      <div className="bg-gray-100 dark:bg-gray-800 p-6 rounded-lg shadow-lg mb-8">
-        <h2 className="text-2xl font-semibold mb-4 text-gray-900 dark:text-white">
-          Meaning
-        </h2>
-        <p className="text-lg text-gray-700 dark:text-gray-300">
-          {lesson.meaning}
-        </p>
-      </div>
-      <div className="bg-gray-100 dark:bg-gray-800 p-6 rounded-lg shadow-lg mb-8">
-        <h2 className="text-2xl font-semibold mb-4 text-gray-900 dark:text-white">
-          Radicals
-        </h2>
-        <ul className="flex flex-wrap gap-4">
-          {lesson.radical ? (
-            <li
-              className="p-4 bg-gray-200 dark:bg-gray-700 rounded-md text-center"
-            >
-              <span className="text-3xl text-gray-900 dark:text-white">
-                {lesson.radical.character}
-              </span>
-              <p className="text-md text-gray-600 dark:text-gray-400">
-                {lesson.radical.meaning}
-              </p>
-            </li>
-          ) : (
-            <p className="text-gray-500 dark:text-gray-400 italic">
-              No radical provided.
-            </p>
-          )}
-        </ul>
-      </div>
-      <div className="bg-gray-100 dark:bg-gray-800 p-6 rounded-lg shadow-lg mb-8">
-        <h2 className="text-2xl font-semibold mb-4 text-gray-900 dark:text-white">
-          Meaning Mnemonic
-        </h2>
-        <p className="text-lg text-gray-700 dark:text-gray-300 italic">
-          {lesson.personalMnemonic}
-        </p>
-      </div>
-      <div className="bg-gray-100 dark:bg-gray-800 p-6 rounded-lg shadow-lg mb-8">
-        <h2 className="text-2xl font-semibold mb-4 text-gray-900 dark:text-white">
-          Readings
-        </h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <h3 className="text-xl font-semibold text-gray-500 dark:text-gray-400 mb-2">
-              On'yomi (Katakana)
-            </h3>
-            <ul className="space-y-2">
-              {lesson.onyomi && lesson.onyomi.length > 0 ? (
-                lesson.onyomi.map((r, i) => (
-                  <li
-                    key={`${r}-${i}`}
-                    className="p-3 bg-gray-200 dark:bg-gray-700 rounded-md"
-                  >
-                    <span className="text-2xl text-gray-900 dark:text-white">
-                      {r}
-                    </span>
-                  </li>
-                ))
-              ) : (
-                <p className="text-gray-500 dark:text-gray-400 italic">
-                  No on'yomi provided.
-                </p>
-              )}
-            </ul>
-          </div>
-          <div>
-            <h3 className="text-xl font-semibold text-gray-500 dark:text-gray-400 mb-2">
-              Kun'yomi (Hiragana)
-            </h3>
-            <ul className="space-y-2">
-              {lesson.kunyomi && lesson.kunyomi.length > 0 ? (
-                lesson.kunyomi.map((r, i) => (
-                  <li
-                    key={`${r}-${i}`}
-                    className="p-3 bg-gray-200 dark:bg-gray-700 rounded-md"
-                  >
-                    <span className="text-2xl text-gray-900 dark:text-white">
-                      {r}
-                    </span>
-                  </li>
-                ))
-              ) : (
-                <p className="text-gray-500 dark:text-gray-400 italic">
-                  No kun'yomi provided.
-                </p>
-              )}
-            </ul>
-          </div>
-        </div>
-      </div>
-      <div className="bg-gray-100 dark:bg-gray-800 p-6 rounded-lg shadow-lg mb-8">
-        <h2 className="text-2xl font-semibold mb-4 text-gray-900 dark:text-white">
-          Reading Mnemonic
-        </h2>
-        <p className="text-lg text-gray-700 dark:text-gray-300 italic">
-          {lesson.personalMnemonic}
-        </p>
-      </div>
-    </>
-  );
 
   const renderFacetChecklist = () => (
     <div className="bg-gray-100 dark:bg-gray-800 p-6 rounded-lg shadow-lg">
@@ -688,14 +416,6 @@ export default function LearnItemPage() {
   // --- Main Render ---
   return (
     <>
-      {/* --- DEBUGGING LOG --- */}
-      {console.log("[Render Debug]", {
-        isLoading,
-        hasError: !!error,
-        lessonType: lesson?.type,
-        hasLesson: !!lesson,
-        source: source,
-      })}
       <main className="container mx-auto max-w-4xl p-8">
         <header className="mb-8">
           <h1 className="text-6xl font-bold text-gray-900 dark:text-white mb-2 break-all">
@@ -729,14 +449,23 @@ export default function LearnItemPage() {
 
         {lesson &&
           ku?.type === "Vocab" &&
-          renderVocabLesson(lesson as VocabLesson)}
+          (
+            <VocabLessonView 
+                lesson={lesson as VocabLesson} 
+                onSaveSection={handleSaveSection} 
+            />
+          )
+        }
+        
         {lesson &&
           ku?.type === "Kanji" &&
-          renderKanjiLesson(lesson as KanjiLesson)}
+          (
+            <KanjiLessonView lesson={lesson as KanjiLesson} />
+          )
+        }
 
         {!isLoading && !error && lesson && source !== "review" && (
           <>
-            {/* {console.log("Render conditions met, lesson object:", lesson)} */}
             {renderFacetChecklist()}
           </>
         )}

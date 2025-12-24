@@ -29,6 +29,8 @@ export interface LessonContent {
   topicId: string;
   title?: string;
   body: string;
+  content?: string;
+  partOfSpeech?: string;
 }
 
 export interface ContextExample {
