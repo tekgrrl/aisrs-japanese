@@ -54,6 +54,7 @@ async function exportLessons() {
       id: lessonId,
       topicId: topicId,
       content: data.vocab,
+      partOfSpeech: data.partOfSpeech,
       type: data.type || "Vocab",
       title: `${data.vocab} Lesson 1`, // Default title
 

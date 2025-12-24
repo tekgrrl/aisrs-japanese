@@ -220,7 +220,7 @@ async function importContent() {
               kuId: kuId,
               userId: CURRENT_USER_ID,
               type: "Vocab",
-              vocab: fm.title || fm.vocab || "Unknown", // Fallbacks
+              vocab: fm.content || "Unknown", // Fallbacks
               definitions: definitions, 
               
               partOfSpeech: fm.partOfSpeech || (fm.tags ? fm.tags[0] : null), // Heuristic if missing
