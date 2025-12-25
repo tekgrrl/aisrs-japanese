@@ -10,7 +10,6 @@ import { useState, useEffect, useCallback } from "react";
 export default function Header() {
   const [stats, setStats] = useState({ learnCount: 0, reviewsDue: 0 });
 
-  console.log("Fetching stats...");
   // Wrap fetchStats in useCallback so it's a stable function
   // and can be safely used in useEffect dependency arrays.
   const fetchStats = useCallback(async () => {
@@ -18,7 +17,6 @@ export default function Header() {
       const response = await fetch("/api/stats");
       if (response.ok) {
         const data = await response.json();
-        console.log("Fetched stats:", data);
         setStats(data);
       }
     } catch (error) {
@@ -35,7 +33,6 @@ export default function Header() {
   useEffect(() => {
     // We define a handler function to be clear
     const handleRefreshStats = () => {
-      console.log("Header: Heard refreshStats event, refetching...");
       fetchStats();
     };
 
@@ -50,7 +47,6 @@ export default function Header() {
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") {
-        console.log("Page has become visible, refreshing stats...");
         fetchStats();
       }
     };
