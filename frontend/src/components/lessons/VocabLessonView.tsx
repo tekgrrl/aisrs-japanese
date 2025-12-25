@@ -1,6 +1,7 @@
 import React from "react";
 import { VocabLesson } from "@/types";
 import { FuriganaText } from "@/components/FuriganaText";
+import RevealableText from "@/components/RevealableText";
 import EditableSection from "./EditableSection";
 
 interface VocabLessonViewProps {
@@ -66,13 +67,13 @@ export default function VocabLessonView({
               lesson.context_examples.map((ex, i) => (
                 <li key={i} className="p-4 bg-gray-200 dark:bg-gray-700 rounded-md">
                   {/* Japanese Sentence with Furigana */}
-                  <p className="text-2xl text-gray-900 dark:text-white mb-1">
+                  <p className="text-2xl text-gray-900 dark:text-white mb-2">
                     <FuriganaText text={ex.sentence} />
                   </p>
                   
-                  {/* English Translation (remains plain text) */}
-                  <p className="text-md text-gray-600 dark:text-gray-400">
-                    {ex.translation}
+                  {/* English Translation (Revealable) */}
+                  <p className="text-md leading-relaxed">
+                    <RevealableText text={ex.translation} />
                   </p>
                 </li>
               ))
