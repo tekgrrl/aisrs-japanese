@@ -520,6 +520,7 @@ export default function ReviewPage() {
       if (dynamicAnswer) {
         allExpectedAnswers.push(dynamicAnswer);
       }
+      console.log("Expected answers for AI-Generated Question:", allExpectedAnswers);
       return allExpectedAnswers;
     }
 
@@ -528,6 +529,7 @@ export default function ReviewPage() {
       facet.facetType === "Definition-to-Content" ||
       facet.facetType === "Reading-to-Content"
     ) {
+      console.log("Expected answers for reverse quiz:", [ku.content]);
       return [ku.content];
     }
 
@@ -536,13 +538,33 @@ export default function ReviewPage() {
       // --- VOCAB LOGIC ---
       const lesson = item.lesson as VocabLesson | undefined;
       if (facet.facetType === "Content-to-Definition") {
-        // Use lesson first, fallback to older ku.data
-        const definitionString =
-          ku.data?.definition || lesson?.meaning_explanation || "";
-        return definitionString.split(",").map((answer) => answer.trim());
+        // Collect all potential definition strings
+        const rawDefinitions: string[] = [];
+        
+        // 1. From Lesson (array)
+        if (lesson?.definitions && Array.isArray(lesson.definitions)) {
+          rawDefinitions.push(...lesson.definitions);
+        }
+        
+        // 2. From KU (string)
+        if (ku.data?.definition) {
+          rawDefinitions.push(ku.data.definition);
+        }
+
+        // Process: split by delimiters (comma, semicolon), trim, filter empty
+        const uniqueDefinitions = Array.from(new Set(
+          rawDefinitions
+            .flatMap((def) => def.split(/[,;]/)) // Split by , or ;
+            .map((def) => def.trim())
+            .filter((def) => def.length > 0)
+        ));
+        
+        console.log("Expected answers for Content-to-Definition:", uniqueDefinitions);
+        return uniqueDefinitions;
       }
       if (facet.facetType === "Content-to-Reading") {
         // Use lesson first, fallback to older ku.data
+        console.log("Expected answers for Content-to-Reading:", [ku.data?.reading || lesson?.reading_explanation || ""]);
         return [ku.data?.reading || lesson?.reading_explanation || ""];
       }
     } else if (ku.type === "Kanji") {
@@ -563,6 +585,7 @@ export default function ReviewPage() {
           //return allReadings.join(', '); // e.g., "ドク, トク, よむ"
         }
         // Fallback just in case lesson is old/missing
+        console.log("Expected answers for Content-to-Reading (fallback):", [ku.data?.onyomi || ku.data?.kunyomi || ""]);
         return ku.data?.onyomi || ku.data?.kunyomi || [];
       }
     }
