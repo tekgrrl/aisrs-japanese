@@ -1,17 +1,39 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { KnowledgeUnitClient } from "@/types";
+import { KnowledgeUnitClient, ReviewFacet } from "@/types";
+
+// Extends ReviewFacet to handle stringified dates from JSON API
+interface ReviewFacetClient extends Omit<ReviewFacet, "nextReviewAt" | "lastReviewAt" | "createdAt" | "history"> {
+  nextReviewAt: string;
+  lastReviewAt?: string;
+  createdAt: string;
+  history?: Array<{
+    timestamp: string;
+    result: "pass" | "fail";
+    stage: number;
+  }>;
+}
 
 export default function AdminPage() {
-  const [knowledgeUnits, setKnowledgeUnits] = useState<KnowledgeUnitClient[]>(
-    [],
-  );
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
-  const [sortBy, setSortBy] = useState<"status" | "createdAt">("createdAt");
-  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
+  const [activeTab, setActiveTab] = useState<"knowledge-units" | "review-facets">("knowledge-units");
+  
+  // Knowledge Units State
+  const [knowledgeUnits, setKnowledgeUnits] = useState<KnowledgeUnitClient[]>([]);
+  const [loadingKus, setLoadingKus] = useState(true);
+  const [kuSearch, setKuSearch] = useState("");
+  const [kuSortBy, setKuSortBy] = useState<"status" | "createdAt">("createdAt");
+  const [kuSortOrder, setKuSortOrder] = useState<"asc" | "desc">("desc");
 
+  // Review Facets State
+  const [reviewFacets, setReviewFacets] = useState<ReviewFacetClient[]>([]);
+  const [loadingFacets, setLoadingFacets] = useState(false);
+  const [facetLoaded, setFacetLoaded] = useState(false); // To prevent refetching if already loaded
+  const [facetSortBy, setFacetSortBy] = useState<"srsStage" | "nextReviewAt" | "kuId">("kuId");
+  const [facetSortOrder, setFacetSortOrder] = useState<"asc" | "desc">("asc");
+
+
+  // Fetch KUs on mount
   useEffect(() => {
     const fetchKus = async () => {
       try {
@@ -21,89 +43,234 @@ export default function AdminPage() {
       } catch (error) {
         console.error("Failed to fetch knowledge units", error);
       } finally {
-        setLoading(false);
+        setLoadingKus(false);
       }
     };
     fetchKus();
   }, []);
 
+  // Fetch Facets when tab is active and not loaded
+  useEffect(() => {
+    if (activeTab === "review-facets" && !facetLoaded && !loadingFacets) {
+      const fetchFacets = async () => {
+        setLoadingFacets(true);
+        try {
+          const res = await fetch("/api/reviews/facets");
+          const data = await res.json();
+          setReviewFacets(data);
+          setFacetLoaded(true);
+        } catch (error) {
+          console.error("Failed to fetch review facets", error);
+        } finally {
+          setLoadingFacets(false);
+        }
+      };
+      fetchFacets();
+    }
+  }, [activeTab, facetLoaded, loadingFacets]);
+
+  // --- KU Logic ---
   const sortedAndFilteredKus = knowledgeUnits
-    .filter((ku) => ku.content.toLowerCase().includes(search.toLowerCase()))
+    .filter((ku) => ku.content.toLowerCase().includes(kuSearch.toLowerCase()))
     .sort((a, b) => {
-      if (sortBy === "status") {
+      if (kuSortBy === "status") {
         const statusA = a.status || "";
         const statusB = b.status || "";
-        return sortOrder === "asc"
+        return kuSortOrder === "asc"
           ? statusA.localeCompare(statusB)
           : statusB.localeCompare(statusA);
       } else {
         const dateA = new Date(a.createdAt).getTime();
         const dateB = new Date(b.createdAt).getTime();
-        return sortOrder === "asc" ? dateA - dateB : dateB - dateA;
+        return kuSortOrder === "asc" ? dateA - dateB : dateB - dateA;
       }
     });
 
-  const handleSort = (newSortBy: "status" | "createdAt") => {
-    if (newSortBy === sortBy) {
-      setSortOrder(sortOrder === "asc" ? "desc" : "asc");
+  const handleKuSort = (newSortBy: "status" | "createdAt") => {
+    if (newSortBy === kuSortBy) {
+      setKuSortOrder(kuSortOrder === "asc" ? "desc" : "asc");
     } else {
-      setSortBy(newSortBy);
-      setSortOrder("desc");
+      setKuSortBy(newSortBy);
+      setKuSortOrder("desc");
     }
   };
 
-  if (loading) {
-    return <div>Loading...</div>;
+  // --- Facet Logic ---
+
+  // Helper to get KU Content
+  const getKuContent = (kuId: string) => {
+    const ku = knowledgeUnits.find(k => k.id === kuId);
+    return ku ? ku.content : kuId; // Fallback to ID if not found (shouldn't happen if KUs loaded)
+  };
+
+  // Calculate passes/fails
+  const getProgress = (facet: ReviewFacetClient) => {
+    if (!facet.history) return { passes: 0, fails: 0 };
+    const passes = facet.history.filter(h => h.result === 'pass').length;
+    const fails = facet.history.filter(h => h.result === 'fail').length;
+    return { passes, fails };
+  };
+
+  const sortedFacets = [...reviewFacets]
+    .sort((a, b) => {
+        // Group by KU/Sort by KU content
+        if (facetSortBy === "kuId") {
+            const contentA = getKuContent(a.kuId);
+            const contentB = getKuContent(b.kuId);
+            return facetSortOrder === "asc" 
+                ? contentA.localeCompare(contentB)
+                : contentB.localeCompare(contentA);
+        } else if (facetSortBy === "srsStage") {
+            return facetSortOrder === "asc" 
+                ? a.srsStage - b.srsStage
+                : b.srsStage - a.srsStage;
+        } else {
+             const dateA = new Date(a.nextReviewAt).getTime();
+             const dateB = new Date(b.nextReviewAt).getTime();
+             return facetSortOrder === "asc" ? dateA - dateB : dateB - dateA;
+        }
+    });
+
+    const handleFacetSort = (newSortBy: "srsStage" | "nextReviewAt" | "kuId") => {
+        if (newSortBy === facetSortBy) {
+            setFacetSortOrder(facetSortOrder === "asc" ? "desc" : "asc");
+        } else {
+            setFacetSortBy(newSortBy);
+            setFacetSortOrder("asc"); // Default asc for text/numbers usually
+        }
+    };
+
+
+  if (loadingKus) {
+    return <div className="p-4">Loading Knowledge Units...</div>;
   }
 
   return (
     <div className="container mx-auto p-4">
-      <h1 className="text-2xl font-bold mb-4">Admin - Knowledge Units</h1>
-      <div className="flex mb-4">
-        <input
-          type="text"
-          placeholder="Search by content..."
-          className="flex-grow p-2 border rounded-l-md"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
+      {/* Header and Tabs */}
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold mb-4">Admin</h1>
+        <div className="flex border-b border-gray-200">
+            <button
+                className={`py-2 px-4 font-medium focus:outline-none ${activeTab === 'knowledge-units' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
+                onClick={() => setActiveTab('knowledge-units')}
+            >
+                Knowledge Units
+            </button>
+            <button
+                className={`py-2 px-4 font-medium focus:outline-none ${activeTab === 'review-facets' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
+                onClick={() => setActiveTab('review-facets')}
+            >
+                Review Facets
+            </button>
+        </div>
       </div>
-      <div className="flex mb-4">
-        <button
-          className="p-2 border rounded-md mr-2"
-          onClick={() => handleSort("status")}
-        >
-          Sort by Status{" "}
-          {sortBy === "status" && (sortOrder === "asc" ? "▲" : "▼")}
-        </button>
-        <button
-          className="p-2 border rounded-md"
-          onClick={() => handleSort("createdAt")}
-        >
-          Sort by Created At{" "}
-          {sortBy === "createdAt" && (sortOrder === "asc" ? "▲" : "▼")}
-        </button>
-      </div>
-      <table className="min-w-full bg-white">
-        <thead>
-          <tr>
-            <th className="py-2 px-4 border-b">Content</th>
-            <th className="py-2 px-4 border-b">Status</th>
-            <th className="py-2 px-4 border-b">Created At</th>
-          </tr>
-        </thead>
-        <tbody>
-          {sortedAndFilteredKus.map((ku) => (
-            <tr key={ku.id}>
-              <td className="py-2 px-4 border-b">{ku.content}</td>
-              <td className="py-2 px-4 border-b">{ku.status}</td>
-              <td className="py-2 px-4 border-b">
-                {new Date(ku.createdAt).toLocaleString()}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+
+      {/* Tab Content: Knowledge Units */}
+      {activeTab === 'knowledge-units' && (
+        <div>
+            <div className="flex mb-4 gap-2">
+                <input
+                type="text"
+                placeholder="Search by content..."
+                className="flex-grow p-2 border rounded-md"
+                value={kuSearch}
+                onChange={(e) => setKuSearch(e.target.value)}
+                />
+            
+                <button
+                className="p-2 border rounded-md px-4 hover:bg-gray-50"
+                onClick={() => handleKuSort("status")}
+                >
+                Sort by Status{" "}
+                {kuSortBy === "status" && (kuSortOrder === "asc" ? "▲" : "▼")}
+                </button>
+                <button
+                className="p-2 border rounded-md px-4 hover:bg-gray-50"
+                onClick={() => handleKuSort("createdAt")}
+                >
+                Sort by Created At{" "}
+                {kuSortBy === "createdAt" && (kuSortOrder === "asc" ? "▲" : "▼")}
+                </button>
+            </div>
+
+            <div className="overflow-x-auto shadow rounded-lg border">
+                <table className="min-w-full bg-white divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                    <tr>
+                        <th className="py-3 px-6 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/3">Content</th>
+                        <th className="py-3 px-6 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/3">Status</th>
+                        <th className="py-3 px-6 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/3">Created At</th>
+                    </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                    {sortedAndFilteredKus.map((ku) => (
+                        <tr key={ku.id}>
+                        <td className="py-2 px-6 whitespace-nowrap">{ku.content}</td>
+                        <td className="py-2 px-6 whitespace-nowrap">{ku.status}</td>
+                        <td className="py-2 px-6 whitespace-nowrap">
+                            {new Date(ku.createdAt).toLocaleString()}
+                        </td>
+                        </tr>
+                    ))}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+      )}
+
+      {/* Tab Content: Review Facets */}
+      {activeTab === 'review-facets' && (
+          <div>
+            {loadingFacets ? (
+                <div>Loading Facets...</div>
+            ) : (
+                <>
+                <div className="flex justify-end mb-4 gap-2">
+                   {/* Add Sort controls if needed, default is by KU */}
+                    <button onClick={() => handleFacetSort('kuId')} className="text-sm text-gray-600 hover:text-black">
+                        Sort by KU {facetSortBy === 'kuId' && (facetSortOrder === 'asc' ? '▲' : '▼')}
+                    </button>
+                     <button onClick={() => handleFacetSort('srsStage')} className="text-sm text-gray-600 hover:text-black">
+                        Sort by SRS {facetSortBy === 'srsStage' && (facetSortOrder === 'asc' ? '▲' : '▼')}
+                    </button>
+                </div>
+                <div className="overflow-x-auto shadow rounded-lg border">
+                     <table className="min-w-full bg-white divide-y divide-gray-200">
+                        <thead className="bg-gray-50">
+                            <tr>
+                                <th className="py-3 px-6 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">KU</th>
+                                <th className="py-3 px-6 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Facet Type</th>
+                                <th className="py-3 px-6 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">SRS Stage</th>
+                                <th className="py-3 px-6 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Progress (P/F)</th>
+                                <th className="py-3 px-6 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Next Review</th>
+
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-200">
+                            {sortedFacets.map((facet) => {
+                                const { passes, fails } = getProgress(facet);
+                                return (
+                                <tr key={facet.id} className="hover:bg-gray-50">
+                                    <td className="py-2 px-6 whitespace-nowrap font-medium">{getKuContent(facet.kuId)}</td>
+                                    <td className="py-2 px-6 whitespace-nowrap text-sm text-gray-600">{facet.facetType}</td>
+                                    <td className="py-2 px-6 whitespace-nowrap text-sm">{facet.srsStage}</td>
+                                    <td className="py-2 px-6 whitespace-nowrap text-sm">
+                                        <span className="text-green-600">{passes}</span> / <span className="text-red-600">{fails}</span>
+                                    </td>
+                                     <td className="py-2 px-6 whitespace-nowrap text-sm text-gray-500">
+                                        {new Date(facet.nextReviewAt).toLocaleString()}
+                                    </td>
+                                </tr>
+                                )
+                            })}
+                        </tbody>
+                    </table>
+                </div>
+                </>
+            )}
+          </div>
+      )}
     </div>
   );
 }
