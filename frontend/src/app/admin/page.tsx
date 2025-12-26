@@ -67,7 +67,7 @@ export default function AdminPage() {
       };
       fetchFacets();
     }
-  }, [activeTab, facetLoaded, loadingFacets]);
+  }, [activeTab, facetLoaded]);
 
   // --- KU Logic ---
   const sortedAndFilteredKus = knowledgeUnits
