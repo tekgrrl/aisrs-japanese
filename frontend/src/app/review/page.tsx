@@ -8,6 +8,7 @@ import { logger } from "@/lib/logger";
 import { QuestionFeedbackModal } from "@/components/QuestionFeedbackModal";
 import EditKnowledgeUnitModal from "@/components/EditKnowledgeUnitModal";
 import { KnowledgeUnit } from "@/types";
+import { getSrsLevelName, getSrsLevelIndex } from "@/utils/srs";
 
 type AnswerState = "unanswered" | "evaluating" | "correct" | "incorrect";
 
@@ -37,6 +38,11 @@ export default function ReviewPage() {
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
 
   const [pendingSrsResult, setPendingSrsResult] = useState<"pass" | "fail" | null>(null);
+
+  const [levelStatus, setLevelStatus] = useState<{
+    direction: "up" | "down";
+    newLevel: string;
+  } | null>(null);
 
   // --- Edit Modal State ---
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -164,6 +170,25 @@ export default function ReviewPage() {
         },
       );
       if (!response.ok) throw new Error("Failed to update SRS data");
+
+      const data = await response.json();
+      const newStage = data.newStage;
+      const oldStage = currentItem.facet.srsStage || 0;
+
+      const oldIndex = getSrsLevelIndex(oldStage);
+      const newIndex = getSrsLevelIndex(newStage);
+
+      if (newIndex > oldIndex) {
+        setLevelStatus({
+          direction: "up",
+          newLevel: getSrsLevelName(newStage),
+        });
+      } else if (newIndex < oldIndex) {
+        setLevelStatus({
+          direction: "down",
+          newLevel: getSrsLevelName(newStage),
+        });
+      }
 
       // SUCCESS! The API call finished and was OK.
       // *Now* we dispatch the event from the client.
@@ -343,6 +368,7 @@ export default function ReviewPage() {
     setAiExplanation("");
     setPendingSrsResult(null);
     setShowFeedbackModal(false);
+    setLevelStatus(null);
     // Use functional update to ensure we use the latest state
     setCurrentIndex((prevIndex) => prevIndex + 1);
   };
@@ -692,7 +718,7 @@ export default function ReviewPage() {
         </div>
 
         {/* Answer Form */}
-        <form onSubmit={handleEvaluateAnswer}>
+        <form onSubmit={handleEvaluateAnswer} className="relative">
           <input
             key={currentItem.facet.id} // Force re-render (and autoFocus) on new item
             type="text"
@@ -720,22 +746,47 @@ export default function ReviewPage() {
             disabled={answerState !== "unanswered" || isDynamicLoading}
             className="w-full p-4 bg-gray-700 border-2 border-gray-600 text-white text-xl rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-800 disabled:text-gray-500"
           />
-          <button
-            type="submit"
-            disabled={answerState !== "unanswered" || isDynamicLoading}
-            className="w-full mt-4 px-6 py-4 bg-blue-600 text-white text-xl font-semibold rounded-md shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-800 disabled:bg-gray-500 disabled:cursor-wait"
-          >
-            {answerState === "evaluating" ? "Evaluating..." : "Submit Answer"}
-          </button>
-          
-          <button
-            type="button"
-            onClick={handleSkip}
-            disabled={answerState !== "unanswered" || isDynamicLoading}
-            className="w-full mt-4 px-6 py-3 bg-gray-500 text-white text-lg font-semibold rounded-md shadow-md hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 focus:ring-offset-gray-800 disabled:bg-gray-800 disabled:text-gray-500"
-          >
-            Skip
-          </button>
+          <div className="relative mt-4">
+            <button
+              type="submit"
+              disabled={answerState !== "unanswered" || isDynamicLoading}
+              className="w-full px-6 py-4 bg-blue-600 text-white text-xl font-semibold rounded-md shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-800 disabled:bg-gray-500 disabled:cursor-wait"
+            >
+              {answerState === "evaluating" ? "Evaluating..." : "Submit Answer"}
+            </button>
+            
+            <button
+              type="button"
+              onClick={handleSkip}
+              disabled={answerState !== "unanswered" || isDynamicLoading}
+              className="w-full mt-4 px-6 py-3 bg-gray-500 text-white text-lg font-semibold rounded-md shadow-md hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 focus:ring-offset-gray-800 disabled:bg-gray-800 disabled:text-gray-500"
+            >
+              Skip
+            </button>
+
+            {/* Level Change Notification Overlay */}
+            {levelStatus && (
+              <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-10 w-full">
+                <div
+                  className={`flex flex-col items-center justify-center p-6 rounded-lg shadow-xl border-2 animate-fade-slide-up mx-auto w-3/4 ${
+                    levelStatus.direction === "up"
+                      ? "bg-[#0A5C36] border-green-400 text-white"
+                      : "bg-red-800 border-red-400 text-white"
+                  }`}
+                >
+                  <span className="text-4xl font-bold mb-2">
+                    {levelStatus.direction === "up" ? "▲" : "▼"}
+                  </span>
+                  <div className="text-center">
+                    <p className="text-sm uppercase tracking-wider opacity-80 mb-1">
+                      {levelStatus.direction === "up" ? "Level Up" : "Level Down"}
+                    </p>
+                    <p className="text-2xl font-bold">{levelStatus.newLevel}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
         </form>
       </div>
 
