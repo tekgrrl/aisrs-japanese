@@ -73,32 +73,23 @@ export class ReviewsService {
             const facetRef = facetDoc.ref;
             const facetData = facetDoc.data() as ReviewFacet;
 
-            // TODO: Add User Check here when Auth is ready
-            // if (data.userId !== currentUserId) throw ...
-
-            // 2. Determine the new SRS stage and time of next review
+            // Determine the new SRS stage and time of next review
             const currentSrsStage = facetData.srsStage || 0;
-            // TODO: Seems like these dates are coerced to Timestamps by Firestore. Need to confirm
-            const oldNextReviewDate = facetData.nextReviewAt ? facetData.nextReviewAt.toDate() : new Date();
+            // Dates from Firestore are timestamps, convert if necessary (though usually handled by SDK)
+            // const oldNextReviewDate = facetData.nextReviewAt ? facetData.nextReviewAt.toDate() : new Date();
 
-            let nextSrsStage: number;
-
-            if (result === 'pass') {
-                // Advance 1 stage, max out at intervals length
-                nextSrsStage = Math.min(
-                    currentSrsStage + 1,
-                    Object.keys(this.INTERVALS).length,
-                );
-            } else {
-                // Penalty: Drop 2 stages, min 1 (unless it was already 0)
-                nextSrsStage = currentSrsStage === 0 ? 0 : Math.max(1, currentSrsStage - 2);
-            }
+            const nextSrsStage = this.calculateNextStage(currentSrsStage, result);
 
             const now = new Date();
             const hoursToAdd = nextSrsStage === 0 ? 0 : this.INTERVALS[nextSrsStage];
             const nextReviewDate = new Date(now.getTime() + hoursToAdd * 60 * 60 * 1000);
 
             // Calculate and update Stats via StatsService
+            // Note: We use the *old* nextReviewAt for stats scheduling accuracy if needed
+            const oldNextReviewDate = facetData.nextReviewAt instanceof Timestamp
+                ? facetData.nextReviewAt.toDate()
+                : (facetData.nextReviewAt ? new Date(facetData.nextReviewAt) : new Date());
+
             await this.statsService.updateReviewScheduleStats(
                 CURRENT_USER_ID,
                 oldNextReviewDate,
@@ -108,7 +99,7 @@ export class ReviewsService {
             );
 
             // WRITE (Facet)
-            this.logger.log(`Updating facet ${facetId} to stage ${nextSrsStage}`);
+            this.logger.log(`Updating facet ${facetId} to stage ${nextSrsStage} (${result.toUpperCase()})`);
 
             transaction.update(facetRef, {
                 srsStage: nextSrsStage,
@@ -119,18 +110,15 @@ export class ReviewsService {
                     timestamp: now,
                     result,
                 }),
-                // Note: We aren't updating the 'history' array here yet.
-                // If you want that atomic, we need to duplicate the logic or pass the transaction.
             });
 
             // 4. WRITE (Knowledge Unit Propagation)
-            // If the item reached Mastered (final stage), we might want to update the KU.
-            if (nextSrsStage === Object.keys(this.INTERVALS).length - 1 && facetData.kuId) {
+            // If the item reached Mastered (Mushin - Stage 8), we update the KU status.
+            if (nextSrsStage === 8 && facetData.kuId) {
                 const kuRef = this.db
                     .collection(KNOWLEDGE_UNITS_COLLECTION)
                     .doc(facetData.kuId);
-                // This is an optimistic update; strictly speaking we should read the KU first
-                // to check if ALL facets are mastered, but this is a safe heuristic for now.
+                // Optimistic update for now
                 transaction.update(kuRef, { status: 'mastered' });
             }
 
@@ -145,6 +133,39 @@ export class ReviewsService {
                 nextReview: nextReviewDate,
             };
         });
+    }
+
+    /**
+     * Calculates the next SRS stage based on the current stage and the result.
+     * Implements the specific AISRS progression paths (Sumi-suri -> Mushin).
+     */
+    private calculateNextStage(currentStage: number, result: 'pass' | 'fail'): number {
+        if (result === 'pass') {
+            // Progression is linear: 0->1->2->3->4...->8
+            // Capped at Stage 8 (Mushin)
+            return Math.min(currentStage + 1, 8);
+        } else {
+            // Failure Transitions
+            switch (currentStage) {
+                case 0: return 0; // Sumi-suri: Initial -> Initial
+                case 1: return 1; // Sumi-suri: Step 1 -> Step 1 (Reset to path start)
+                case 2: return 1; // Sumi-suri: Step 2 -> Step 1
+                case 3: return 1; // Sumi-suri: Step 3 -> Step 1
+                case 4: return 2; // Kaisho I -> Sumi-suri III (Stage 2) - "Two failures in Kaisho resets back to SRS 2"? 
+                // Wait, clarification said: "Let's make it drop to SRS Stage 4". 
+                // BUT also "Two failures in Kaisho resets back to SRS 2".
+                // Let's re-read the approved logic table carefully.
+                // Table says: 4 -> Fail -> 2.
+                // Table says: 5 -> Fail -> 4.
+                // This assumes "Two failures in Kaisho" means dropping from 5->4 (1 fail), then 4->2 (2 fails).
+                // So 4->2 is correct per table.
+                case 5: return 4; // Kaisho II -> Kaisho I
+                case 6: return 4; // Gyosho -> Kaisho I
+                case 7: return 6; // Sosho -> Gyosho
+                case 8: return 6; // Mushin -> Gyosho
+                default: return Math.max(0, currentStage - 1); // Fallback safe
+            }
+        }
     }
 
     async updateFacetQuestion(facetId: string, questionId: string) {
