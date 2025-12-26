@@ -70,9 +70,9 @@ export default function Header() {
 
     // Apply initial class
     if (isVisible) {
-      document.body.classList.add("furigana-visible");
+      document.documentElement.setAttribute("data-furigana", "true");
     } else {
-      document.body.classList.remove("furigana-visible");
+      document.documentElement.removeAttribute("data-furigana");
     }
   }, []);
 
@@ -82,9 +82,9 @@ export default function Header() {
     localStorage.setItem("furiganaVisible", String(newState));
 
     if (newState) {
-      document.body.classList.add("furigana-visible");
+      document.documentElement.setAttribute("data-furigana", "true");
     } else {
-      document.body.classList.remove("furigana-visible");
+      document.documentElement.removeAttribute("data-furigana");
     }
   }, [showFurigana]);
 

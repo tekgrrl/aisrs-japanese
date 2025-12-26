@@ -100,7 +100,7 @@ The lesson should be in English. Where you want to use Japanese text for example
 **Task 2: Lesson Generation**
 * Generate detailed explanations for meaning and reading.
 * If a word is a "suru noun", include explanations of the meaning of the suru form.
-* Generate context examples.
+* Generate context examples that are no more complex that JLPT N4 even if the vocabulary itself is more advanced.
 * Analyze component Kanji.
 * Do not explain what "rendaku" means.
 

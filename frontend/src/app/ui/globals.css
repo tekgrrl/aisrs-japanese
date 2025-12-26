@@ -41,6 +41,10 @@ body {
 }
 
 /* Furigana Visibility Control */
-body:not(.furigana-visible) rt {
+rt {
   display: none;
+}
+
+html[data-furigana="true"] rt {
+  display: revert;
 }
