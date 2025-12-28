@@ -56,13 +56,23 @@ export default function ReviewPage() {
   const nextButtonRef = useRef<HTMLButtonElement>(null);
 
   // --- Focus Next Button Effect ---
+  const FOCUS_TIMEOUT_MS = 50;
+
   useEffect(() => {
+    let timeoutId: NodeJS.Timeout;
+
     if (answerState === "correct" || answerState === "incorrect") {
       // Small timeout to ensure render is complete and element is visible
-      setTimeout(() => {
+      timeoutId = setTimeout(() => {
         nextButtonRef.current?.focus();
-      }, 50);
+      }, FOCUS_TIMEOUT_MS);
     }
+
+    return () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    };
   }, [answerState]);
 
   // --- Fetch Dynamic Question Logic ---
