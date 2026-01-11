@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef, FormEvent } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ReviewItem, ReviewFacet, VocabLesson, KanjiLesson } from "@/types";
 import * as wanakana from "wanakana";
 import { logger } from "@/lib/logger";
@@ -13,6 +14,7 @@ import { getSrsLevelName, getSrsLevelIndex } from "@/utils/srs";
 type AnswerState = "unanswered" | "evaluating" | "correct" | "incorrect";
 
 export default function ReviewPage() {
+  const router = useRouter();
   const [reviewQueue, setReviewQueue] = useState<ReviewItem[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
@@ -776,14 +778,28 @@ export default function ReviewPage() {
               {answerState === "evaluating" ? "Evaluating..." : "Submit Answer"}
             </button>
             
-            <button
-              type="button"
-              onClick={handleSkip}
-              disabled={answerState !== "unanswered" || isDynamicLoading}
-              className="w-full mt-4 px-6 py-3 bg-gray-500 text-white text-lg font-semibold rounded-md shadow-md hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 focus:ring-offset-gray-800 disabled:bg-gray-800 disabled:text-gray-500"
-            >
-              Skip
-            </button>
+            <div className="flex gap-4 mt-4">
+              <button
+                type="button"
+                onClick={handleSkip}
+                disabled={answerState !== "unanswered" || isDynamicLoading}
+                className="flex-1 px-6 py-3 bg-gray-500 text-white text-lg font-semibold rounded-md shadow-md hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 focus:ring-offset-gray-800 disabled:bg-gray-800 disabled:text-gray-500"
+              >
+                Skip
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (currentItem) {
+                    router.push(`/learn/${currentItem.ku.id}?source=review`);
+                  }
+                }}
+                disabled={answerState !== "unanswered" || isDynamicLoading}
+                className="flex-1 px-6 py-3 bg-[#0A5C36] text-white text-lg font-semibold rounded-md shadow-md hover:bg-[#084a2b] focus:outline-none focus:ring-2 focus:ring-green-800 focus:ring-offset-2 focus:ring-offset-gray-800 disabled:bg-gray-800 disabled:text-gray-500"
+              >
+                Skip & Review Lesson
+              </button>
+            </div>
 
             {/* Level Change Notification Overlay */}
             {levelStatus && (
