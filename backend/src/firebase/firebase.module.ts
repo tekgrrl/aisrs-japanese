@@ -1,6 +1,7 @@
 import { Module, Global } from '@nestjs/common';
 import * as admin from 'firebase-admin';
-
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { getFirestore } from 'firebase-admin/firestore';
 // Custom Token for Injection
 export const FIRESTORE_CONNECTION = 'FIRESTORE_CONNECTION';
 export const KNOWLEDGE_UNITS_COLLECTION = "knowledge-units";
@@ -14,18 +15,20 @@ export const FieldValue = admin.firestore.FieldValue;
 
 @Global() // Makes this module available everywhere without importing it
 @Module({
+  imports: [ConfigModule.forRoot()],
   providers: [
     {
       provide: FIRESTORE_CONNECTION,
-      useFactory: () => {
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) => {
         // Prevent double initialization in hot-reload
         if (!admin.apps.length) {
           admin.initializeApp({
-            projectId: 'aisrs-japanese-dev', // Matches your emulator/project config
-            // credential: ... (Add prod cert logic here later)
+            projectId: configService.get<string>('GOOGLE_CLOUD_PROJECT'), // Matches your emulator/project config
           });
         }
-        return admin.firestore();
+        const firestoreDbName = configService.get<string>('FIRESTORE_DB') || '(default)';
+        return getFirestore(admin.app(), firestoreDbName);
       },
     },
   ],
