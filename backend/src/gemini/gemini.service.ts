@@ -138,6 +138,10 @@ export class GeminiService implements OnModuleInit {
           error.message.includes("network")
         ) {
           errorMessage = `Network error during API call: ${error.message}`;
+          if (error.cause) {
+            errorDetails.cause = error.cause;
+            this.logger.error(`Network error cause:`, error.cause);
+          }
         }
       } else {
         try {
@@ -408,6 +412,10 @@ export class GeminiService implements OnModuleInit {
           error.message.includes("network")
         ) {
           errorMessage = `Network error during API call: ${error.message}`;
+          if (error.cause) {
+            errorDetails.cause = error.cause;
+            this.logger.error(`Network error cause:`, error.cause);
+          }
         }
       } else {
         try {
