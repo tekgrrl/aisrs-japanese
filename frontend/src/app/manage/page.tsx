@@ -41,10 +41,8 @@ export default function KnowledgeManagementPage() {
   let isFormValid = isContentValid; // Base requirement
 
   if (newKuType === "Vocab") {
-    // If type is Vocab, all three fields are required
-    const isReadingValid = newKuReading.trim() !== "";
-    const isDefinitionValid = newKuDefinition.trim() !== "";
-    isFormValid = isContentValid && isReadingValid && isDefinitionValid;
+    // Reading and Definition are now optional for Vocab
+    isFormValid = isContentValid;
   }
   // For other types, only 'Content' is required.
   // --- END VALIDATION ---
@@ -344,7 +342,7 @@ export default function KnowledgeManagementPage() {
                   onChange={(e) => setNewKuReading(e.target.value)}
                   placeholder="e.g., たべる, かぞく"
                   className="w-full p-3 bg-gray-700 border-gray-600 text-white rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
-                  required // --- VALIDATION ---
+                // required removed
                 />
               </div>
               <div>
@@ -361,7 +359,7 @@ export default function KnowledgeManagementPage() {
                   onChange={(e) => setNewKuDefinition(e.target.value)}
                   placeholder="e.g., To eat, Family"
                   className="w-full p-3 bg-gray-700 border-gray-600 text-white rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
-                  required // --- VALIDATION ---
+                // required removed
                 />
               </div>
             </>

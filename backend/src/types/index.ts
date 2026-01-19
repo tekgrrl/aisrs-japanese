@@ -57,6 +57,7 @@ export interface VocabLesson {
   kuId?: string;
   type: "Vocab";
   vocab: string;
+  reading: string; // The canonical kana reading
   definitions: string[];
   definition?: string; // Deprecated, kept for backward compatibility
   partOfSpeech: PartOfSpeech;
