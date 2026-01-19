@@ -270,9 +270,10 @@ export default function ReviewPage() {
       if (isNewAiQuestion(currentItem)) {
         setPendingSrsResult("fail");
         // Do NOT call handleUpdateSrs here
-      } else {
-        await handleUpdateSrs("fail");
-      }
+         await handleUpdateSrs("fail");
+       }
+
+       setAnswerState("incorrect");
 
       setAnswerState("incorrect");
 
