@@ -243,7 +243,7 @@ export default function ReviewPage() {
 
   const isNewAiQuestion = (item: ReviewItem) => {
     if (item.facet.facetType !== "AI-Generated-Question") return false;
-    
+
     // If we don't have a dynamic question ID yet, we can't determine.
     // But this is called during answer evaluation, so it should be set.
     if (!dynamicQuestionId) return false;
@@ -265,7 +265,7 @@ export default function ReviewPage() {
     // --- New: Short-circuit for empty answer ---
     if (userAnswer.trim() === "") {
       setAiExplanation("No answer provided.");
-      
+
       // Check if we need to defer SRS update
       if (isNewAiQuestion(currentItem)) {
         setPendingSrsResult("fail");
@@ -273,7 +273,7 @@ export default function ReviewPage() {
       } else {
         await handleUpdateSrs("fail");
       }
-      
+
       setAnswerState("incorrect");
 
       const facetId = currentItem.facet.id;
@@ -376,7 +376,7 @@ export default function ReviewPage() {
   const goToNextItem = () => {
     // If it's a new AI question and we haven't shown feedback yet
     const isNew = isNewAiQuestion(currentItem);
-    
+
     if (isNew && pendingSrsResult) {
       setShowFeedbackModal(true);
       return;
@@ -432,14 +432,14 @@ export default function ReviewPage() {
               ku: {
                 ...item.ku,
                 ...updates,
-                 ...updatedKu, 
+                ...updatedKu,
               },
             };
           }
           return item;
         })
       );
-      
+
       window.dispatchEvent(new CustomEvent("refreshStats"));
     } catch (err) {
       console.error(err);
@@ -454,14 +454,14 @@ export default function ReviewPage() {
     // Status is already 'active' by default, so no need to patch unless we want to be explicit
     // But let's be safe and ensure it's active if it was somehow not
     if (dynamicQuestionId) {
-        await updateQuestionStatus(dynamicQuestionId, "active");
-        
-        // Update local facet state so if it reappears, it's not "new"
-        if (currentItem) {
-            currentItem.facet.currentQuestionId = dynamicQuestionId;
-        }
+      await updateQuestionStatus(dynamicQuestionId, "active");
+
+      // Update local facet state so if it reappears, it's not "new"
+      if (currentItem) {
+        currentItem.facet.currentQuestionId = dynamicQuestionId;
+      }
     } else {
-        console.warn("[ReviewPage] handleFeedbackKeep: No dynamicQuestionId to update");
+      console.warn("[ReviewPage] handleFeedbackKeep: No dynamicQuestionId to update");
     }
     advanceToNext();
   };
@@ -482,7 +482,7 @@ export default function ReviewPage() {
     // "Re-queue... so it appears again later". This could mean "next session".
     // If we don't update SRS, `nextReviewAt` is still in the past. So it will be fetched next time.
     // So advancing index is fine. It will just be skipped for now.
-    
+
     advanceToNext();
   };
 
@@ -493,10 +493,10 @@ export default function ReviewPage() {
 
       // Update local facet state so if it reappears, it's not "new"
       if (currentItem) {
-          currentItem.facet.currentQuestionId = dynamicQuestionId;
+        currentItem.facet.currentQuestionId = dynamicQuestionId;
       }
     }
-    
+
     // Record SRS tracking data based on the ACTUAL result (pass or fail)
     // Just like "Keep", we respect the user's answer.
     if (pendingSrsResult) {
@@ -589,12 +589,12 @@ export default function ReviewPage() {
       if (facet.facetType === "Content-to-Definition") {
         // Collect all potential definition strings
         const rawDefinitions: string[] = [];
-        
+
         // 1. From Lesson (array)
         if (lesson?.definitions && Array.isArray(lesson.definitions)) {
           rawDefinitions.push(...lesson.definitions);
         }
-        
+
         // 2. From KU (string)
         if (ku.data?.definition) {
           rawDefinitions.push(ku.data.definition);
@@ -607,14 +607,30 @@ export default function ReviewPage() {
             .map((def) => def.trim())
             .filter((def) => def.length > 0)
         ));
-        
+
         console.log("Expected answers for Content-to-Definition:", uniqueDefinitions);
         return uniqueDefinitions;
       }
       if (facet.facetType === "Content-to-Reading") {
-        // Use lesson first, fallback to older ku.data
-        console.log("Expected answers for Content-to-Reading:", [ku.data?.reading || lesson?.reading_explanation || ""]);
-        return [ku.data?.reading || lesson?.reading_explanation || ""];
+        // Use lesson.reading as primary, fallback to ku.data.reading (which might be empty now)
+        // If both are present, we might want to accept both?
+        // But getExpectedAnswer returns string[].
+        // Let's use ku.data.reading if present (legacy source of truth), AND lesson.reading.
+
+        const answers: string[] = [];
+        if (ku.data?.reading) answers.push(ku.data.reading);
+        if (lesson?.reading) answers.push(lesson.reading);
+
+        // Deduplicate
+        const unique = Array.from(new Set(answers));
+
+        if (unique.length > 0) {
+          console.log("Expected answers for Content-to-Reading:", unique);
+          return unique;
+        }
+
+        // Fallback to reading_explanation if absolutely nothing else (unlikely with Gemini)
+        return [lesson?.reading_explanation || ""];
       }
     } else if (ku.type === "Kanji") {
       // --- KANJI LOGIC ---
@@ -640,10 +656,10 @@ export default function ReviewPage() {
     }
 
     // --- KANJI COMPONENT LOGIC ---
-    if (facet.facetType === "Kanji-Component-Meaning") {  
+    if (facet.facetType === "Kanji-Component-Meaning") {
 
-      const meaningStr = ku.data?.meaning || ""; 
-      
+      const meaningStr = ku.data?.meaning || "";
+
       return meaningStr.split(',').map(s => s.trim()).filter(s => s);
     }
     if (facet.facetType === "Kanji-Component-Reading") {
@@ -777,7 +793,7 @@ export default function ReviewPage() {
             >
               {answerState === "evaluating" ? "Evaluating..." : "Submit Answer"}
             </button>
-            
+
             <div className="flex gap-4 mt-4">
               <button
                 type="button"
@@ -805,11 +821,10 @@ export default function ReviewPage() {
             {levelStatus && (
               <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-10 w-full">
                 <div
-                  className={`flex flex-col items-center justify-center p-6 rounded-lg shadow-xl border-2 animate-fade-slide-up mx-auto w-3/4 ${
-                    levelStatus.direction === "up"
+                  className={`flex flex-col items-center justify-center p-6 rounded-lg shadow-xl border-2 animate-fade-slide-up mx-auto w-3/4 ${levelStatus.direction === "up"
                       ? "bg-[#0A5C36] border-green-400 text-white"
                       : "bg-red-800 border-red-400 text-white"
-                  }`}
+                    }`}
                 >
                   <span className="text-4xl font-bold mb-2">
                     {levelStatus.direction === "up" ? "▲" : "▼"}
@@ -830,11 +845,10 @@ export default function ReviewPage() {
       {/* --- Answer Feedback Section --- */}
       {answerState !== "unanswered" && answerState !== "evaluating" && (
         <div
-          className={`mt-8 p-6 rounded-lg ${
-            answerState === "correct"
+          className={`mt-8 p-6 rounded-lg ${answerState === "correct"
               ? "bg-green-800 border-green-600"
               : "bg-red-800 border-red-600"
-          }`}
+            }`}
         >
           <h3 className="text-2xl font-semibold text-white mb-3">
             {answerState === "correct" ? "Correct" : "Incorrect"}
@@ -869,7 +883,7 @@ export default function ReviewPage() {
           )}
 
           <div className="mt-6 flex gap-4">
-             <button
+            <button
               onClick={handleEditClick}
               className="px-4 py-3 bg-gray-600 text-white font-semibold rounded-md shadow-md hover:bg-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 focus:ring-offset-gray-800"
             >

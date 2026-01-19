@@ -7,6 +7,8 @@ import { KnowledgeUnit, Lesson } from '../types';
 import { performance } from 'perf_hooks';
 import { CURRENT_USER_ID } from '@/lib/constants';
 
+import { KnowledgeUnitsService } from '../knowledge-units/knowledge-units.service';
+
 @Injectable()
 export class LessonsService {
     private readonly logger = new Logger(LessonsService.name);
@@ -14,6 +16,7 @@ export class LessonsService {
     constructor(
         @Inject(FIRESTORE_CONNECTION) private readonly db: Firestore,
         private readonly geminiService: GeminiService,
+        private readonly knowledgeUnitsService: KnowledgeUnitsService,
     ) { }
 
     async generateLesson(kuId: string) {
@@ -201,7 +204,31 @@ You MUST return a valid JSON object matching this schema:
         // --- SAVE TO 'lessons' collection ---
         await lessonDbRef.set(lessonJson);
 
+        // --- UPDATE KU WITH LESSON DATA ---
+        if (ku.type === 'Vocab') {
+            const vocabLesson = lessonJson as any; // Use any to access new fields or helper merged fields
+            const updates: any = {};
 
+            // Use dot notation to update nested data fields without overwriting the map
+            if (vocabLesson.reading) {
+                updates['data.reading'] = vocabLesson.reading;
+            }
+
+            // definition is populated above by joining definitions
+            if (vocabLesson.definition) {
+                updates['data.definition'] = vocabLesson.definition;
+            }
+
+            if (Object.keys(updates).length > 0) {
+                try {
+                    this.logger.log(`Updating KU ${kuId} with lesson data: ${JSON.stringify(updates)}`);
+                    await this.knowledgeUnitsService.update(kuId, updates);
+                } catch (e) {
+                    this.logger.error(`Failed to backfill KU ${kuId} with lesson data`, e);
+                    // Don't fail the response, just log error
+                }
+            }
+        }
 
         return lessonJson;
     }
