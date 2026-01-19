@@ -3,7 +3,7 @@ import { FIRESTORE_CONNECTION, LESSONS_COLLECTION, KNOWLEDGE_UNITS_COLLECTION } 
 import { Firestore } from 'firebase-admin/firestore';
 import { GeminiService } from '../gemini/gemini.service';
 import { QuestionsService } from '../questions/questions.service';
-import { KnowledgeUnit, Lesson } from '../types';
+import { KnowledgeUnit, Lesson, VocabLesson } from '../types';
 import { performance } from 'perf_hooks';
 import { CURRENT_USER_ID } from '@/lib/constants';
 
@@ -206,8 +206,8 @@ You MUST return a valid JSON object matching this schema:
 
         // --- UPDATE KU WITH LESSON DATA ---
         if (ku.type === 'Vocab') {
-            const vocabLesson = lessonJson as any; // Use any to access new fields or helper merged fields
-            const updates: any = {};
+            const vocabLesson = lessonJson as VocabLesson;
+            const updates: Record<string, any> = {};
 
             // Use dot notation to update nested data fields without overwriting the map
             if (vocabLesson.reading) {
