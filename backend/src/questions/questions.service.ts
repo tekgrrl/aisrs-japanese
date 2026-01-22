@@ -159,6 +159,7 @@ Rules:
                 answer: questionItem.data.answer,
                 accepted_alternatives: questionItem.data.acceptedAlternatives,
                 questionId: questionItem.id, // Return the ID
+                status: questionItem.status, // Return the status
               };
             }
           } else {
@@ -242,6 +243,7 @@ Rules:
     return {
       ...parsedJson,
       questionId: returnedQuestionId,
+      status: 'active', // New questions are always active
     };
 
   } // end generateQuestion

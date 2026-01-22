@@ -43,9 +43,9 @@ export const QuestionFeedbackModal: React.FC<QuestionFeedbackModalProps> = ({
 
           <button
             onClick={onReport}
-            className="w-full py-3 px-4 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-md transition-colors shadow-md flex items-center justify-center gap-2"
+            className="w-full py-3 px-4 bg-gray-600 hover:bg-gray-700 text-white font-semibold rounded-md transition-colors shadow-md flex items-center justify-center gap-2"
           >
-            <span>🚩 Report Problem (Valid but Flawed)</span>
+            <span>🤷 Undecided (will rate next time)</span>
           </button>
         </div>
       </div>

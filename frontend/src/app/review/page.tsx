@@ -35,6 +35,9 @@ export default function ReviewPage() {
   const [dynamicContext, setDynamicContext] = useState<string | null>(null);
   const [dynamicAltAnswers, setDynamicAltAnswers] = useState<string[]>([]);
   const [dynamicQuestionId, setDynamicQuestionId] = useState<string | null>(null);
+  const [dynamicQuestionStatus, setDynamicQuestionStatus] = useState<
+    "active" | "flagged" | "inactive" | null
+  >(null);
 
   // --- Feedback Modal State ---
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
@@ -94,13 +97,14 @@ export default function ReviewPage() {
         const errData = await response.json();
         throw new Error(errData.error || "Failed to generate question");
       }
-      const { question, answer, context, accepted_alternatives, questionId } =
+      const { question, answer, context, accepted_alternatives, questionId, status } =
         await response.json();
       setDynamicQuestion(question);
       setDynamicAnswer(answer);
       setDynamicContext(context || null);
       setDynamicAltAnswers(accepted_alternatives || null);
       setDynamicQuestionId(questionId || null);
+      setDynamicQuestionStatus(status || "active");
     } catch (err) {
       if (err instanceof Error) setError(err.message);
       else setError("An unknown error occurred");
@@ -151,7 +155,9 @@ export default function ReviewPage() {
       setDynamicAnswer(null);
       setDynamicAltAnswers([]);
       setDynamicContext(null);
+      setDynamicContext(null);
       setDynamicQuestionId(null);
+      setDynamicQuestionStatus(null);
 
       fetchDynamicQuestion(
         currentItem.ku.content,
@@ -163,7 +169,9 @@ export default function ReviewPage() {
       setDynamicAnswer(null);
       setDynamicAltAnswers([]);
       setDynamicContext(null);
+      setDynamicContext(null);
       setDynamicQuestionId(null);
+      setDynamicQuestionStatus(null);
     }
   }, [currentItem, currentIndex]); // Re-run whenever the currentItem OR the index changes
 
@@ -249,12 +257,16 @@ export default function ReviewPage() {
     if (!dynamicQuestionId) return false;
 
     // If the facet has a recorded question ID that matches the current one,
-    // it means we've seen this question before (and failed it).
-    if (item.facet.currentQuestionId === dynamicQuestionId) {
+    // it means we've seen this question before... UNLESS it is flagged.
+    // If it is flagged (Undecided), we treat it as new so the user can rate it again.
+    if (
+      item.facet.currentQuestionId === dynamicQuestionId &&
+      dynamicQuestionStatus !== "flagged"
+    ) {
       return false;
     }
 
-    // Otherwise (no recorded ID, or different ID), it's a new question.
+    // Otherwise (no recorded ID, or different ID, or flagged), it's a new question (or needs input).
     return true;
   };
 
@@ -270,10 +282,10 @@ export default function ReviewPage() {
       if (isNewAiQuestion(currentItem)) {
         setPendingSrsResult("fail");
         // Do NOT call handleUpdateSrs here
-         await handleUpdateSrs("fail");
-       }
+        await handleUpdateSrs("fail");
+      }
 
-       setAnswerState("incorrect");
+      setAnswerState("incorrect");
 
       setAnswerState("incorrect");
 
@@ -487,12 +499,14 @@ export default function ReviewPage() {
     advanceToNext();
   };
 
-  const handleFeedbackReport = async () => {
-    // Mark as flagged
+  const handleFeedbackUndecided = async () => {
+    // Mark as flagged (so it shows up again next time)
     if (dynamicQuestionId) {
       await updateQuestionStatus(dynamicQuestionId, "flagged");
 
-      // Update local facet state so if it reappears, it's not "new"
+      // Update local facet state so if it reappears, it's not "new"... 
+      // ACTUALLY, we want the modal to show again.
+      // But we update the facet's question ID to ensure we track usage.
       if (currentItem) {
         currentItem.facet.currentQuestionId = dynamicQuestionId;
       }
@@ -823,8 +837,8 @@ export default function ReviewPage() {
               <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-10 w-full">
                 <div
                   className={`flex flex-col items-center justify-center p-6 rounded-lg shadow-xl border-2 animate-fade-slide-up mx-auto w-3/4 ${levelStatus.direction === "up"
-                      ? "bg-[#0A5C36] border-green-400 text-white"
-                      : "bg-red-800 border-red-400 text-white"
+                    ? "bg-[#0A5C36] border-green-400 text-white"
+                    : "bg-red-800 border-red-400 text-white"
                     }`}
                 >
                   <span className="text-4xl font-bold mb-2">
@@ -847,8 +861,8 @@ export default function ReviewPage() {
       {answerState !== "unanswered" && answerState !== "evaluating" && (
         <div
           className={`mt-8 p-6 rounded-lg ${answerState === "correct"
-              ? "bg-green-800 border-green-600"
-              : "bg-red-800 border-red-600"
+            ? "bg-green-800 border-green-600"
+            : "bg-red-800 border-red-600"
             }`}
         >
           <h3 className="text-2xl font-semibold text-white mb-3">
@@ -912,7 +926,7 @@ export default function ReviewPage() {
         isOpen={showFeedbackModal}
         onKeep={handleFeedbackKeep}
         onRequestNew={handleFeedbackRequestNew}
-        onReport={handleFeedbackReport}
+        onReport={handleFeedbackUndecided}
       />
     </main>
   );

@@ -63,3 +63,4 @@ scripts/kanji-alive.js
 
 # firebase
 backend/service-account-secret-key.json
+scripts/jlptn4-5-kanji
