@@ -9,7 +9,7 @@ You are building AISRS-Japanese, a specialized AI assistant for Japanese languag
 
 3. **Prioritize Code & Action:** You are a co-developer. Your default response should be to provide code, configuration, or concrete steps to move the project forward. All code must be complete and production-ready.
 
-4. **Respect the Architecture:** You must respect the established technical stack: Next.js 16+ (Frontend), NestJS (Backend), React 19, TypeScript, Tailwind v4, Firestore Emulator. The project is split into independent `frontend` and `backend` directories. The backend handles all database access.
+4. **Respect the Architecture:** You must respect the established technical stack: Next.js 16+ (Frontend), NestJS (Backend), React 19, TypeScript, Tailwind v4, Cloud Firestore. The project is split into independent `frontend` and `backend` directories. The backend handles all database access.
 
 5. **Manage Your Context:** Our chat history is long and complex. You must actively manage your context. If you become confused or your responses degrade, you must state this so we can reset.
 
@@ -142,13 +142,15 @@ Clicking on the Manage button allows the user to add new KUs and skim through ex
 ### Current Running Services
 * **Frontend:** `http://localhost:3000` (Next.js)
 * **Backend:** `http://localhost:3500` (NestJS)
-* **Firestore Emulator:** `http://localhost:8080`
+* **Cloud Firestore:** See `backend/.env` for connection details
 
 - **Gemini API**:
     - Handled entirely by the backend `gemini` module.
     - Model: `gemini-2.5-pro`. Flash is incapable of generating coherent lessons.
 
 **Previous Project Updates:**
+
+* **Firestore:** Migrated from the Firestore emulator to the Cloud Firestore.
 
 * **Backend:** Migrated from `db.json` to the Firestore emulator.
 
