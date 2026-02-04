@@ -1,9 +1,54 @@
-import { Controller, Post, Body, BadRequestException, Param, Put, Get, Query } from '@nestjs/common';
+import { Controller, Post, Body, BadRequestException, Param, Put, Get, Query, Logger } from '@nestjs/common';
 import { LessonsService } from './lessons.service';
+import { KnowledgeUnitsService } from '../knowledge-units/knowledge-units.service';
 
 @Controller('lessons')
 export class LessonsController {
-  constructor(private readonly lessonsService: LessonsService) { }
+  private readonly logger = new Logger(LessonsController.name);
+
+  constructor(
+    private readonly lessonsService: LessonsService,
+    private readonly knowledgeUnitsService: KnowledgeUnitsService
+  ) { }
+
+  @Post('batch')
+  async batch(@Body() body: { items: string[] }) {
+    if (!body.items || !Array.isArray(body.items)) {
+      throw new BadRequestException('items array is required');
+    }
+
+    const { items } = body;
+    this.logger.log(`Received batch request for ${items.length} items`);
+
+    // Fire and forget - background processing
+    (async () => {
+      try {
+        const batchItems: { id: string; content: string }[] = [];
+
+        // 1. Ensure KUs exist for all items
+        for (const content of items) {
+          try {
+            const trimmed = content.trim();
+            if (!trimmed) continue;
+
+            const id = await this.knowledgeUnitsService.ensureVocab(trimmed);
+            batchItems.push({ id, content: trimmed });
+          } catch (e) {
+            this.logger.error(`Failed to ensure KU for ${content}`, e);
+          }
+        }
+
+        // 2. Process batch for lessons
+        if (batchItems.length > 0) {
+          await this.lessonsService.processBatch(batchItems);
+        }
+      } catch (err) {
+        this.logger.error('Background batch processing failed', err);
+      }
+    })();
+
+    return { message: 'Batch processing started', count: items.length };
+  }
 
   @Post('generate')
   async generate(@Body() body: { kuId: string }) {
