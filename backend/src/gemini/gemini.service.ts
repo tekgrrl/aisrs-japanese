@@ -196,7 +196,8 @@ export class GeminiService implements OnModuleInit {
 
   async generateLesson(
     userMessage: string, // prompt, if I have to clarify this with a comment...
-    logContext?: Record<string, any>
+    logContext?: Record<string, any>,
+    cachedContentName?: string,
   ) {
 
     const initialLogData: ApiLog = {
@@ -218,6 +219,10 @@ export class GeminiService implements OnModuleInit {
     let text: string | undefined; // Capture raw text for logging
     let lessonString: string | undefined;
 
+    if (logContext?.content) {
+      this.logger.log(`Generating lesson for content: "${logContext.content}" (Cache: ${cachedContentName || 'None'})`);
+    }
+
     try {
       const apiResponse = await this.client.models.generateContent({
         model: this.modelName,
@@ -225,6 +230,7 @@ export class GeminiService implements OnModuleInit {
         config: {
           responseMimeType: "application/json",
           temperature: 0.4,
+          cachedContent: cachedContentName,
         }
       });
 
@@ -248,6 +254,9 @@ export class GeminiService implements OnModuleInit {
         throw new Error("AI response did not contain a valid JSON object.");
       }
 
+      if (logContext?.content) {
+        this.logger.log(`Successfully generated lesson for "${logContext.content}"`);
+      }
       return lessonString;
 
     } catch (error) {
@@ -562,6 +571,43 @@ export class GeminiService implements OnModuleInit {
           console.error('Failed to update log', err)
         );
       }
+    }
+  }
+  async createContextCache(
+    content: string,
+    ttlSeconds: number = 3600,
+  ): Promise<string> {
+    try {
+      // @google/genai SDK format for cache creation
+      // Note: The SDK might store caches under `client.caches`
+      const cacheResponse = await this.client.caches.create({
+        model: this.modelName,
+        config: {
+          systemInstruction: {
+            parts: [{ text: content }],
+          },
+          ttl: `${ttlSeconds}s`,
+        },
+      });
+
+      this.logger.log(`Created context cache: ${cacheResponse.name}`);
+      if (!cacheResponse.name) {
+        throw new Error("Context cache creation returned empty name");
+      }
+      return cacheResponse.name;
+    } catch (error) {
+      this.logger.error('Failed to create context cache', error);
+      throw error;
+    }
+  }
+
+  async deleteContextCache(name: string): Promise<void> {
+    try {
+      await this.client.caches.delete({ name });
+      this.logger.log(`Deleted context cache: ${name}`);
+    } catch (error) {
+      // It's possible the cache expired or was already deleted
+      this.logger.warn(`Failed to delete context cache ${name}`, error);
     }
   }
 }

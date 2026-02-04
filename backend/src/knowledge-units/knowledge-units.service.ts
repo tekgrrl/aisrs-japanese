@@ -151,6 +151,34 @@ export class KnowledgeUnitsService {
         return newRef.id;
     }
 
+    async ensureVocab(content: string): Promise<string> {
+        // 1. Try to find existing
+        const existing = await this.findByContent(content, 'Vocab');
+
+        if (existing) {
+            return existing.id;
+        }
+
+        // 2. Create New
+        const newRef = this.db.collection(KNOWLEDGE_UNITS_COLLECTION).doc();
+        await newRef.set({
+            content: content,
+            type: 'Vocab',
+            data: {
+                reading: '', // Will be filled by Gemini
+                definition: '', // Will be filled by Gemini
+            },
+            status: 'learning',
+            facet_count: 0,
+            createdAt: Timestamp.now(),
+            relatedUnits: [],
+            personalNotes: '',
+            userId: CURRENT_USER_ID,
+        });
+
+        return newRef.id;
+    }
+
     async update(id: string, updates: Partial<any>) { // typed as 'any' or a DTO to allow flexible updates
         const ref = this.db.collection(KNOWLEDGE_UNITS_COLLECTION).doc(id);
 
