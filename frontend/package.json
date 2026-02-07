@@ -23,7 +23,7 @@
     "js-yaml": "^4.1.1",
     "kuroshiro": "^1.2.0",
     "lucide-react": "^0.555.0",
-    "next": "16.0.7",
+    "next": "16.1.6",
     "react": "19.2.0",
     "react-dom": "19.2.0",
     "uuid": "^13.0.0",
@@ -48,5 +48,8 @@
     "tailwindcss": "^4",
     "ts-jest": "^29.4.5",
     "typescript": "^5"
+  },
+  "resolutions": {
+    "baseline-browser-mapping": "^2.9.19"
   }
 }
