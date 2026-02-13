@@ -10,6 +10,7 @@ export const LESSONS_COLLECTION = "lessons";
 export const API_LOGS_COLLECTION = "api-logs";
 export const QUESTIONS_COLLECTION = "questions";
 export const USER_STATS_COLLECTION = 'user-stats';
+export const SCENARIOS_COLLECTION = 'scenarios';
 export const Timestamp = admin.firestore.Timestamp;
 export const FieldValue = admin.firestore.FieldValue;
 
