@@ -225,17 +225,20 @@ export class ScenariosService {
     let referenceScript = "No reference script available.";
     if (scenario.dialogue && scenario.dialogue.length > 0) {
       referenceScript = scenario.dialogue.map(line => {
-        return `${line.speaker}: ${line.text} (${line.translation})`;
+        return `${line.speaker}: ${line.text} (${line.translation || ''})`;
       }).join('\n');
     }
+
+    // 3b. Determine Roles
+    const { aiRole, userRole } = this.determineRoles(scenario.setting.participants);
 
     const systemPrompt = `
       You are a roleplay partner in a Japanese immersion scenario.
       **Scenario Context:**
       - Title: ${scenario.title}
       - Setting: ${scenario.setting.location}
-      - Your Role: ${scenario.setting.participants[0] || 'Partner'}
-      - User Role: ${scenario.setting.participants[1] || 'Traveler'}
+      - Your Role: ${aiRole}
+      - User Role: ${userRole}
       - Goal: ${scenario.setting.goal}
       - Difficulty: ${scenario.difficultyLevel}
 
@@ -246,7 +249,7 @@ export class ScenariosService {
       ${historyLines}
 
       **INSTRUCTIONS:**
-      1. You are acting out the role of ${scenario.setting.participants[0] || 'Partner'}.
+      1. You are acting out the role of ${aiRole}.
       2. Use the 'REFERENCE SCRIPT' as your guide for the conversation flow.
       3. You must ensure key events/questions from the script occur (e.g., if the script has the shopkeeper ask for a passport, YOU must ask for the passport).
       4. Speak ONLY in Japanese appropriate for the setting and your role.
@@ -345,16 +348,27 @@ Create a "Genki-style" learning scenario for an ADULT traveler/expat (not a stud
     if (!scenario.dialogue || scenario.dialogue.length === 0) return [];
 
     const firstLine = scenario.dialogue[0];
-    const userRoles = ['User', 'Traveler', 'Me', 'Watashi', 'Guest', 'Customer', 'Client', 'Patient'];
+    const { aiRole, userRole } = this.determineRoles(scenario.setting.participants);
 
-    // If the first speaker is NOT the user, assume it's the AI and seed the chat
-    if (!userRoles.includes(firstLine.speaker)) {
+    const speaker = firstLine.speaker.toLowerCase();
+    const ai = aiRole.toLowerCase();
+    const user = userRole.toLowerCase();
+
+    // Safety: If speaker matches User, definitely DO NOT seed.
+    if (user.includes(speaker) || speaker.includes(user)) {
+      return [];
+    }
+
+    // If the first speaker IS the AI, seed the chat
+    // Fuzzy match: if "Teacher" is in "Teacher (Sensei)" or vice versa
+    if (ai.includes(speaker) || speaker.includes(ai)) {
       return [{
         speaker: 'ai',
         text: firstLine.text,
         timestamp: Date.now()
       }];
     }
+
     return [];
   }
 
@@ -363,8 +377,7 @@ Create a "Genki-style" learning scenario for an ADULT traveler/expat (not a stud
     if (!scenario.chatHistory || scenario.chatHistory.length === 0) return null;
 
 
-    const aiRole = scenario.setting.participants[0] || 'AI';
-    const userRole = scenario.setting.participants[1] || 'User';
+    const { aiRole, userRole } = this.determineRoles(scenario.setting.participants);
 
     const chatHistoryForEval = scenario.chatHistory.map(msg => ({
       speaker: msg.speaker === 'user' ? userRole : aiRole,
@@ -381,5 +394,43 @@ Create a "Genki-style" learning scenario for an ADULT traveler/expat (not a stud
 
     const result = await this.geminiService.evaluateScenario(chatHistoryForEval, context);
     return result || null;
+  }
+
+
+  private determineRoles(participants: string[]): { aiRole: string; userRole: string } {
+    if (!participants || participants.length === 0) {
+      return { aiRole: 'Partner', userRole: 'Traveler' };
+    }
+
+    const userKeywords = ['User', 'Traveler', 'Customer', 'Guest', 'Student', 'Patient', 'Me', 'Watashi'];
+    const aiKeywords = ['Teacher', 'Sensei', 'Staff', 'Clerk', 'Shopkeeper', 'Manager', 'Doctor', 'Nurse', 'Police', 'Officer', 'Partner'];
+
+    let userRole = participants.find(p => userKeywords.some(k => p.toLowerCase().includes(k.toLowerCase())));
+    let aiRole: string;
+
+    if (userRole) {
+      // AI is the other participant
+      aiRole = participants.find(p => p !== userRole) || 'Partner';
+    } else {
+      // Try to find AI Role first
+      const foundAiRole = participants.find(p => aiKeywords.some(k => p.toLowerCase().includes(k.toLowerCase())));
+
+      if (foundAiRole) {
+        aiRole = foundAiRole;
+        userRole = participants.find(p => p !== aiRole) || 'Traveler';
+      } else {
+        // Fallback: Assume index 1 is user (common in generated scenarios like ["Staff", "Traveler"])
+        if (participants.length > 1) {
+          userRole = participants[1];
+          aiRole = participants[0];
+        } else {
+          // Only 1 participant?
+          userRole = 'Traveler'; // Default
+          aiRole = participants[0] || 'Partner';
+        }
+      }
+    }
+
+    return { aiRole, userRole };
   }
 }
