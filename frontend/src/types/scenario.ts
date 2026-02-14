@@ -1,4 +1,6 @@
-import { Timestamp } from 'firebase-admin/firestore';
+// import { Timestamp } from 'firebase-admin/firestore';
+// Mocking Timestamp for frontend to avoid firebase-admin dependency
+export type Timestamp = { seconds: number; nanoseconds: number; toDate: () => Date; } | any;
 
 export type ScenarioDifficulty = 'N5' | 'N4' | 'N3' | 'N2' | 'N1';
 export type ScenarioState = 'encounter' | 'drill' | 'simulate' | 'completed';
@@ -18,10 +20,11 @@ export interface ScenarioDialogueLine {
     audioUrl?: string;
 }
 
+// UPDATED: Split content into distinct fields for cleaner import
 export interface ExtractedKU {
-    content: string;
-    reading: string;
-    meaning: string;
+    content: string; // The Japanese writing (e.g., "本屋")
+    reading: string; // The reading (e.g., "ほんや")
+    meaning: string; // The English meaning (e.g., "Bookstore")
     type: 'vocab' | 'kanji';
     kuId?: string;
     status: 'new' | 'learning' | 'mastered';
@@ -69,20 +72,13 @@ export interface Scenario {
 
     createdAt: Timestamp;
     completedAt?: Timestamp;
-
-    roles?: {
-        user: string;
-        ai: string;
-    };
 }
 
-// FIX: DTOs must be Classes for NestJS reflection/validation to work
 export class GenerateScenarioDto {
     difficulty!: ScenarioDifficulty;
     theme?: string;
 }
 
-// FIX: DTOs must be Classes for NestJS reflection/validation to work
 export class ChatTurnDto {
     userMessage!: string;
 }

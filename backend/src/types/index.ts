@@ -18,6 +18,7 @@ export interface ApiLog {
     kuId?: string | null;
     topic?: string | null;
     source?: string | null;
+    [key: string]: any;
   };
   responseData?: {
     rawText?: string; // The raw text from the AI

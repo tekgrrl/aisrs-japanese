@@ -16,9 +16,17 @@ export class ScenariosController {
 
   @Post('generate')
   async generateScenario(@Body() dto: GenerateScenarioDto) {
-    // In a real app, userId would come from a guard/decorator
     const userId = 'default-user';
-    return this.scenariosService.generateScenario(userId, dto);
+    const id = await this.scenariosService.generateScenario(userId, dto);
+
+    // FIX: Must return an object, not a raw string, so the frontend can parse it as JSON
+    return { id };
+  }
+
+  @Get()
+  async getAllScenarios() {
+    const userId = 'default-user';
+    return this.scenariosService.getAllScenarios(userId);
   }
 
   @Get(':id')
@@ -33,6 +41,12 @@ export class ScenariosController {
   @Post(':id/advance')
   async advanceState(@Param('id') id: string) {
     return this.scenariosService.advanceState(id);
+  }
+
+  @Post(':id/reset')
+  async resetSession(@Param('id') id: string) {
+    await this.scenariosService.resetSession(id);
+    return { success: true };
   }
 
   @Post(':id/chat')
