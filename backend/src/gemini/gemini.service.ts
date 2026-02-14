@@ -25,7 +25,7 @@ export class GeminiService implements OnModuleInit {
 
   onModuleInit() {
     const apiKey = this.configService.get<string>('GEMINI_API_KEY');
-    this.modelName = this.configService.get<string>('GEMINI_MODEL') || 'gemini-1.5-flash';
+    this.modelName = this.configService.get<string>('GEMINI_MODEL') || 'gemini-2.5-pro';
 
     if (!apiKey) {
       throw new Error('GEMINI_API_KEY is not defined in environment variables');
@@ -333,6 +333,9 @@ export class GeminiService implements OnModuleInit {
 
   }
 
+  // ... existing imports ...
+  // ... existing class definition ...
+
   async generateScenario(userMessage: string) {
     const initialLogData: ApiLog = {
       timestamp: Timestamp.now(),
@@ -388,12 +391,17 @@ export class GeminiService implements OnModuleInit {
         const endTime = performance.now();
         const durationMs = (endTime - startTime) / 1000;
 
+        // FIX: Initialize with safe values only. Do not explicitly set keys to undefined.
         const updateData: Partial<ApiLog> = {
           durationMs,
           status: errorOccurred ? "error" : "success",
-          errorData: errorOccurred ? { message: capturedError?.message } : undefined,
-          responseData: errorOccurred ? undefined : { parsedJson: scenarioString || null }
         };
+
+        if (errorOccurred) {
+          updateData.errorData = { message: capturedError?.message };
+        } else {
+          updateData.responseData = { parsedJson: scenarioString || null };
+        }
 
         try {
           await this.apilogService.completeLog(logRef, updateData);
@@ -679,6 +687,218 @@ export class GeminiService implements OnModuleInit {
     } catch (error) {
       // It's possible the cache expired or was already deleted
       this.logger.warn(`Failed to delete context cache ${name}`, error);
+    }
+  }
+
+  async generateChatResponse(
+    systemPrompt: string,
+    userMessage: string,
+    logContext?: Record<string, any>
+  ) {
+    let startTime = performance.now();
+    let errorOccurred = false;
+    let capturedError: any;
+    let aiJsonText: string | undefined;
+    let parsedJson: {
+      message: string;
+      speaker: string;
+      correction?: string;
+      sceneFinished?: boolean;
+    } | undefined;
+
+    const initialLogData: ApiLog = {
+      timestamp: Timestamp.now(),
+      route: "/scenarios/chat",
+      status: "pending",
+      modelUsed: this.modelName,
+      requestData: {
+        userMessage: userMessage,
+        systemPrompt: systemPrompt,
+        input_topic: logContext?.topic,
+        kuId: logContext?.scenarioId,
+      },
+    };
+
+    const logRef = await this.apilogService.startLog(initialLogData);
+
+    try {
+      const response = await this.client.models.generateContent({
+        model: this.modelName,
+        contents: [{ parts: [{ text: userMessage }] }],
+        config: {
+          systemInstruction: { parts: [{ text: systemPrompt }] },
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: "OBJECT",
+            properties: {
+              message: { type: "STRING" },
+              speaker: { type: "STRING" },
+              correction: { type: "STRING", nullable: true },
+              sceneFinished: { type: "BOOLEAN", nullable: true },
+            },
+            required: ["message", "speaker"],
+          },
+        },
+      });
+
+      aiJsonText = response.text;
+
+      if (!aiJsonText) {
+        throw new Error("Empty response text from Gemini API");
+      }
+
+      parsedJson = JSON.parse(aiJsonText);
+      return parsedJson;
+
+    } catch (error) {
+      errorOccurred = true;
+      capturedError = error;
+      this.logger.error('Gemini Service Chat Error:', error);
+      throw new InternalServerErrorException("Failed to generate chat response");
+    } finally {
+      if (logRef) {
+        const endTime = performance.now();
+        const durationMs = (endTime - startTime) / 1000;
+        const updateData: Partial<ApiLog> = {
+          durationMs,
+          status: errorOccurred ? "error" : "success",
+        };
+
+        if (errorOccurred) {
+          updateData.errorData = {
+            message: capturedError instanceof Error ? capturedError.message : String(capturedError)
+          };
+        } else {
+          updateData.responseData = {
+            rawText: aiJsonText,
+            parsedJson: parsedJson,
+          };
+        }
+
+        try {
+          await this.apilogService.completeLog(logRef, updateData);
+        } catch (logError) {
+          this.logger.error("Failed to complete API log", logError);
+        }
+      }
+    }
+  }
+
+  async evaluateScenario(
+    chatHistory: { speaker: string; text: string }[],
+    scenarioContext: { title: string; goal: string; difficulty: string; userRole?: string; aiRole?: string }
+  ) {
+    let startTime = performance.now();
+    let errorOccurred = false;
+    let capturedError: any;
+    let aiJsonText: string | undefined;
+    let parsedJson: {
+      success: boolean;
+      rating: number;
+      feedback: string;
+      corrections: { original: string; correction: string; explanation: string }[];
+    } | undefined;
+
+    const initialLogData: ApiLog = {
+      timestamp: Timestamp.now(),
+      route: "/scenarios/evaluate",
+      status: "pending",
+      modelUsed: this.modelName,
+      requestData: {
+        scenarioContext,
+        historyLength: chatHistory.length,
+        userMessage: "Scenario Evaluation", // Required by interface
+      },
+    };
+
+    const logRef = await this.apilogService.startLog(initialLogData);
+
+    try {
+      // Improved Transcript Formatting
+      const historyText = chatHistory.map((m) => {
+        const roleLabel = m.speaker === scenarioContext.userRole ? `[User - ${m.speaker}]` : `[AI - ${m.speaker}]`;
+        return `${roleLabel}: ${m.text}`;
+      }).join("\n");
+
+      const prompt = `
+        Act as a strict Japanese language teacher.
+        Evaluate this Roleplay Session based on:
+        1. Goal Achievement (${scenarioContext.goal})
+        2. Grammar/Vocabulary Usage (Level ${scenarioContext.difficulty})
+        3. Naturalness
+
+        SCENARIO CONTEXT:
+        - Title: ${scenarioContext.title}
+        - Goal: ${scenarioContext.goal}
+        - User Role: ${scenarioContext.userRole || 'User'} (The person being evaluated)
+        - AI Role: ${scenarioContext.aiRole || 'AI'} (The conversation partner)
+
+        TRANSCRIPT:
+        ${historyText}
+
+        INSTRUCTION: Evaluate the USER (${scenarioContext.userRole || 'User'}) based on how well they achieved the goal. Do not confuse the User with the AI.
+        
+        Provide a structured evaluation in JSON.
+      `;
+
+      // LOG PROMPT for debugging
+      console.log('--- SCENARIO EVALUATION PROMPT ---');
+      console.log(prompt);
+      console.log('----------------------------------');
+
+      const response = await this.client.models.generateContent({
+        model: this.modelName,
+        contents: [{ parts: [{ text: prompt }] }],
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: "OBJECT",
+            properties: {
+              success: { type: "BOOLEAN" },
+              rating: { type: "INTEGER", description: "1-5 stars" },
+              feedback: { type: "STRING" },
+              corrections: {
+                type: "ARRAY",
+                items: {
+                  type: "OBJECT",
+                  properties: {
+                    original: { type: "STRING" },
+                    correction: { type: "STRING" },
+                    explanation: { type: "STRING" },
+                  },
+                },
+              },
+            },
+            required: ["success", "rating", "feedback", "corrections"],
+          },
+        },
+      });
+
+      aiJsonText = response.text;
+      if (!aiJsonText) throw new Error("Empty response from AI");
+
+      parsedJson = JSON.parse(aiJsonText);
+      return parsedJson;
+
+    } catch (error) {
+      errorOccurred = true;
+      capturedError = error;
+      this.logger.error("Scenario Evaluation Failed", error);
+      throw new InternalServerErrorException("Failed to evaluate scenario");
+    } finally {
+      if (logRef) {
+        const endTime = performance.now();
+        const updateData: Partial<ApiLog> = {
+          durationMs: (endTime - startTime) / 1000,
+          status: errorOccurred ? "error" : "success",
+        };
+        if (errorOccurred) {
+          updateData.errorData = { message: String(capturedError) };
+        } else {
+          updateData.responseData = { parsedJson };
+        }
+        await this.apilogService.completeLog(logRef, updateData).catch(e => this.logger.error(e));
+      }
     }
   }
 }

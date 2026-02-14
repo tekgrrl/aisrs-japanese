@@ -1,4 +1,5 @@
-import admin from "firebase-admin";
+/*
+// import admin from "firebase-admin";
 
 const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT_KEY as string;
 
@@ -13,3 +14,4 @@ export const initAdmin = async () => {
     }
   }
 };
+*/
