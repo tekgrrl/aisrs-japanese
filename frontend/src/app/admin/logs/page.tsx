@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { ApiLog } from "@/types";
+import { JsonDisplay } from "@/components/JSONDisplay";
 
 export default function LogsPage() {
     const [logs, setLogs] = useState<ApiLog[]>([]);
@@ -133,8 +134,8 @@ export default function LogsPage() {
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap">
                                             <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${log.status === 'success' ? 'bg-green-100 text-green-800' :
-                                                    log.status === 'error' ? 'bg-red-100 text-red-800' :
-                                                        'bg-yellow-100 text-yellow-800'
+                                                log.status === 'error' ? 'bg-red-100 text-red-800' :
+                                                    'bg-yellow-100 text-yellow-800'
                                                 }`}>
                                                 {log.status}
                                             </span>
@@ -160,7 +161,7 @@ export default function LogsPage() {
                                                     <div className="border rounded-md bg-white p-3">
                                                         <h3 className="font-semibold text-gray-700 mb-2 border-b pb-1">Request Data</h3>
                                                         <pre className="text-xs text-gray-600 whitespace-pre-wrap font-mono overflow-auto max-h-96">
-                                                            {JSON.stringify(log.requestData, null, 2)}
+                                                            <JsonDisplay data={log.requestData} />
                                                         </pre>
                                                     </div>
                                                     <div className="border rounded-md bg-white p-3">
@@ -169,12 +170,12 @@ export default function LogsPage() {
                                                             <div className="text-red-600">
                                                                 <p className="font-bold">Error:</p>
                                                                 <pre className="text-xs whitespace-pre-wrap font-mono overflow-auto max-h-96">
-                                                                    {JSON.stringify(log.errorData, null, 2)}
+                                                                    <JsonDisplay data={log.errorData} />
                                                                 </pre>
                                                             </div>
                                                         ) : (
                                                             <pre className="text-xs text-green-700 whitespace-pre-wrap font-mono overflow-auto max-h-96">
-                                                                {JSON.stringify(log.responseData, null, 2)}
+                                                                <JsonDisplay data={log.responseData} />
                                                             </pre>
                                                         )}
                                                     </div>

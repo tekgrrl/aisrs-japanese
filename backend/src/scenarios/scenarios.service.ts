@@ -66,6 +66,7 @@ export class ScenariosService {
           timeOfDay: data.setting.timeOfDay,
           visualPrompt: data.setting.visualPrompt,
         },
+        roles: data.roles,
         dialogue: data.dialogue,
         extractedKUs: data.extractedKUs.map((ku: any) => ({
           content: cleanContent(ku.content),
@@ -229,8 +230,15 @@ export class ScenariosService {
       }).join('\n');
     }
 
-    // 3b. Determine Roles
-    const { aiRole, userRole } = this.determineRoles(scenario.setting.participants);
+    let userRole = scenario.roles?.user;
+    let aiRole = scenario.roles?.ai;
+
+    if (!userRole || !aiRole) {
+      // Fallback for older scenarios that lack the 'roles' field
+      const roles = this.determineRoles(scenario.setting.participants);
+      userRole = roles.userRole;
+      aiRole = roles.aiRole;
+    }
 
     const systemPrompt = `
       You are a roleplay partner in a Japanese immersion scenario.
@@ -326,8 +334,16 @@ Create a "Genki-style" learning scenario for an ADULT traveler/expat (not a stud
     "timeOfDay": "Morning/Evening/etc",
     "visualPrompt": "Detailed visual description of the scene for an image generator"
   },
+  "roles": {
+    "user": "EXACT_NAME_OF_USER_ROLE_FROM_PARTICIPANTS_ARRAY", 
+    "ai": "EXACT_NAME_OF_AI_ROLE_FROM_PARTICIPANTS_ARRAY"
+  },
   "dialogue": [
-    { "speaker": "Role A", "text": "Japanese text", "translation": "English translation" }
+    { 
+      "speaker": "EXACT_NAME_FROM_PARTICIPANTS_ARRAY", 
+      "text": "Japanese text", 
+      "translation": "English translation" 
+    }
   ],
   "extractedKUs": [
     {
@@ -402,7 +418,7 @@ Create a "Genki-style" learning scenario for an ADULT traveler/expat (not a stud
       return { aiRole: 'Partner', userRole: 'Traveler' };
     }
 
-    const userKeywords = ['User', 'Traveler', 'Customer', 'Guest', 'Student', 'Patient', 'Me', 'Watashi'];
+    const userKeywords = ['User', 'Traveler', 'Customer', 'Guest', 'Student', 'Patient', 'Me', 'Watashi', 'Traveller', 'Passenger', 'Protagonist', 'person', 'you'];
     const aiKeywords = ['Teacher', 'Sensei', 'Staff', 'Clerk', 'Shopkeeper', 'Manager', 'Doctor', 'Nurse', 'Police', 'Officer', 'Partner'];
 
     let userRole = participants.find(p => userKeywords.some(k => p.toLowerCase().includes(k.toLowerCase())));
@@ -415,7 +431,7 @@ Create a "Genki-style" learning scenario for an ADULT traveler/expat (not a stud
       // Try to find AI Role first
       const foundAiRole = participants.find(p => aiKeywords.some(k => p.toLowerCase().includes(k.toLowerCase())));
 
-      if (foundAiRole) {
+      if (foundAiRole && !userRole) {
         aiRole = foundAiRole;
         userRole = participants.find(p => p !== aiRole) || 'Traveler';
       } else {
@@ -430,6 +446,8 @@ Create a "Genki-style" learning scenario for an ADULT traveler/expat (not a stud
         }
       }
     }
+
+    this.logger.log(`AI Role: ${aiRole}, User Role: ${userRole}`);
 
     return { aiRole, userRole };
   }

@@ -69,6 +69,11 @@ export interface Scenario {
 
     createdAt: Timestamp;
     completedAt?: Timestamp;
+
+    roles?: {
+        user: string;
+        ai: string;
+    };
 }
 
 // FIX: DTOs must be Classes for NestJS reflection/validation to work
