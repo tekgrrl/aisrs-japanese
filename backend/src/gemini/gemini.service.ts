@@ -333,6 +333,77 @@ export class GeminiService implements OnModuleInit {
 
   }
 
+  async generateScenario(userMessage: string) {
+    const initialLogData: ApiLog = {
+      timestamp: Timestamp.now(),
+      route: "/scenarios/generate",
+      status: "pending",
+      modelUsed: this.modelName,
+      requestData: {
+        userMessage: userMessage,
+      },
+    };
+
+    const logRef = await this.apilogService.startLog(initialLogData);
+    let startTime = performance.now();
+    let errorOccurred = false;
+    let capturedError: any;
+    let scenarioString: string | undefined;
+
+    try {
+      const apiResponse = await this.client.models.generateContent({
+        model: this.modelName,
+        contents: [{ parts: [{ text: userMessage }] }],
+        config: {
+          responseMimeType: "application/json",
+          temperature: 0.4,
+        }
+      });
+
+      if (!apiResponse || !apiResponse?.text) throw new Error("AI response was empty.");
+
+      // Defensive Parsing
+      scenarioString = apiResponse.text;
+      const jsonStart = scenarioString.indexOf("{");
+      const jsonEnd = scenarioString.lastIndexOf("}");
+
+      if (jsonStart !== -1 && jsonEnd !== -1) {
+        scenarioString = scenarioString.substring(jsonStart, jsonEnd + 1);
+      } else {
+        this.logger.error("AI response did not contain a valid JSON object.", { rawText: scenarioString });
+        throw new Error("AI response did not contain a valid JSON object.");
+      }
+
+      return scenarioString;
+
+    } catch (error) {
+      errorOccurred = true;
+      capturedError = error;
+      this.logger.error('Gemini Service Error (Scenario):', error);
+
+      // Re-throw appropriate exception (simplified from generateLesson for brevity, acts the same)
+      throw new InternalServerErrorException("Failed to generate scenario");
+    } finally {
+      if (logRef) {
+        const endTime = performance.now();
+        const durationMs = (endTime - startTime) / 1000;
+
+        const updateData: Partial<ApiLog> = {
+          durationMs,
+          status: errorOccurred ? "error" : "success",
+          errorData: errorOccurred ? { message: capturedError?.message } : undefined,
+          responseData: errorOccurred ? undefined : { parsedJson: scenarioString || null }
+        };
+
+        try {
+          await this.apilogService.completeLog(logRef, updateData);
+        } catch (logError) {
+          this.logger.error("Failed to complete API log", logError);
+        }
+      }
+    }
+  }
+
   async generateQuestionAI(
     userMessage: string,
     systemPrompt: string,

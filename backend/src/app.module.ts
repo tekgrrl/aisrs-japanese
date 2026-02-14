@@ -12,9 +12,10 @@ import { LessonsModule } from './lessons/lessons.module';
 import { KnowledgeUnitsModule } from './knowledge-units/knowledge-units.module';
 import { StatsModule } from './stats/stats.module';
 import { KanjiModule } from './kanji/kanji.module';
+import { ScenariosModule } from './scenarios/scenarios.module';
 
 @Module({
-  imports: [ReviewsModule, FirebaseModule, GeminiModule,ConfigModule.forRoot(), QuestionsModule, ApilogModule, LessonsModule, KnowledgeUnitsModule, StatsModule, KanjiModule],
+  imports: [ReviewsModule, FirebaseModule, GeminiModule,ConfigModule.forRoot(), QuestionsModule, ApilogModule, LessonsModule, KnowledgeUnitsModule, StatsModule, KanjiModule, ScenariosModule],
   controllers: [AppController],
   providers: [AppService, QuestionsService],
 })
