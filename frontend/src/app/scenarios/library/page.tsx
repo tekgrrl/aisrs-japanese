@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Scenario, ScenarioDifficulty } from '@/types/scenario';
 
 // TODO: Align with dashboard config
@@ -19,7 +19,29 @@ interface ScenarioTemplate {
 
 export default function ScenarioLibrary() {
     const router = useRouter();
-    const [activeTab, setActiveTab] = useState<'core' | 'archives'>('core');
+    const searchParams = useSearchParams();
+
+    // Initialize tab from URL or default to 'core'
+    const initialTab = searchParams.get('tab') === 'scenarios' ? 'scenarios' : 'core';
+    const [activeTab, setActiveTab] = useState<'core' | 'scenarios'>(initialTab);
+
+    // Sync state if URL changes (e.g. back button)
+    useEffect(() => {
+        const tab = searchParams.get('tab') === 'scenarios' ? 'scenarios' : 'core';
+        setActiveTab(tab);
+    }, [searchParams]);
+
+    const handleTabChange = (tab: 'core' | 'scenarios') => {
+        setActiveTab(tab);
+        // Update URL without full reload
+        const params = new URLSearchParams(searchParams.toString());
+        if (tab === 'scenarios') {
+            params.set('tab', 'scenarios');
+        } else {
+            params.delete('tab');
+        }
+        router.replace(`/scenarios/library?${params.toString()}`);
+    };
 
     // Data State
     const [templates, setTemplates] = useState<ScenarioTemplate[]>([]);
@@ -133,7 +155,7 @@ export default function ScenarioLibrary() {
             <div className="border-b border-slate-200">
                 <nav className="-mb-px flex gap-8">
                     <button
-                        onClick={() => setActiveTab('core')}
+                        onClick={() => handleTabChange('core')}
                         className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${activeTab === 'core'
                             ? 'border-indigo-500 text-indigo-600'
                             : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
@@ -142,13 +164,13 @@ export default function ScenarioLibrary() {
                         Core Library
                     </button>
                     <button
-                        onClick={() => setActiveTab('archives')}
-                        className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${activeTab === 'archives'
+                        onClick={() => handleTabChange('scenarios')}
+                        className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${activeTab === 'scenarios'
                             ? 'border-indigo-500 text-indigo-600'
                             : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
                             }`}
                     >
-                        My Archives ({archives.length})
+                        My Scenarios ({archives.length})
                     </button>
                 </nav>
             </div>
@@ -189,7 +211,7 @@ export default function ScenarioLibrary() {
                         </div>
                     )}
 
-                    {activeTab === 'archives' && (
+                    {activeTab === 'scenarios' && (
                         <div className="space-y-4">
                             {archives.length === 0 && <p className="text-slate-500 text-center py-10">No past scenarios found.</p>}
                             {archives.map(scenario => (
@@ -223,7 +245,7 @@ export default function ScenarioLibrary() {
                                     </div>
 
                                     <div className="flex gap-3 w-full md:w-auto">
-                                        <Link href={`/scenarios/${scenario.id}`} className="flex-1 md:flex-none">
+                                        <Link href={`/scenarios/${scenario.id}?from=library`} className="flex-1 md:flex-none">
                                             <button className="w-full px-4 py-2 border border-slate-300 text-slate-700 rounded-lg font-medium hover:bg-slate-50 transition-colors">
                                                 View
                                             </button>

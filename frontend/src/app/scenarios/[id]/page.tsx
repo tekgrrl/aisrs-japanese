@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, use } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Scenario, ChatMessage, ScenarioAttempt } from '@/types/scenario';
 
 // Configuration for API URL - adjust if using env vars
@@ -146,6 +147,14 @@ export default function ScenarioPage({ params }: { params: Promise<{ id: string 
         }
     };
 
+    const searchParams = useSearchParams();
+    const router = useRouter(); // We need router for back()
+    const fromLibrary = searchParams.get('from') === 'library';
+
+    const handleBackToLibrary = () => {
+        router.back();
+    };
+
     if (loading) return <div className="p-10 text-center text-slate-500">Loading Scene...</div>;
     if (error || !scenario) return <div className="p-10 text-center text-red-500">{error}</div>;
 
@@ -199,6 +208,15 @@ export default function ScenarioPage({ params }: { params: Promise<{ id: string 
 
     return (
         <div className="max-w-4xl mx-auto p-6 space-y-8 pb-24">
+            {fromLibrary && (
+                <button
+                    onClick={handleBackToLibrary}
+                    className="mb-2 text-sm text-slate-500 hover:text-indigo-600 transition-colors flex items-center gap-1"
+                >
+                    ← Back to Library
+                </button>
+            )}
+
             {/* Header Info */}
             <header className="border-b border-slate-200 pb-6">
                 <div className="flex justify-between items-start mb-4">
@@ -290,18 +308,37 @@ export default function ScenarioPage({ params }: { params: Promise<{ id: string 
                             )}
 
                             <div className="pt-6 border-t border-slate-100 flex justify-between items-center">
-                                <button
-                                    onClick={() => handleReset(true)}
-                                    className="px-6 py-3 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 transition-colors shadow-sm"
-                                >
-                                    ↺ Replay Scenario
-                                </button>
-                                <button
-                                    onClick={() => window.location.href = '/scenarios'}
-                                    className="px-6 py-3 bg-slate-200 text-slate-700 font-bold rounded-lg hover:bg-slate-300 transition-colors"
-                                >
-                                    Return to List
-                                </button>
+                                {scenario.evaluation.outcome === 'failed' ? (
+                                    <>
+                                        <button
+                                            onClick={() => handleReset(true)}
+                                            className="px-6 py-3 bg-red-600 text-white font-bold rounded-lg hover:bg-red-700 transition-colors shadow-sm"
+                                        >
+                                            ↺ Retake Lesson
+                                        </button>
+                                        <button
+                                            onClick={() => window.location.reload()} // Just reload to see script again (Read-Only Encounter effectively)
+                                            className="px-6 py-3 bg-slate-200 text-slate-700 font-bold rounded-lg hover:bg-slate-300 transition-colors"
+                                        >
+                                            Review Materials
+                                        </button>
+                                    </>
+                                ) : (
+                                    <>
+                                        <button
+                                            onClick={() => handleReset(true)}
+                                            className="px-6 py-3 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 transition-colors shadow-sm"
+                                        >
+                                            ↺ Practice Roleplay
+                                        </button>
+                                        <button
+                                            onClick={() => window.location.href = '/scenarios'}
+                                            className="px-6 py-3 bg-slate-200 text-slate-700 font-bold rounded-lg hover:bg-slate-300 transition-colors"
+                                        >
+                                            Return to Dashboard
+                                        </button>
+                                    </>
+                                )}
                             </div>
                         </div>
                     </div>

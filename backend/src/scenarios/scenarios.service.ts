@@ -461,7 +461,20 @@ Create a "Genki-style" learning scenario for an ADULT traveler/expat (not a stud
     }));
 
     // 4. Delegate to Gemini Service
-    return this.geminiService.evaluateScenario(history, context);
+    const evaluation = await this.geminiService.evaluateScenario(history, context);
+
+    // 5. Apply Business Logic for Outcome
+    // IF success AND rating >= 3 -> Passed
+    // ELSE -> Failed
+    if (evaluation.success && evaluation.rating >= 3) {
+      evaluation.outcome = 'passed';
+      evaluation.recommendedAction = 'replay_chat'; // or maybe just 'practice_roleplay'
+    } else {
+      evaluation.outcome = 'failed';
+      evaluation.recommendedAction = 'repeat_lesson';
+    }
+
+    return evaluation;
   }
 
 
