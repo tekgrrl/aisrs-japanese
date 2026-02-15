@@ -45,6 +45,8 @@ export interface ScenarioEvaluation {
         correction: string;
         explanation: string;
     }[];
+    outcome?: 'passed' | 'failed';
+    recommendedAction?: 'repeat_lesson' | 'replay_chat';
 }
 
 export interface Scenario {
