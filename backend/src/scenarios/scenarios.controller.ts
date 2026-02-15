@@ -3,16 +3,24 @@ import {
   Get,
   Post,
   Body,
+  Query,
   Param,
   HttpException,
-  HttpStatus
+  HttpStatus,
+  ParseIntPipe,
+  BadRequestException
 } from '@nestjs/common';
 import { ScenariosService } from './scenarios.service';
-import { GenerateScenarioDto, ChatTurnDto } from '../types/scenario';
+import { GenerateScenarioDto, ChatTurnDto, ResetSessionDto } from '../types/scenario';
 
 @Controller('scenarios')
 export class ScenariosController {
   constructor(private readonly scenariosService: ScenariosService) { }
+
+  @Get('templates')
+  getTemplates() {
+    return this.scenariosService.getTemplates();
+  }
 
   @Post('generate')
   async generateScenario(@Body() dto: GenerateScenarioDto) {
@@ -24,9 +32,13 @@ export class ScenariosController {
   }
 
   @Get()
-  async getAllScenarios() {
+  async getAllScenarios(@Query('days') days?: string) {
     const userId = 'default-user';
-    return this.scenariosService.getAllScenarios(userId);
+    const limitDays = days ? parseInt(days, 10) : undefined;
+    if (limitDays !== undefined && isNaN(limitDays)) {
+      throw new BadRequestException('Invalid days parameter');
+    }
+    return this.scenariosService.getAllScenarios(userId, limitDays);
   }
 
   @Get(':id')
@@ -44,8 +56,8 @@ export class ScenariosController {
   }
 
   @Post(':id/reset')
-  async resetSession(@Param('id') id: string) {
-    await this.scenariosService.resetSession(id);
+  async resetSession(@Param('id') id: string, @Body() body: ResetSessionDto) {
+    await this.scenariosService.resetSession(id, body.archive);
     return { success: true };
   }
 

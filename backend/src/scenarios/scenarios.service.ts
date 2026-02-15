@@ -6,10 +6,23 @@ import {
   NotFoundException
 } from '@nestjs/common';
 import { Firestore, CollectionReference, Timestamp, FieldValue } from 'firebase-admin/firestore';
-import { Scenario, GenerateScenarioDto, ScenarioState, ExtractedKU, ChatMessage, ScenarioEvaluation } from '../types/scenario';
+import { Scenario, GenerateScenarioDto, ScenarioState, ExtractedKU, ChatMessage, ScenarioEvaluation, ScenarioAttempt } from '../types/scenario';
 import { KnowledgeUnitsService } from '../knowledge-units/knowledge-units.service'; // Import Service
 import { FIRESTORE_CONNECTION, SCENARIOS_COLLECTION } from '../firebase/firebase.module';
 import { GeminiService } from '../gemini/gemini.service';
+
+// Centralized Role Definitions to ensure Prompt and Heuristic are always in sync
+const ALLOWED_USER_ROLES = [
+  'Traveler', 'Traveller', 'Customer', 'Guest', 'Student', 'Patient', 'Me', 'Watashi', 'Passenger',
+  '客', '私', '旅行者', '学生', '患者', '乗客'
+];
+
+const ALLOWED_AI_ROLES = [
+  'Teacher', 'Sensei', 'Staff', 'Clerk', 'Shopkeeper', 'Manager', 'Doctor', 'Nurse', 'Police', 'Officer', 'Station Attendant',
+  '先生', '店員', '医者', '看護師', '警察', '駅員', '係員'
+];
+
+import { ScenarioTemplate, SCENARIO_TEMPLATES } from './templates';
 
 @Injectable()
 export class ScenariosService {
@@ -24,13 +37,24 @@ export class ScenariosService {
     this.collectionRef = this.db.collection(SCENARIOS_COLLECTION);
   }
 
-  async getAllScenarios(userId: string): Promise<Scenario[]> {
-    const snapshot = await this.collectionRef
+  async getAllScenarios(userId: string, limitDays?: number): Promise<Scenario[]> {
+    let query = this.collectionRef
       .where('userId', '==', userId)
-      .orderBy('createdAt', 'desc')
-      .get();
+      .orderBy('createdAt', 'desc');
 
+    if (limitDays) {
+      const date = new Date();
+      date.setDate(date.getDate() - limitDays);
+      const timestamp = Timestamp.fromDate(date);
+      query = query.where('createdAt', '>', timestamp);
+    }
+
+    const snapshot = await query.get();
     return snapshot.docs.map(doc => doc.data() as Scenario);
+  }
+
+  getTemplates(): ScenarioTemplate[] {
+    return SCENARIO_TEMPLATES;
   }
 
   async getScenario(id: string): Promise<Scenario | null> {
@@ -78,14 +102,15 @@ export class ScenariosService {
         grammarNotes: data.grammarNotes,
         state: 'encounter',
         createdAt: Timestamp.now(),
+        chatHistory: [],
       };
 
       await docRef.set(newScenario);
       return id;
 
     } catch (error) {
-      console.error('Scenario Generation Failed:', error);
-      throw new InternalServerErrorException('Failed to generate scenario from AI');
+      this.logger.error('Scenario Generation Failed:', error);
+      throw new InternalServerErrorException('Failed to generate scenario from AI', error);
     }
   }
 
@@ -190,15 +215,31 @@ export class ScenariosService {
     await this.collectionRef.doc(id).update(updateData);
   }
 
-  async resetSession(id: string): Promise<void> {
-    this.logger.log(`Resetting session for scenario ${id}`);
+
+
+  async resetSession(id: string, archive: boolean): Promise<void> {
+    this.logger.log(`Resetting session for scenario ${id} (Archive: ${archive})`);
     const scenario = await this.getScenario(id);
     if (!scenario) throw new NotFoundException('Scenario not found');
 
-    await this.collectionRef.doc(id).update({
+    const updateData: any = {
       state: 'simulate',
       chatHistory: this.getInitialChatHistory(scenario), // Reset to initial seed if applicable
-    });
+      evaluation: FieldValue.delete(), // clear evaluation
+      completedAt: FieldValue.delete(), // clear completedAt
+    };
+
+    // Archiving Logic
+    if (archive && scenario.state === 'completed' && scenario.chatHistory && scenario.evaluation && scenario.completedAt) {
+      const attempt: ScenarioAttempt = {
+        completedAt: scenario.completedAt,
+        chatHistory: scenario.chatHistory,
+        evaluation: scenario.evaluation
+      };
+      updateData.pastAttempts = FieldValue.arrayUnion(attempt);
+    }
+
+    await this.collectionRef.doc(id).update(updateData);
   }
 
   async handleChat(id: string, userMessage: string): Promise<ChatMessage[]> {
@@ -316,7 +357,11 @@ Create a "Genki-style" learning scenario for an ADULT traveler/expat (not a stud
 2. **Vocabulary:** STRICTLY LIMIT vocabulary to ${dto.difficulty} level. Introduce exactly 3-5 "Target Words" required for the specific goal.
 3. **Grammar Notes:** Identify 1-2 key grammar points used in the dialogue and explain them like a textbook (Genki style).
 4. **Visual Context:** Provide a descriptive prompt that could be used to generate an image of the scene.
-5. **Data Formatting (CRITICAL):**
+5. **Role Constraints:**
+   - **User Roles:** ${ALLOWED_USER_ROLES.join(', ')}
+   - **Partner Roles:** ${ALLOWED_AI_ROLES.join(', ')}
+   - Use these exact terms (or their Japanese equivalents provided in the list) for the 'roles' object and 'participants' array.
+6. **Data Formatting (CRITICAL):**
    - **NO ROMAJI**. Never include Romaji in any field.
    - **Extracted KUs:**
      - \`content\`: Japanese text ONLY (e.g., "本屋"). No readings or definitions in this field.
@@ -389,17 +434,18 @@ Create a "Genki-style" learning scenario for an ADULT traveler/expat (not a stud
   }
 
   // Helper method for evaluation
-  private async generateEvaluation(scenario: Scenario): Promise<ScenarioEvaluation | null> {
-    if (!scenario.chatHistory || scenario.chatHistory.length === 0) return null;
+  private async generateEvaluation(scenario: Scenario): Promise<ScenarioEvaluation> {
+    // 1. Determine Roles for Context
+    let userRole = scenario.roles?.user;
+    let aiRole = scenario.roles?.ai;
 
+    if (!userRole || !aiRole) {
+      const roles = this.determineRoles(scenario.setting.participants);
+      userRole = roles.userRole;
+      aiRole = roles.aiRole;
+    }
 
-    const { aiRole, userRole } = this.determineRoles(scenario.setting.participants);
-
-    const chatHistoryForEval = scenario.chatHistory.map(msg => ({
-      speaker: msg.speaker === 'user' ? userRole : aiRole,
-      text: msg.text
-    }));
-
+    // 2. Prepare Context for Gemini Service
     const context = {
       title: scenario.title,
       goal: scenario.setting.goal,
@@ -408,8 +454,14 @@ Create a "Genki-style" learning scenario for an ADULT traveler/expat (not a stud
       aiRole
     };
 
-    const result = await this.geminiService.evaluateScenario(chatHistoryForEval, context);
-    return result || null;
+    // 3. Prepare History (Map ChatMessage[] to simpler structure if needed, though interfaces align)
+    const history = (scenario.chatHistory || []).map(msg => ({
+      speaker: msg.speaker,
+      text: msg.text
+    }));
+
+    // 4. Delegate to Gemini Service
+    return this.geminiService.evaluateScenario(history, context);
   }
 
 
@@ -418,10 +470,7 @@ Create a "Genki-style" learning scenario for an ADULT traveler/expat (not a stud
       return { aiRole: 'Partner', userRole: 'Traveler' };
     }
 
-    const userKeywords = ['User', 'Traveler', 'Customer', 'Guest', 'Student', 'Patient', 'Me', 'Watashi', 'Traveller', 'Passenger', 'Protagonist', 'person', 'you'];
-    const aiKeywords = ['Teacher', 'Sensei', 'Staff', 'Clerk', 'Shopkeeper', 'Manager', 'Doctor', 'Nurse', 'Police', 'Officer', 'Partner'];
-
-    let userRole = participants.find(p => userKeywords.some(k => p.toLowerCase().includes(k.toLowerCase())));
+    let userRole = participants.find(p => ALLOWED_USER_ROLES.some(k => p.toLowerCase().includes(k.toLowerCase())));
     let aiRole: string;
 
     if (userRole) {
@@ -429,7 +478,7 @@ Create a "Genki-style" learning scenario for an ADULT traveler/expat (not a stud
       aiRole = participants.find(p => p !== userRole) || 'Partner';
     } else {
       // Try to find AI Role first
-      const foundAiRole = participants.find(p => aiKeywords.some(k => p.toLowerCase().includes(k.toLowerCase())));
+      const foundAiRole = participants.find(p => ALLOWED_AI_ROLES.some(k => p.toLowerCase().includes(k.toLowerCase())));
 
       if (foundAiRole && !userRole) {
         aiRole = foundAiRole;

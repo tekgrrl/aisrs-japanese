@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { GoogleGenAI } from '@google/genai';
-import { ApiLog, Lesson } from '@/types';
+import { ApiLog, Lesson, ScenarioEvaluation } from '@/types';
 import { Timestamp } from 'firebase-admin/firestore';
 import { ApilogService } from '../apilog/apilog.service';
 import { performance } from "perf_hooks"; // For timing
@@ -25,7 +25,8 @@ export class GeminiService implements OnModuleInit {
 
   onModuleInit() {
     const apiKey = this.configService.get<string>('GEMINI_API_KEY');
-    this.modelName = this.configService.get<string>('GEMINI_MODEL') || 'gemini-2.5-pro';
+    this.modelName = this.configService.get<string>('MODEL_GEMINI_FLASH') || 'gemini-3-flash-preview';
+    this.logger.log(`Using Gemini model: ${this.modelName}`);
 
     if (!apiKey) {
       throw new Error('GEMINI_API_KEY is not defined in environment variables');
@@ -787,17 +788,12 @@ export class GeminiService implements OnModuleInit {
   async evaluateScenario(
     chatHistory: { speaker: string; text: string }[],
     scenarioContext: { title: string; goal: string; difficulty: string; userRole?: string; aiRole?: string }
-  ) {
+  ): Promise<ScenarioEvaluation> {
     let startTime = performance.now();
     let errorOccurred = false;
     let capturedError: any;
     let aiJsonText: string | undefined;
-    let parsedJson: {
-      success: boolean;
-      rating: number;
-      feedback: string;
-      corrections: { original: string; correction: string; explanation: string }[];
-    } | undefined;
+    let parsedJson: ScenarioEvaluation | undefined;
 
     const initialLogData: ApiLog = {
       timestamp: Timestamp.now(),
@@ -877,7 +873,7 @@ export class GeminiService implements OnModuleInit {
       aiJsonText = response.text;
       if (!aiJsonText) throw new Error("Empty response from AI");
 
-      parsedJson = JSON.parse(aiJsonText);
+      parsedJson = JSON.parse(aiJsonText) as ScenarioEvaluation;
       return parsedJson;
 
     } catch (error) {

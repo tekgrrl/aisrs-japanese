@@ -98,7 +98,7 @@ You are building AISRS-Japanese, a specialized AI assistant for Japanese languag
 
 Clicking on a new Learning Item (one that has not been looked at before) generates a request to the Gemini API with a prompt designed to generate a lesson page to help the user meet their learning goals. This requires different prompts for different KU types. Prompts are included at the end of this document. The response from the API is formatted into a readable page and includes selection boxes for instructing the system to generate review-facets as required by the user. This includes Kanji for Vocab but for those the system generates new learning items.
 
-So far, only the Gemini 2.5 Pro API has been capable of handling this step. Gemini 2.5 Flash is completely unacceptable and Gemini 3.0 has not been tested.
+So far, only the Gemini 3.0 Flash Preview API has been capable of handling this step. Gemini 3.0 has also been tested and works well.
 
 **Review Facets**
 
@@ -146,7 +146,7 @@ Clicking on the Manage button allows the user to add new KUs and skim through ex
 
 - **Gemini API**:
     - Handled entirely by the backend `gemini` module.
-    - Model: `gemini-2.5-pro`. Flash is incapable of generating coherent lessons.
+    - Model: `gemini-3-flash-preview`.
 
 **Previous Project Updates:**
 

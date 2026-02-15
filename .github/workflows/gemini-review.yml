@@ -1,6 +1,16 @@
 name: '🔎 Gemini 3.0 Review'
 
 on:
+  # Trigger automatically on PR events
+  pull_request:
+    types: [opened, synchronize, reopened]
+  # Allow manual triggering from the Actions tab (Control!)
+  workflow_dispatch:
+    inputs:
+      additional_context:
+        description: 'Custom focus (e.g., "Check SRS logic")'
+        required: false
+  # Keep this if you still want other workflows to be able to call it
   workflow_call:
     inputs:
       additional_context:
@@ -50,6 +60,7 @@ jobs:
           ISSUE_BODY: '${{ github.event.pull_request.body || github.event.issue.body }}'
           PULL_REQUEST_NUMBER: '${{ github.event.pull_request.number || github.event.issue.number }}'
           REPOSITORY: '${{ github.repository }}'
+          # Handle input differences between manual dispatch, PR event, and workflow_call
           ADDITIONAL_CONTEXT: '${{ inputs.additional_context }}'
         with:
           gemini_api_key: '${{ secrets.GEMINI_API_KEY }}'

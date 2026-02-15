@@ -24,7 +24,7 @@ export default function ScenariosDashboard() {
 
     const fetchScenarios = async () => {
         try {
-            const res = await fetch(`${API_BASE_URL}/scenarios`);
+            const res = await fetch(`${API_BASE_URL}/scenarios?days=3`);
             if (res.ok) {
                 const data = await res.json();
                 setScenarios(data);
@@ -72,6 +72,11 @@ export default function ScenariosDashboard() {
                     <h1 className="text-3xl font-bold text-slate-800">Scenarios</h1>
                     <p className="text-slate-500">Synthesized Immersion Learning</p>
                 </div>
+                <Link href="/scenarios/library">
+                    <button className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-medium transition-colors">
+                        Browse Full Library
+                    </button>
+                </Link>
             </header>
 
             {/* Generator Card */}
@@ -125,12 +130,15 @@ export default function ScenariosDashboard() {
 
             {/* List Section */}
             <section>
-                <h2 className="text-xl font-semibold mb-4 text-slate-700">Recent Scenarios</h2>
+                <h2 className="text-xl font-semibold mb-4 text-slate-700">Recent Activity (Last 3 Days)</h2>
                 {loading ? (
-                    <div className="text-center py-10 text-slate-400">Loading archives...</div>
+                    <div className="text-center py-10 text-slate-400">Loading recent activity...</div>
                 ) : scenarios.length === 0 ? (
                     <div className="text-center py-10 bg-slate-50 rounded-lg border border-dashed border-slate-300">
-                        <p className="text-slate-500">No scenarios found. Create your first one above!</p>
+                        <p className="text-slate-500">No recent activity.</p>
+                        <Link href="/scenarios/library" className="text-indigo-600 hover:underline mt-2 inline-block">
+                            Browse Library to start a new session
+                        </Link>
                     </div>
                 ) : (
                     <div className="grid gap-4">

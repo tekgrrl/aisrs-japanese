@@ -238,3 +238,4 @@ export interface QuestionItem {
     timestamp: Timestamp;
   }[];
 }
+export * from './scenario';

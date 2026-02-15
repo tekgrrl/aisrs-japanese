@@ -72,6 +72,18 @@ export interface Scenario {
 
     createdAt: Timestamp;
     completedAt?: Timestamp;
+    pastAttempts?: ScenarioAttempt[];
+
+    roles?: {
+        user: string;
+        ai: string;
+    };
+}
+
+export interface ScenarioAttempt {
+    completedAt: Timestamp;
+    chatHistory: ChatMessage[];
+    evaluation: ScenarioEvaluation;
 }
 
 export class GenerateScenarioDto {
