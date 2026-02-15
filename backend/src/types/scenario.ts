@@ -1,4 +1,5 @@
 import { Timestamp } from 'firebase-admin/firestore';
+import { IsBoolean, IsOptional } from 'class-validator';
 
 export type ScenarioDifficulty = 'N5' | 'N4' | 'N3' | 'N2' | 'N1';
 export type ScenarioState = 'encounter' | 'drill' | 'simulate' | 'completed';
@@ -92,4 +93,10 @@ export class GenerateScenarioDto {
 // FIX: DTOs must be Classes for NestJS reflection/validation to work
 export class ChatTurnDto {
     userMessage!: string;
+}
+
+export class ResetSessionDto {
+    @IsBoolean()
+    @IsOptional()
+    archive: boolean = false;
 }

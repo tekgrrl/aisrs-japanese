@@ -11,7 +11,7 @@ import {
   BadRequestException
 } from '@nestjs/common';
 import { ScenariosService } from './scenarios.service';
-import { GenerateScenarioDto, ChatTurnDto } from '../types/scenario';
+import { GenerateScenarioDto, ChatTurnDto, ResetSessionDto } from '../types/scenario';
 
 @Controller('scenarios')
 export class ScenariosController {
@@ -56,7 +56,7 @@ export class ScenariosController {
   }
 
   @Post(':id/reset')
-  async resetSession(@Param('id') id: string, @Body() body: { archive: boolean }) {
+  async resetSession(@Param('id') id: string, @Body() body: ResetSessionDto) {
     await this.scenariosService.resetSession(id, body.archive);
     return { success: true };
   }
