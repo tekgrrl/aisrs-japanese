@@ -44,6 +44,12 @@ export interface ScenarioEvaluation {
     }[];
 }
 
+export interface ScenarioAttempt {
+    completedAt: Timestamp;
+    chatHistory: ChatMessage[];
+    evaluation: ScenarioEvaluation;
+}
+
 export interface Scenario {
     id: string;
     userId: string;
@@ -69,6 +75,7 @@ export interface Scenario {
 
     createdAt: Timestamp;
     completedAt?: Timestamp;
+    pastAttempts?: ScenarioAttempt[];
 
     roles?: {
         user: string;

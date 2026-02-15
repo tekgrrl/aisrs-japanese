@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, use } from 'react';
-import { Scenario, ChatMessage } from '@/types/scenario';
+import { Scenario, ChatMessage, ScenarioAttempt } from '@/types/scenario';
 
 // Configuration for API URL - adjust if using env vars
 const API_BASE_URL = 'http://localhost:3000/api';
@@ -90,6 +90,9 @@ export default function ScenarioPage({ params }: { params: Promise<{ id: string 
         }
     };
 
+    // History View State
+    const [viewingHistory, setViewingHistory] = useState<ScenarioAttempt | null>(null);
+
     const handleAdvance = async () => {
         if (!scenario) return;
 
@@ -117,7 +120,7 @@ export default function ScenarioPage({ params }: { params: Promise<{ id: string 
             } else if (scenario.state === 'drill') {
                 // Moved to simulate
             } else if (scenario.state === 'simulate') {
-                alert("Session Completed!");
+                // alert("Session Completed!");
             }
         } catch (err) {
             console.error(err);
@@ -127,8 +130,72 @@ export default function ScenarioPage({ params }: { params: Promise<{ id: string 
         }
     };
 
+    const handleReset = async (archive: boolean) => {
+        if (!confirm(archive ? "Replay this scenario? Use this to try a different approach." : "Restart session? This will clear your chat history.")) return;
+        try {
+            await fetch(`${API_BASE_URL}/scenarios/${id}/reset`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ archive })
+            });
+            // Reload page to reset state completely
+            window.location.reload();
+        } catch (e) {
+            console.error(e);
+            alert("Failed to reset session.");
+        }
+    };
+
     if (loading) return <div className="p-10 text-center text-slate-500">Loading Scene...</div>;
     if (error || !scenario) return <div className="p-10 text-center text-red-500">{error}</div>;
+
+    // If viewing history, show a simplified report card for that attempt
+    if (viewingHistory) {
+        return (
+            <div className="max-w-4xl mx-auto p-6 space-y-8 pb-24">
+                <button onClick={() => setViewingHistory(null)} className="text-slate-500 hover:text-slate-800 mb-4">
+                    ← Back to Current Session
+                </button>
+
+                <section className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+                    <div className="bg-slate-100 p-6 border-b border-slate-200">
+                        <h2 className="text-xl font-bold text-slate-800">Past Attempt</h2>
+                        <div className="text-sm text-slate-500">
+                            {new Date(viewingHistory.completedAt.seconds * 1000).toLocaleDateString()}
+                        </div>
+                        <div className="flex gap-1 text-amber-500 mt-2">
+                            {[...Array(5)].map((_, i) => (
+                                <span key={i} className={i < viewingHistory.evaluation.rating ? "opacity-100" : "opacity-30"}>★</span>
+                            ))}
+                        </div>
+                    </div>
+                    <div className="p-8 space-y-6">
+                        <div>
+                            <h3 className="font-bold text-slate-900 mb-2">Feedback</h3>
+                            <p className="text-slate-600 bg-slate-50 p-4 rounded-lg">{viewingHistory.evaluation.feedback}</p>
+                        </div>
+                        {/* Chat History for this attempt */}
+                        <div>
+                            <h3 className="font-bold text-slate-900 mb-4">Transcript</h3>
+                            <div className="space-y-4 max-h-96 overflow-y-auto p-4 bg-slate-50 rounded-lg border border-slate-200">
+                                {viewingHistory.chatHistory.map((msg, idx) => (
+                                    <div key={idx} className={`flex flex-col ${msg.speaker === 'user' ? 'items-end' : 'items-start'}`}>
+                                        <div className={`max-w-[80%] rounded-lg p-3 text-sm ${msg.speaker === 'user'
+                                            ? 'bg-indigo-100 text-indigo-900'
+                                            : 'bg-white border border-slate-200 text-slate-800'
+                                            }`}>
+                                            <div className="font-bold text-xs opacity-70 mb-1">{msg.speaker}</div>
+                                            {msg.text}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        )
+    }
 
     return (
         <div className="max-w-4xl mx-auto p-6 space-y-8 pb-24">
@@ -150,13 +217,7 @@ export default function ScenarioPage({ params }: { params: Promise<{ id: string 
                     {/* Session Controls */}
                     {scenario.state === 'simulate' && (
                         <button
-                            onClick={async () => {
-                                if (!confirm("Restart session? This will clear your chat history.")) return;
-                                try {
-                                    await fetch(`${API_BASE_URL}/scenarios/${id}/reset`, { method: 'POST' });
-                                    fetchScenario();
-                                } catch (e) { console.error(e); }
-                            }}
+                            onClick={() => handleReset(false)}
                             className="text-sm text-slate-500 hover:text-red-600 underline"
                         >
                             Restart Session
@@ -176,62 +237,103 @@ export default function ScenarioPage({ params }: { params: Promise<{ id: string 
 
             {/* Conditional Render: Report Card */}
             {scenario.state === 'completed' && scenario.evaluation ? (
-                <section className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm animate-in fade-in slide-in-from-bottom-4">
-                    <div className="bg-green-600 text-white p-6 text-center">
-                        <div className="text-4xl mb-2">🎉</div>
-                        <h2 className="text-3xl font-bold mb-2">Mission Debrief</h2>
-                        <div className="flex justify-center gap-1 text-amber-300 text-2xl">
-                            {[...Array(5)].map((_, i) => (
-                                <span key={i} className={i < scenario.evaluation!.rating ? "opacity-100" : "opacity-30"}>★</span>
-                            ))}
-                        </div>
-                    </div>
-
-                    <div className="p-8 space-y-8">
-                        {/* General Feedback */}
-                        <div>
-                            <h3 className="font-bold text-slate-900 mb-2">Senssei's Feedback</h3>
-                            <p className="text-slate-600 leading-relaxed bg-slate-50 p-4 rounded-lg border border-slate-100">
-                                {scenario.evaluation.feedback}
-                            </p>
-                        </div>
-
-                        {/* Corrections */}
-                        {scenario.evaluation.corrections.length > 0 && (
-                            <div>
-                                <h3 className="font-bold text-slate-900 mb-4">Corrections & Improvements</h3>
-                                <div className="space-y-4">
-                                    {scenario.evaluation.corrections.map((item, idx) => (
-                                        <div key={idx} className="border border-slate-200 rounded-lg p-4 bg-slate-50/50">
-                                            <div className="flex flex-col md:flex-row gap-4 mb-2">
-                                                <div className="flex-1">
-                                                    <div className="text-xs text-red-500 font-bold uppercase mb-1">You Said</div>
-                                                    <div className="text-slate-800 line-through decoration-red-300">{item.original}</div>
-                                                </div>
-                                                <div className="hidden md:block text-slate-300 text-2xl">→</div>
-                                                <div className="flex-1">
-                                                    <div className="text-xs text-green-600 font-bold uppercase mb-1">Better</div>
-                                                    <div className="text-green-800 font-medium">{item.correction}</div>
-                                                </div>
-                                            </div>
-                                            <p className="text-sm text-slate-500 border-t border-slate-200 pt-2 mt-2">
-                                                💡 {item.explanation}
-                                            </p>
-                                        </div>
-                                    ))}
-                                </div>
+                <section className="space-y-8">
+                    <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm animate-in fade-in slide-in-from-bottom-4">
+                        <div className="bg-green-600 text-white p-6 text-center">
+                            <div className="text-4xl mb-2">🎉</div>
+                            <h2 className="text-3xl font-bold mb-2">Mission Debrief</h2>
+                            <div className="flex justify-center gap-1 text-amber-300 text-2xl">
+                                {[...Array(5)].map((_, i) => (
+                                    <span key={i} className={i < scenario.evaluation!.rating ? "opacity-100" : "opacity-30"}>★</span>
+                                ))}
                             </div>
-                        )}
+                        </div>
 
-                        <div className="pt-6 border-t border-slate-100 flex justify-center">
-                            <button
-                                onClick={() => window.location.href = '/scenarios'}
-                                className="px-6 py-3 bg-slate-800 text-white font-bold rounded-lg hover:bg-slate-900 transition-colors"
-                            >
-                                Return to Scenarios List
-                            </button>
+                        <div className="p-8 space-y-8">
+                            {/* General Feedback */}
+                            <div>
+                                <h3 className="font-bold text-slate-900 mb-2">Sensei's Feedback</h3>
+                                <p className="text-slate-600 leading-relaxed bg-slate-50 p-4 rounded-lg border border-slate-100">
+                                    {scenario.evaluation.feedback}
+                                </p>
+                            </div>
+
+                            {/* Corrections */}
+                            {scenario.evaluation.corrections.length > 0 && (
+                                <div>
+                                    <h3 className="font-bold text-slate-900 mb-4">Corrections & Improvements</h3>
+                                    <div className="space-y-4">
+                                        {scenario.evaluation.corrections
+                                            .filter(c => c.original && c.correction && c.original.length < 200)
+                                            .map((c, idx) => (
+                                                <div key={idx} className="border border-slate-200 rounded-lg p-4 bg-slate-50/50">
+                                                    <div className="flex flex-col md:flex-row gap-4 mb-2">
+                                                        <div className="flex-1">
+                                                            <div className="text-xs text-red-500 font-bold uppercase mb-1">You Said</div>
+                                                            <div className="text-slate-800 line-through decoration-red-300">{c.original}</div>
+                                                        </div>
+                                                        <div className="hidden md:block text-slate-300 text-2xl">→</div>
+                                                        <div className="flex-1">
+                                                            <div className="text-xs text-green-600 font-bold uppercase mb-1">Better</div>
+                                                            <div className="text-green-800 font-medium">{c.correction}</div>
+                                                        </div>
+                                                    </div>
+                                                    <p className="text-sm text-slate-500 border-t border-slate-200 pt-2 mt-2">
+                                                        💡 {c.explanation}
+                                                    </p>
+                                                </div>
+                                            ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            <div className="pt-6 border-t border-slate-100 flex justify-between items-center">
+                                <button
+                                    onClick={() => handleReset(true)}
+                                    className="px-6 py-3 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 transition-colors shadow-sm"
+                                >
+                                    ↺ Replay Scenario
+                                </button>
+                                <button
+                                    onClick={() => window.location.href = '/scenarios'}
+                                    className="px-6 py-3 bg-slate-200 text-slate-700 font-bold rounded-lg hover:bg-slate-300 transition-colors"
+                                >
+                                    Return to List
+                                </button>
+                            </div>
                         </div>
                     </div>
+
+                    {/* Past Attempts Section */}
+                    {scenario.pastAttempts && scenario.pastAttempts.length > 0 && (
+                        <div className="mt-8 border-t border-slate-200 pt-8">
+                            <h3 className="text-xl font-bold text-slate-800 mb-4">History</h3>
+                            <div className="grid gap-4 md:grid-cols-2">
+                                {scenario.pastAttempts.map((attempt, i) => (
+                                    <button
+                                        key={i}
+                                        onClick={() => setViewingHistory(attempt)}
+                                        className="text-left p-4 bg-white border border-slate-200 rounded-lg hover:border-indigo-300 transition-colors group"
+                                    >
+                                        <div className="flex justify-between items-start mb-2">
+                                            <span className="font-bold text-slate-700">Attempt #{scenario.pastAttempts!.length - i}</span>
+                                            <span className="text-xs text-slate-500">
+                                                {new Date(attempt.completedAt.seconds * 1000).toLocaleDateString()}
+                                            </span>
+                                        </div>
+                                        <div className="flex gap-1 text-amber-400 text-sm">
+                                            {[...Array(5)].map((_, starI) => (
+                                                <span key={starI} className={starI < attempt.evaluation.rating ? "opacity-100" : "opacity-30"}>★</span>
+                                            ))}
+                                        </div>
+                                        <div className="text-xs text-indigo-600 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            View Details →
+                                        </div>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    )}
                 </section>
             ) : scenario.state === 'simulate' ? (
                 <section className="bg-slate-50 border border-slate-200 rounded-xl overflow-hidden flex flex-col h-[600px]">

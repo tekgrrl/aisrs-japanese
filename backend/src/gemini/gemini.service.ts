@@ -25,7 +25,8 @@ export class GeminiService implements OnModuleInit {
 
   onModuleInit() {
     const apiKey = this.configService.get<string>('GEMINI_API_KEY');
-    this.modelName = this.configService.get<string>('GEMINI_MODEL') || 'gemini-2.5-pro';
+    this.modelName = this.configService.get<string>('MODEL_GEMINI_FLASH') || 'gemini-3-flash-preview';
+    this.logger.log(`Using Gemini model: ${this.modelName}`);
 
     if (!apiKey) {
       throw new Error('GEMINI_API_KEY is not defined in environment variables');
