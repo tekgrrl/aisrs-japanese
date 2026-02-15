@@ -264,13 +264,15 @@ export default function ScenarioPage({ params }: { params: Promise<{ id: string 
                                     <h3 className="font-bold text-slate-900 mb-4">Corrections & Improvements</h3>
                                     <div className="space-y-4">
                                         {scenario.evaluation.corrections
-                                            .filter(c => c.original && c.correction && c.original.length < 200)
+                                            .filter(c => c.original && c.correction)
                                             .map((c, idx) => (
                                                 <div key={idx} className="border border-slate-200 rounded-lg p-4 bg-slate-50/50">
                                                     <div className="flex flex-col md:flex-row gap-4 mb-2">
                                                         <div className="flex-1">
                                                             <div className="text-xs text-red-500 font-bold uppercase mb-1">You Said</div>
-                                                            <div className="text-slate-800 line-through decoration-red-300">{c.original}</div>
+                                                            <div className="text-slate-800 line-through decoration-red-300" title={c.original}>
+                                                                {c.original.length > 200 ? c.original.substring(0, 200) + '...' : c.original}
+                                                            </div>
                                                         </div>
                                                         <div className="hidden md:block text-slate-300 text-2xl">→</div>
                                                         <div className="flex-1">
