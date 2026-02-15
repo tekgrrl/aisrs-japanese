@@ -6,7 +6,7 @@ import {
   NotFoundException
 } from '@nestjs/common';
 import { Firestore, CollectionReference, Timestamp, FieldValue } from 'firebase-admin/firestore';
-import { Scenario, GenerateScenarioDto, ScenarioState, ExtractedKU, ChatMessage, ScenarioEvaluation } from '../types/scenario';
+import { Scenario, GenerateScenarioDto, ScenarioState, ExtractedKU, ChatMessage, ScenarioEvaluation, ScenarioAttempt } from '../types/scenario';
 import { KnowledgeUnitsService } from '../knowledge-units/knowledge-units.service'; // Import Service
 import { FIRESTORE_CONNECTION, SCENARIOS_COLLECTION } from '../firebase/firebase.module';
 import { GeminiService } from '../gemini/gemini.service';
@@ -231,7 +231,7 @@ export class ScenariosService {
 
     // Archiving Logic
     if (archive && scenario.state === 'completed' && scenario.chatHistory && scenario.evaluation && scenario.completedAt) {
-      const attempt: any = { // using any to avoid strict type checks on Timestamp vs Date if needed, but should match interface
+      const attempt: ScenarioAttempt = {
         completedAt: scenario.completedAt,
         chatHistory: scenario.chatHistory,
         evaluation: scenario.evaluation
