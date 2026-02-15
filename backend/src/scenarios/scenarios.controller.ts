@@ -7,7 +7,8 @@ import {
   Param,
   HttpException,
   HttpStatus,
-  ParseIntPipe
+  ParseIntPipe,
+  BadRequestException
 } from '@nestjs/common';
 import { ScenariosService } from './scenarios.service';
 import { GenerateScenarioDto, ChatTurnDto } from '../types/scenario';
@@ -34,6 +35,9 @@ export class ScenariosController {
   async getAllScenarios(@Query('days') days?: string) {
     const userId = 'default-user';
     const limitDays = days ? parseInt(days, 10) : undefined;
+    if (limitDays !== undefined && isNaN(limitDays)) {
+      throw new BadRequestException('Invalid days parameter');
+    }
     return this.scenariosService.getAllScenarios(userId, limitDays);
   }
 
