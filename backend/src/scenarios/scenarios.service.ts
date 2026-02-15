@@ -445,65 +445,23 @@ Create a "Genki-style" learning scenario for an ADULT traveler/expat (not a stud
       aiRole = roles.aiRole;
     }
 
-    // 2. Format History with Hardened Checks
-    const historyText = (scenario.chatHistory || [])
-      .map(msg => {
-        // Normalize speaker check to handle 'User', 'user', or role name leaks
-        const isUser = msg.speaker?.toLowerCase() === 'user';
-        const label = isUser ? userRole : aiRole;
-        return `[${label}]: ${msg.text}`;
-      })
-      .join('\n');
+    // 2. Prepare Context for Gemini Service
+    const context = {
+      title: scenario.title,
+      goal: scenario.setting.goal,
+      difficulty: scenario.difficultyLevel,
+      userRole,
+      aiRole
+    };
 
-    // DEBUG: Log the exact transcript we are sending to Gemini
-    console.log('--- EVALUATION TRANSCRIPT START ---');
-    console.log(`User Role: ${userRole}, AI Role: ${aiRole}`);
-    console.log(historyText);
-    console.log('--- EVALUATION TRANSCRIPT END ---');
+    // 3. Prepare History (Map ChatMessage[] to simpler structure if needed, though interfaces align)
+    const history = (scenario.chatHistory || []).map(msg => ({
+      speaker: msg.speaker,
+      text: msg.text
+    }));
 
-    // 3. Prompt
-    const prompt = `
-      Act as a strict Japanese language teacher evaluating a roleplay session.
-      
-      **SCENARIO CONTEXT:**
-      - Goal: ${scenario.setting.goal}
-      - User Role: ${userRole} (The student being evaluated)
-      - Partner Role: ${aiRole}
-      - Level: ${scenario.difficultyLevel}
-
-      **TRANSCRIPT:**
-      ${historyText}
-
-      **TASK:**
-      1. Analyze the USER'S performance.
-      2. Did they achieve the goal? (success: true/false)
-      3. Rate naturalness (1-5).
-      4. Provide specific feedback.
-      5. Identify 1-3 critical mistakes or unnatural phrases.
-
-      **CRITICAL OUTPUT RULES:**
-      - Return ONLY valid JSON.
-      - **NO Internal Monologue:** Do not write notes, "thinking steps", or parenthetical explanations inside the JSON values.
-      - **Format:**
-        - 'original': The exact text the user said.
-        - 'correction': A better/more natural Japanese phrase.
-        - 'explanation': Why the correction is better (in English).
-      - If no corrections are needed, return an empty array for 'corrections'.
-
-      **JSON SCHEMA:**
-      {
-        "success": boolean,
-        "rating": number,
-        "feedback": "string",
-        "corrections": [
-          { "original": "string", "correction": "string", "explanation": "string" }
-        ]
-      }
-    `;
-
-    // 4. Call Gemini
-    const jsonString = await this.geminiService.generateScenario(JSON.stringify({ userMessage: prompt }));
-    return JSON.parse(jsonString) as ScenarioEvaluation;
+    // 4. Delegate to Gemini Service
+    return this.geminiService.evaluateScenario(history, context);
   }
 
 
