@@ -13,10 +13,11 @@ import { KnowledgeUnitsModule } from './knowledge-units/knowledge-units.module';
 import { StatsModule } from './stats/stats.module';
 import { KanjiModule } from './kanji/kanji.module';
 import { ScenariosModule } from './scenarios/scenarios.module';
+import { AudioModule } from './audio/audio.module';
 
 @Module({
-  imports: [ReviewsModule, FirebaseModule, GeminiModule,ConfigModule.forRoot(), QuestionsModule, ApilogModule, LessonsModule, KnowledgeUnitsModule, StatsModule, KanjiModule, ScenariosModule],
+  imports: [ReviewsModule, FirebaseModule, GeminiModule, ConfigModule.forRoot(), QuestionsModule, ApilogModule, LessonsModule, KnowledgeUnitsModule, StatsModule, KanjiModule, ScenariosModule, AudioModule],
   controllers: [AppController],
   providers: [AppService, QuestionsService],
 })
-export class AppModule {}
+export class AppModule { }

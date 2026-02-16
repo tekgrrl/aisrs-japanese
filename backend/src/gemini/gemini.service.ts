@@ -787,7 +787,7 @@ export class GeminiService implements OnModuleInit {
 
   async evaluateScenario(
     chatHistory: { speaker: string; text: string }[],
-    scenarioContext: { title: string; goal: string; difficulty: string; userRole?: string; aiRole?: string }
+    scenarioContext: { title: string; goal: string; difficulty: string; userRole?: string; aiRole?: string; isObjectiveMet: boolean }
   ): Promise<ScenarioEvaluation> {
     let startTime = performance.now();
     let errorOccurred = false;
@@ -811,6 +811,7 @@ export class GeminiService implements OnModuleInit {
 
     try {
       // Improved Transcript Formatting
+
       const historyText = chatHistory.map((m) => {
         const roleLabel = m.speaker === scenarioContext.userRole ? `[User - ${m.speaker}]` : `[AI - ${m.speaker}]`;
         return `${roleLabel}: ${m.text}`;
@@ -819,22 +820,31 @@ export class GeminiService implements OnModuleInit {
       const prompt = `
         Act as a strict Japanese language teacher.
         Evaluate this Roleplay Session based on:
-        1. Goal Achievement (${scenarioContext.goal})
+        1. Did they achieve the Goal? (success: true/false): (${scenarioContext.goal})
         2. Grammar/Vocabulary Usage (Level ${scenarioContext.difficulty})
-        3. Naturalness
+        3. Rate naturalness (1-5).
+        4. Provide specific feedback in English.
+        5. Identify 1-3 critical mistakes.
 
         SCENARIO CONTEXT:
         - Title: ${scenarioContext.title}
         - Goal: ${scenarioContext.goal}
         - User Role: ${scenarioContext.userRole || 'User'} (The person being evaluated)
         - AI Role: ${scenarioContext.aiRole || 'AI'} (The conversation partner)
+        - OBJECTIVE MET: ${scenarioContext.isObjectiveMet}
 
         TRANSCRIPT:
         ${historyText}
 
-        INSTRUCTION: Evaluate the USER (${scenarioContext.userRole || 'User'}) based on how well they achieved the goal. Do not confuse the User with the AI.
+        **CRITICAL GRADING RULES:**
+        1. **Output Language:** Write the 'feedback' and 'explanation' fields in **ENGLISH ONLY**. Do not use Japanese for the report text.
+        2. **Failure Condition:** If 'OBJECTIVE MET' is 'NO', the 'success' field MUST be false, and the 'rating' MUST be 1 or 2 (Fail). Do not give high ratings for incomplete work.
+        3. **Success Condition:** If 'OBJECTIVE MET' is 'YES', grade based on naturalness and grammar.
+
+        INSTRUCTION: Evaluate the USER (${scenarioContext.userRole || 'User'}) based on how well they achieved the goal. Do not confuse the User's responses with the AI's responses. 
+        OUTPUT LANGUAGE: the feedback and explanation must be in English. Do not write the report in Japanese but do not translate the user's or AI's responses.
         
-        Provide a structured evaluation in JSON.
+        Provide a structured evaluation in JSON using the attached schema.
       `;
 
       // LOG PROMPT for debugging

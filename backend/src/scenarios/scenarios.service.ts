@@ -103,6 +103,7 @@ export class ScenariosService {
         state: 'encounter',
         createdAt: Timestamp.now(),
         chatHistory: [],
+        isObjectiveMet: false
       };
 
       await docRef.set(newScenario);
@@ -227,6 +228,7 @@ export class ScenariosService {
       chatHistory: this.getInitialChatHistory(scenario), // Reset to initial seed if applicable
       evaluation: FieldValue.delete(), // clear evaluation
       completedAt: FieldValue.delete(), // clear completedAt
+      isObjectiveMet: false, // Reset objective met status
     };
 
     // Archiving Logic
@@ -332,9 +334,16 @@ export class ScenariosService {
     };
 
     // 5. Persist to Firestore (Atomic Update)
-    await this.collectionRef.doc(id).update({
+    const updateData: Record<string, any> = {
       chatHistory: FieldValue.arrayUnion(userMsgObj, aiMsgObj)
-    });
+    };
+
+    // If the AI says the scene is finished, update isObjectiveMet
+    if (aiResponse.sceneFinished) {
+      updateData.isObjectiveMet = true;
+    }
+
+    await this.collectionRef.doc(id).update(updateData);
 
     // 6. Return Full History (so frontend can sync)
     // We assume the frontend has the previous state, but returning full history is safer for sync
@@ -450,6 +459,7 @@ Create a "Genki-style" learning scenario for an ADULT traveler/expat (not a stud
       title: scenario.title,
       goal: scenario.setting.goal,
       difficulty: scenario.difficultyLevel,
+      isObjectiveMet: scenario.isObjectiveMet ?? false,
       userRole,
       aiRole
     };
