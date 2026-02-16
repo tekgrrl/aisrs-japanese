@@ -813,8 +813,14 @@ export class GeminiService implements OnModuleInit {
       // Improved Transcript Formatting
 
       const historyText = chatHistory.map((m) => {
-        const roleLabel = m.speaker === scenarioContext.userRole ? `[User - ${m.speaker}]` : `[AI - ${m.speaker}]`;
-        return `${roleLabel}: ${m.text}`;
+        // Check against the internal ID 'user', not the display name
+        const isUser = m.speaker === 'user';
+
+        // Map internal ID to the specific Scenario Role
+        const currentRoleName = isUser ? scenarioContext.userRole : scenarioContext.aiRole;
+
+        // Label it clearly for the LLM
+        return `[${isUser ? 'User' : 'AI'} - ${currentRoleName}]: ${m.text}`;
       }).join("\n");
 
       const prompt = `
