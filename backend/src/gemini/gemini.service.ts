@@ -813,8 +813,14 @@ export class GeminiService implements OnModuleInit {
       // Improved Transcript Formatting
 
       const historyText = chatHistory.map((m) => {
-        const roleLabel = m.speaker === scenarioContext.userRole ? `[User - ${m.speaker}]` : `[AI - ${m.speaker}]`;
-        return `${roleLabel}: ${m.text}`;
+        // Check against the internal ID 'user', not the display name
+        const isUser = m.speaker === 'user';
+
+        // Map internal ID to the specific Scenario Role
+        const currentRoleName = isUser ? scenarioContext.userRole : scenarioContext.aiRole;
+
+        // Label it clearly for the LLM
+        return `[${isUser ? 'User' : 'AI'} - ${currentRoleName}]: ${m.text}`;
       }).join("\n");
 
       const prompt = `
@@ -840,6 +846,7 @@ export class GeminiService implements OnModuleInit {
         1. **Output Language:** Write the 'feedback' and 'explanation' fields in **ENGLISH ONLY**. Do not use Japanese for the report text.
         2. **Failure Condition:** If 'OBJECTIVE MET' is 'NO', the 'success' field MUST be false, and the 'rating' MUST be 1 or 2 (Fail). Do not give high ratings for incomplete work.
         3. **Success Condition:** If 'OBJECTIVE MET' is 'YES', grade based on naturalness and grammar.
+        4. **Ignore Punctuation:** the user input is a speech transcript. Do NOT critique missing commas, periods, or quotation marks. Focus ONLY on word choice, grammar, and natural flow.
 
         INSTRUCTION: Evaluate the USER (${scenarioContext.userRole || 'User'}) based on how well they achieved the goal. Do not confuse the User's responses with the AI's responses. 
         OUTPUT LANGUAGE: the feedback and explanation must be in English. Do not write the report in Japanese but do not translate the user's or AI's responses.
