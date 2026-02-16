@@ -1,8 +1,11 @@
 'use client';
 
-import { useState, useEffect, use } from 'react';
+import { useState, useEffect, use, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Scenario, ChatMessage, ScenarioAttempt } from '@/types/scenario';
+import { useAudioPlayer } from '@/hooks/useAudioPlayer';
+import { useSpeechRecognition } from '@/hooks/useSpeechRecognition';
+import { Volume2, Mic, MicOff } from 'lucide-react';
 
 // Configuration for API URL - adjust if using env vars
 const API_BASE_URL = 'http://localhost:3000/api';
@@ -22,6 +25,55 @@ export default function ScenarioPage({ params }: { params: Promise<{ id: string 
 
     // UI State
     const [showTranslations, setShowTranslations] = useState(false);
+
+    // Audio Hooks
+    const { playBlob, isPlaying: isAudioPlaying } = useAudioPlayer();
+    const { isListening, transcript, start: startListening, stop: stopListening, supported: isSpeechSupported } = useSpeechRecognition();
+    const historyLengthRef = useRef(0);
+
+    // Helper to play TTS
+    const playTts = async (text: string) => {
+        try {
+            const res = await fetch(`${API_BASE_URL}/audio/speak`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text }),
+            });
+            if (!res.ok) throw new Error('TTS fetch failed');
+            const blob = await res.blob();
+            playBlob(blob);
+        } catch (e) {
+            console.error("TTS error", e);
+        }
+    };
+
+    // Effect: Auto-play new AI messages
+    useEffect(() => {
+        if (chatHistory.length > historyLengthRef.current) {
+            const lastMsg = chatHistory[chatHistory.length - 1];
+            // Only play if it's AI (or not user/system) and we are in simulation
+            // adjusting condition to be safe: speaker !== 'user'
+            if (lastMsg.speaker !== 'user' && scenario?.state === 'simulate') {
+                playTts(lastMsg.text);
+            }
+            historyLengthRef.current = chatHistory.length;
+        }
+    }, [chatHistory, scenario?.state]);
+
+    // Effect: Update input with speech transcript
+    useEffect(() => {
+        if (isListening) {
+            setUserMessage(transcript);
+        }
+    }, [transcript, isListening]);
+
+    const toggleListening = () => {
+        if (isListening) {
+            stopListening();
+        } else {
+            startListening();
+        }
+    };
 
     useEffect(() => {
         fetchScenario();
@@ -48,6 +100,13 @@ export default function ScenarioPage({ params }: { params: Promise<{ id: string 
             setLoading(false);
         }
     };
+
+    // Update ref after initial load so we don't auto-play history
+    useEffect(() => {
+        if (scenario && scenario.chatHistory) {
+            historyLengthRef.current = scenario.chatHistory.length;
+        }
+    }, [scenario]);
 
     const [advancing, setAdvancing] = useState(false);
 
@@ -399,7 +458,18 @@ export default function ScenarioPage({ params }: { params: Promise<{ id: string 
                                     ? 'bg-indigo-600 text-white rounded-tr-none'
                                     : 'bg-white border border-slate-200 text-slate-800 rounded-tl-none shadow-sm'
                                     }`}>
-                                    <div className="text-xs opacity-70 mb-1">{msg.speaker}</div>
+                                    <div className="text-xs opacity-70 mb-1 flex items-center gap-2">
+                                        <span>{msg.speaker}</span>
+                                        {msg.speaker !== 'user' && (
+                                            <button
+                                                onClick={() => playTts(msg.text)}
+                                                className="opacity-50 hover:opacity-100 hover:bg-black/10 rounded p-0.5 transition-all"
+                                                title="Replay Audio"
+                                            >
+                                                <Volume2 size={14} />
+                                            </button>
+                                        )}
+                                    </div>
                                     <div className="text-lg">{msg.text}</div>
                                 </div>
                                 {/* Correction Display */}
@@ -433,6 +503,19 @@ export default function ScenarioPage({ params }: { params: Promise<{ id: string 
                                 className="flex-1 px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
                                 disabled={isSending}
                             />
+                            {isSpeechSupported && (
+                                <button
+                                    type="button"
+                                    onClick={toggleListening}
+                                    className={`px-4 py-3 rounded-lg font-bold transition-all border ${isListening
+                                        ? 'bg-red-50 text-red-600 border-red-200 animate-pulse ring-2 ring-red-100'
+                                        : 'bg-white text-slate-400 border-slate-200 hover:text-slate-600 hover:bg-slate-50'
+                                        }`}
+                                    title={isListening ? "Stop Listening" : "Start Listening"}
+                                >
+                                    <Mic size={20} className={isListening ? "fill-current" : ""} />
+                                </button>
+                            )}
                             <button
                                 type="submit"
                                 disabled={isSending || !userMessage.trim()}
