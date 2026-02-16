@@ -70,6 +70,7 @@ export interface Scenario {
 
     state: ScenarioState;
     chatHistory?: ChatMessage[];
+    isObjectiveMet?: boolean;
     evaluation?: ScenarioEvaluation;
 
     createdAt: Timestamp;

@@ -102,7 +102,12 @@ export default function ScenarioPage({ params }: { params: Promise<{ id: string 
         if (scenario.state === 'drill') {
             // Proceed to advance to 'simulate'
         } else if (scenario.state === 'simulate') {
-            // Proceed to advance to 'completed'
+            // Check if objective met before finishing
+            if (!scenario.isObjectiveMet) {
+                if (!confirm("The scenario goal hasn't been met yet. Ending now might result in a lower score. Continue?")) {
+                    return;
+                }
+            }
         } else if (scenario.state === 'completed') {
             return;
         }
@@ -532,20 +537,24 @@ export default function ScenarioPage({ params }: { params: Promise<{ id: string 
                         </div>
                         <button
                             onClick={handleAdvance}
-                            disabled={advancing}
+                            disabled={advancing || (scenario.state === 'simulate' && chatHistory.length === 0)}
                             className={`px-8 py-3 rounded-lg font-bold transition-colors shadow-sm ${scenario.state === 'encounter'
                                 ? 'bg-indigo-600 hover:bg-indigo-700 text-white'
                                 : scenario.state === 'drill'
                                     ? 'bg-purple-600 hover:bg-purple-700 text-white'
                                     : scenario.state === 'simulate'
-                                        ? 'bg-slate-800 hover:bg-slate-900 text-white'
+                                        ? (scenario.isObjectiveMet
+                                            ? 'bg-green-600 hover:bg-green-700 text-white' // Objective Met
+                                            : 'bg-amber-500 hover:bg-amber-600 text-white') // Warning / Early Exit
                                         : 'bg-green-600 hover:bg-green-700 text-white'
-                                } ${advancing ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                } ${advancing || (scenario.state === 'simulate' && chatHistory.length === 0) ? 'opacity-50 cursor-not-allowed' : ''}`}
                         >
                             {advancing ? 'Processing...' :
                                 scenario.state === 'encounter' ? 'Start Drilling →' :
                                     scenario.state === 'drill' ? 'Start Roleplay →' :
-                                        scenario.state === 'simulate' ? 'Finish & Evaluate' : 'Completed'}
+                                        scenario.state === 'simulate'
+                                            ? (scenario.isObjectiveMet ? 'Complete Mission' : 'End Session Early')
+                                            : 'Completed'}
                         </button>
                     </div>
                 </div>
