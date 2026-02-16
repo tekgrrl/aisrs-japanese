@@ -112,6 +112,11 @@ export default function ScenarioPage({ params }: { params: Promise<{ id: string 
 
     const handleSendMessage = async (e: React.FormEvent) => {
         e.preventDefault();
+        // Stop listening immediately to avoid picking up TTS
+        if (isListening) {
+            stopListening();
+        }
+
         if (!userMessage.trim() || isSending) return;
 
         setIsSending(true);
@@ -140,6 +145,24 @@ export default function ScenarioPage({ params }: { params: Promise<{ id: string 
 
             // Backend returns the full updated history
             setChatHistory(fullHistory);
+
+            // Check if the scene is finished based on the last message
+            if (fullHistory.length > 0) {
+                const lastMsg = fullHistory[fullHistory.length - 1];
+                if (lastMsg.sceneFinished) {
+                    setScenario(prev => prev ? ({
+                        ...prev,
+                        isObjectiveMet: true,
+                        chatHistory: fullHistory // Ensure history is also synced in scenario object
+                    }) : null);
+                } else {
+                    // Also sync history to scenario object to be safe
+                    setScenario(prev => prev ? ({
+                        ...prev,
+                        chatHistory: fullHistory
+                    }) : null);
+                }
+            }
 
         } catch (err) {
             console.error(err);
