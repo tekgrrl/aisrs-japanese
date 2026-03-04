@@ -114,7 +114,7 @@ export default function Header() {
         >
           AISRS
         </Link>
-        
+
         {/* Navigation Links */}
         <div className="flex items-center space-x-2 sm:space-x-4">
           <Link
@@ -136,6 +136,12 @@ export default function Header() {
             Manage
           </Link>
           <Link
+            href="/scenarios"
+            className="px-4 py-2 rounded-md text-shodo-ink font-medium hover:bg-shodo-ink/5 transition-colors duration-200"
+          >
+            Scenarios
+          </Link>
+          <Link
             href="/library"
             className="px-4 py-2 rounded-md text-shodo-ink font-medium hover:bg-shodo-ink/5 transition-colors duration-200"
           >
@@ -149,24 +155,21 @@ export default function Header() {
         {/* Settings / Toggles */}
         <button
           onClick={toggleFurigana}
-          className={`text-sm font-medium transition-colors duration-200 flex items-center gap-2 ${
-            showFurigana
+          className={`text-sm font-medium transition-colors duration-200 flex items-center gap-2 ${showFurigana
               ? "text-shodo-ink"
               : "text-shodo-ink/40 hover:text-shodo-ink/70"
-          }`}
+            }`}
           title="Toggle Furigana (Alt+F)"
           aria-pressed={showFurigana}
         >
           <span className="text-xs uppercase tracking-wider">Furigana</span>
-          <div 
-            className={`w-8 h-4 rounded-full relative transition-colors duration-200 ${
-              showFurigana ? "bg-shodo-ink" : "bg-shodo-ink/20"
-            }`}
-          >
-            <div 
-              className={`absolute top-0.5 bottom-0.5 w-3 h-3 rounded-full bg-shodo-paper shadow-sm transition-all duration-200 ${
-                showFurigana ? "left-4.5" : "left-0.5"
+          <div
+            className={`w-8 h-4 rounded-full relative transition-colors duration-200 ${showFurigana ? "bg-shodo-ink" : "bg-shodo-ink/20"
               }`}
+          >
+            <div
+              className={`absolute top-0.5 bottom-0.5 w-3 h-3 rounded-full bg-shodo-paper shadow-sm transition-all duration-200 ${showFurigana ? "left-4.5" : "left-0.5"
+                }`}
             />
           </div>
         </button>
