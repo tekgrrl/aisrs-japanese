@@ -26,27 +26,70 @@ export interface ApiLog {
   };
 }
 
-interface UserStats {
-  userId: string;
+/**
+ * Represents the root document for a user in the strict multi-tenant architecture.
+ * Document path: users/{uid}
+ * This document serves as the unified source of truth for the user's high-level state.
+ */
+export interface UserRoot {
+  id: string; // The Firestore document ID (which corresponds to the user's auth UID)
 
-  // Forecasts (Bucket Counts)
-  reviewForecast: Record<string, number>; // "YYYY-MM-DD": count
-  hourlyForecast: Record<string, number>; // "YYYY-MM-DD-HH": count
+  /**
+   * Statistical data related to the user's reviews, engagement, and progression.
+   * Consolidates legacy UserStats fields.
+   */
+  stats: {
+    // Forecasts (Bucket Counts)
+    reviewForecast: Record<string, number>; // "YYYY-MM-DD": count
+    hourlyForecast: Record<string, number>; // "YYYY-MM-DD-HH": count
 
-  // Engagement
-  currentStreak: number;
-  lastReviewDate: Timestamp; // ISO Date
+    // Engagement
+    currentStreak: number;
+    lastReviewDate: Timestamp; // ISO Date
 
-  // Performance
-  totalReviews: number;
-  passedReviews: number;
+    // Performance
+    totalReviews: number;
+    passedReviews: number;
 
-  // Progression (by Level)
-  levelProgress: {
-    n5: { total: number, mastered: number },
-    n4: { total: number, mastered: number },
-    // ...
-  }
+    // Progression (by Level)
+    levelProgress: {
+      n5: { total: number; mastered: number };
+      n4: { total: number; mastered: number };
+      n3?: { total: number; mastered: number };
+      n2?: { total: number; mastered: number };
+      n1?: { total: number; mastered: number };
+    };
+  };
+
+  /**
+   * Data specifically used by the AI Architect (Gemini) to personalize the learning experience.
+   * This context acts as the "Personal Tutor" memory mapping logic context onto interaction styling.
+   */
+  tutorContext: {
+    /** Words learned recently that the AI should actively try to reinforce in scenarios/examples. */
+    frontierVocab: string[];
+
+    /** Words the user has failed often that need repair/re-evaluation through the AI tutor. */
+    leechVocab: string[];
+
+    /** The current topic or structural node the user is tackling in their overall curriculum. */
+    currentCurriculumNode: string;
+
+    /** The set of grammar constructs the AI is permitted to use when generating content for this user. */
+    allowedGrammar: string[];
+
+    /** Specific grammar points the user struggles with; AI should emphasize diagnosing and practicing these. */
+    weakGrammarPoints: string[];
+
+    /** The user's identified conversational tendency, signaling how the AI should prompt for polite vs. casual context. */
+    communicationStyle: 'too_formal' | 'too_casual' | 'balanced' | 'hesitant';
+
+    /** Nuance or meaning-related weaknesses (e.g., struggling to differentiate similar-meaning words). */
+    semanticWeaknesses: string[];
+
+    /** Topics or themes the user brings up frequently or has shown interest in. */
+    suggestedThemes: string[];
+  };
 }
 
 export interface VocabLesson {
@@ -98,6 +141,7 @@ export interface KanjiLesson {
   }
 
   // User Data (From Firestore/DB)
+  /** @deprecated - migrating to User state models */
   personalMnemonic?: string;
 
   // Mnemonics from AI
@@ -113,7 +157,61 @@ export interface KanjiLesson {
   }[];
 }
 
-export type Lesson = VocabLesson | KanjiLesson;
+export interface GlobalVocabLesson {
+  type: "Vocab";
+  vocab: string;
+  reading: string;
+  definitions: string[];
+  definition?: string;
+  partOfSpeech: PartOfSpeech;
+  meaning_explanation: string;
+  reading_explanation: string;
+  context_examples?: { sentence: string; translation: string }[];
+  component_kanji?: {
+    kanji: string;
+    reading: string;
+    meaning: string;
+    onyomi?: string[];
+    kunyomi?: string[];
+  }[];
+}
+
+export interface GlobalKanjiLesson {
+  type: "Kanji";
+  kanji: string;
+  meaning: string;
+  onyomi: string[];
+  kunyomi: string[];
+  strokeCount: number;
+  strokeImages: string[];
+  radical?: {
+    character: string;
+    meaning: string;
+    image: string;
+    animation?: string[];
+  };
+  references?: {
+    grade: number;
+    kodansha: number;
+    classic_nelson: number;
+  };
+  mnemonic_meaning: string;
+  mnemonic_reading: string;
+  relatedVocab: {
+    id: string;
+    content: string;
+    reading: string;
+  }[];
+}
+
+export interface UserLessonData {
+  lessonId: string; // The ID of the generic lesson it adapts
+  userId: string;
+  kuId: string;
+  personalMnemonic?: string;
+}
+
+export type Lesson = VocabLesson | KanjiLesson | GlobalVocabLesson | GlobalKanjiLesson;
 
 export type KnowledgeUnitType =
   | "Vocab"
@@ -142,6 +240,7 @@ export type PartOfSpeech =
 
 export interface KnowledgeUnit {
   id: string;
+  /** @deprecated - migrating to User state models */
   userId: string;
   type: KnowledgeUnitType;
   content: string; // The main "thing" (e.g., "食べる", "家族", "Giving/Receiving")
@@ -152,13 +251,44 @@ export interface KnowledgeUnit {
     // We can add more specific fields here later
     [key: string]: any;
   };
+  /** @deprecated - migrating to User state models */
   personalNotes: string;
+  /** @deprecated - migrating to User state models */
   userNotes?: string;
   relatedUnits: string[]; // Array of other KnowledgeUnit IDs
+  /** @deprecated - migrating to User state models */
   createdAt: Timestamp; // Added for sorting
+  /** @deprecated - migrating to User state models */
+  status: "learning" | "reviewing";
+  /** @deprecated - migrating to User state models */
+  facet_count: number;
+  /** @deprecated - migrating to User state models */
+  history?: any[]; // Or define a proper history type
+}
+
+export interface GlobalKnowledgeUnit {
+  id: string;
+  type: KnowledgeUnitType;
+  content: string;
+  data: {
+    reading?: string;
+    definition?: string;
+    meaning?: string;
+    [key: string]: any;
+  };
+  relatedUnits: string[];
+}
+
+export interface UserKnowledgeUnit {
+  id: string;
+  userId: string;
+  kuId: string; // Bridges to GlobalKnowledgeUnit.id
+  personalNotes: string;
+  userNotes?: string;
+  createdAt: Timestamp;
   status: "learning" | "reviewing";
   facet_count: number;
-  history?: any[]; // Or define a proper history type
+  history?: any[];
 }
 
 export type KnowledgeUnitClient = Omit<KnowledgeUnit, "createdAt"> & {
@@ -197,8 +327,8 @@ export interface ReviewFacet {
  */
 export interface ReviewItem {
   facet: ReviewFacet;
-  ku: KnowledgeUnit;
-  lesson?: Lesson;
+  ku: KnowledgeUnit | (GlobalKnowledgeUnit & UserKnowledgeUnit);
+  lesson?: Lesson | (GlobalVocabLesson & UserLessonData) | (GlobalKanjiLesson & UserLessonData);
 }
 
 // This represents the structure of our old db.json
@@ -217,6 +347,7 @@ export type LessonDifficulty =
 
 export interface QuestionItem {
   id: string;
+  /** @deprecated - migrating to User state models */
   userId: string;
   kuId: string;
   data: {
@@ -226,8 +357,36 @@ export interface QuestionItem {
     acceptedAlternatives?: string[];
     difficulty: LessonDifficulty;
   };
+  /** @deprecated - migrating to User state models */
   status?: "active" | "flagged" | "inactive"; // Default is 'active' if undefined
   createdAt: string | Timestamp;
+  /** @deprecated - migrating to User state models */
+  lastUsed?: string | Timestamp;
+  /** @deprecated - migrating to User state models */
+  previousAnswers?: {
+    answer: string;
+    result: "pass" | "fail";
+    timestamp: Timestamp;
+  }[];
+}
+
+export interface GlobalQuestion {
+  id: string;
+  kuId: string;
+  data: {
+    context?: string;
+    question: string;
+    answer: string;
+    acceptedAlternatives?: string[];
+    difficulty: LessonDifficulty;
+  };
+  createdAt: string | Timestamp;
+}
+
+export interface UserQuestionState {
+  userId: string;
+  questionId: string; // Bridges to GlobalQuestion.id
+  status: "active" | "flagged" | "inactive";
   lastUsed?: string | Timestamp;
   previousAnswers?: {
     answer: string;

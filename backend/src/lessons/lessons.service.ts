@@ -3,7 +3,7 @@ import { FIRESTORE_CONNECTION, LESSONS_COLLECTION, KNOWLEDGE_UNITS_COLLECTION } 
 import { Firestore, BulkWriter } from 'firebase-admin/firestore';
 import { GeminiService } from '../gemini/gemini.service';
 import { QuestionsService } from '../questions/questions.service';
-import { KnowledgeUnit, Lesson, VocabLesson } from '../types';
+import { KnowledgeUnit, Lesson, VocabLesson, KanjiLesson } from '../types';
 import { performance } from 'perf_hooks';
 import { CURRENT_USER_ID } from '@/lib/constants';
 
@@ -115,7 +115,7 @@ ${VOCAB_INSTRUCTIONS}`;
 
     try {
       lessonJson = JSON.parse(lessonString) as Lesson;
-      lessonJson.kuId = kuId;
+      (lessonJson as VocabLesson | KanjiLesson).kuId = kuId;
       (lessonJson as any).userId = CURRENT_USER_ID;
 
       // --- MERGE USER DEFINITIONS (if Vocab) ---

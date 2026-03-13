@@ -51,6 +51,7 @@ export interface ScenarioEvaluation {
 
 export interface Scenario {
     id: string;
+    /** @deprecated - migrating to User state models */
     userId: string;
     title: string;
     description: string;
@@ -68,19 +69,60 @@ export interface Scenario {
     extractedKUs: ExtractedKU[];
     grammarNotes: GrammarNote[];
 
+    /** @deprecated - migrating to User state models */
     state: ScenarioState;
+    /** @deprecated - migrating to User state models */
     chatHistory?: ChatMessage[];
+    /** @deprecated - migrating to User state models */
     isObjectiveMet?: boolean;
+    /** @deprecated - migrating to User state models */
     evaluation?: ScenarioEvaluation;
 
+    /** @deprecated - migrating to User state models */
     createdAt: Timestamp;
+    /** @deprecated - migrating to User state models */
     completedAt?: Timestamp;
+    /** @deprecated - migrating to User state models */
     pastAttempts?: ScenarioAttempt[];
 
     roles?: {
         user: string;
         ai: string;
     };
+}
+
+export interface ScenarioTemplate {
+    id: string;
+    title: string;
+    description: string;
+    difficultyLevel: ScenarioDifficulty;
+    setting: {
+        location: string;
+        participants: string[];
+        goal: string;
+        timeOfDay: string;
+        visualPrompt: string;
+    };
+    dialogue: ScenarioDialogueLine[];
+    extractedKUs: ExtractedKU[];
+    grammarNotes: GrammarNote[];
+    roles?: {
+        user: string;
+        ai: string;
+    };
+}
+
+export interface ScenarioSession {
+    id: string;
+    userId: string;
+    templateId: string; // Bridges to ScenarioTemplate.id
+    state: ScenarioState;
+    chatHistory?: ChatMessage[];
+    isObjectiveMet?: boolean;
+    evaluation?: ScenarioEvaluation;
+    createdAt: Timestamp;
+    completedAt?: Timestamp;
+    pastAttempts?: ScenarioAttempt[];
 }
 
 export interface ScenarioAttempt {
