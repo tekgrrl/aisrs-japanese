@@ -41,15 +41,15 @@ A more advanced system module distinct from simple flashcards. Scenarios facilit
 
 ```mermaid
 graph TD
-    Vocab(Vocab KU) -->|User selects Kanji component| Kanji(Component Kanji KU)
-    Vocab -->|Generates| Vocab_Reading(Review Facet: Reading)
-    Vocab -->|Generates| Vocab_Meaning(Review Facet: Meaning)
+    Vocab["Vocab KU"] -->|User selects Kanji component| Kanji["Component Kanji KU"]
+    Vocab -->|Generates| Vocab_Reading["Review Facet: Reading"]
+    Vocab -->|Generates| Vocab_Meaning["Review Facet: Meaning"]
     
-    Kanji -->|Links back to| Origin(origin: { type: 'vocab', kuId })
-    Kanji -->|Generates| Kanji_Reading(Review Facet: Selected Onyomi/Kunyomi)
-    Kanji -->|Generates| Kanji_Meaning(Review Facet: Meaning)
+    Kanji -->|Links back to| Origin["origin: { type: 'vocab', kuId }"]
+    Kanji -->|Generates| Kanji_Reading["Review Facet: Selected Onyomi/Kunyomi"]
+    Kanji -->|Generates| Kanji_Meaning["Review Facet: Meaning"]
     
-    Scenario(Scenario) -->|Extracts unknowns| Vocab
+    Scenario["Scenario"] -->|Extracts unknowns| Vocab
 ```
 
 ## Firestore Specifics
