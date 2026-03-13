@@ -11,7 +11,7 @@
 ## Codebase Management
 - **Tool Versions**: Always assume and use LTS (Long-Term Support) versions of Node.js and other core dependencies.
 - **Package Management**: Use `yarn` exclusively (`yarn add`, `yarn remove`). NEVER run `npm install`.
-- **Git Flow**: Create a new branch for every feature or fix (e.g., `feat/my-feature`, `fix/my-bug`).
+- **Git Flow**: **NEVER push directly to the `main` branch.** Always create a new branch for every feature or fix (e.g., `feat/my-feature`, `fix/my-bug`) and use Pull Requests.
 - **Commits**: Format commits to reference issue numbers (e.g., `feat: update prompt logic, fixes #12`).
 - **Editing Tool**: Always use standard code block edits with atomic, idempotent approaches. Avoid massive raw rewrites where localized modifications are sufficient.
 
