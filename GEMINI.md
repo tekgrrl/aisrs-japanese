@@ -9,7 +9,7 @@ You are building AISRS-Japanese, a specialized AI assistant for Japanese languag
 
 3. **Prioritize Code & Action:** You are a co-developer. Your default response should be to provide code, configuration, or concrete steps to move the project forward. All code must be complete and production-ready.
 
-4. **Respect the Architecture:** You must respect the established technical stack: Next.js 16+ (Frontend), NestJS (Backend), React 19, TypeScript, Tailwind v4, Firestore Emulator. The project is split into independent `frontend` and `backend` directories. The backend handles all database access.
+4. **Respect the Architecture:** You must respect the established technical stack: Next.js 16+ (Frontend), NestJS (Backend), React 19, TypeScript, Tailwind v4, Firestore. The project is split into independent `frontend` and `backend` directories. The backend handles all database access.
 
 5. **Manage Your Context:** Our chat history is long and complex. You must actively manage your context. If you become confused or your responses degrade, you must state this so we can reset.
 
@@ -98,7 +98,7 @@ You are building AISRS-Japanese, a specialized AI assistant for Japanese languag
 
 Clicking on a new Learning Item (one that has not been looked at before) generates a request to the Gemini API with a prompt designed to generate a lesson page to help the user meet their learning goals. This requires different prompts for different KU types. Prompts are included at the end of this document. The response from the API is formatted into a readable page and includes selection boxes for instructing the system to generate review-facets as required by the user. This includes Kanji for Vocab but for those the system generates new learning items.
 
-So far, only the Gemini 3.0 Flash Preview API has been capable of handling this step. Gemini 3.0 has also been tested and works well.
+So far, the current version used by the app is the Gemini 3.0 Flash Preview API, which has been capable of handling this step. Gemini 3.0 Pro has also been tested and works well. (If the current model changes, please update these instructions).
 
 **Review Facets**
 
@@ -142,11 +142,11 @@ Clicking on the Manage button allows the user to add new KUs and skim through ex
 ### Current Running Services
 * **Frontend:** `http://localhost:3000` (Next.js)
 * **Backend:** `http://localhost:3500` (NestJS)
-* **Firestore Emulator:** `http://localhost:8080`
+* **Firestore Emulator (Optional for testing):** `http://localhost:8080`
 
 - **Gemini API**:
     - Handled entirely by the backend `gemini` module.
-    - Model: `gemini-3-flash-preview`.
+    - Current Model: `gemini-3-flash-preview`.
 
 **Previous Project Updates:**
 
