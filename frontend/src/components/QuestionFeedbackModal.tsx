@@ -22,8 +22,8 @@ export const QuestionFeedbackModal: React.FC<QuestionFeedbackModalProps> = ({
           Rate this Question
         </h2>
         <p className="text-gray-300 mb-8 text-center">
-          Since this is a new AI-generated question, we need your feedback. Is it
-          good?
+          Since this is a new AI-generated question, we need your feedback. Is
+          it good?
         </p>
 
         <div className="flex flex-col gap-4">

@@ -82,7 +82,7 @@ export interface UserRoot {
     weakGrammarPoints: string[];
 
     /** The user's identified conversational tendency, signaling how the AI should prompt for polite vs. casual context. */
-    communicationStyle: 'too_formal' | 'too_casual' | 'balanced' | 'hesitant';
+    communicationStyle: "too_formal" | "too_casual" | "balanced" | "hesitant";
 
     /** Nuance or meaning-related weaknesses (e.g., struggling to differentiate similar-meaning words). */
     semanticWeaknesses: string[];
@@ -138,7 +138,7 @@ export interface KanjiLesson {
     grade: number;
     kodansha: number;
     classic_nelson: number;
-  }
+  };
 
   // User Data (From Firestore/DB)
   /** @deprecated - migrating to User state models */
@@ -211,7 +211,11 @@ export interface UserLessonData {
   personalMnemonic?: string;
 }
 
-export type Lesson = VocabLesson | KanjiLesson | GlobalVocabLesson | GlobalKanjiLesson;
+export type Lesson =
+  | VocabLesson
+  | KanjiLesson
+  | GlobalVocabLesson
+  | GlobalKanjiLesson;
 
 export type KnowledgeUnitType =
   | "Vocab"
@@ -328,7 +332,10 @@ export interface ReviewFacet {
 export interface ReviewItem {
   facet: ReviewFacet;
   ku: KnowledgeUnit | (GlobalKnowledgeUnit & UserKnowledgeUnit);
-  lesson?: Lesson | (GlobalVocabLesson & UserLessonData) | (GlobalKanjiLesson & UserLessonData);
+  lesson?:
+    | Lesson
+    | (GlobalVocabLesson & UserLessonData)
+    | (GlobalKanjiLesson & UserLessonData);
 }
 
 // This represents the structure of our old db.json

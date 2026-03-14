@@ -22,9 +22,7 @@ export default function KanjiLessonView({ lesson }: KanjiLessonViewProps) {
         </h2>
         <ul className="flex flex-wrap gap-4">
           {lesson.radical ? (
-            <li
-              className="p-4 bg-gray-200 dark:bg-gray-700 rounded-md text-center"
-            >
+            <li className="p-4 bg-gray-200 dark:bg-gray-700 rounded-md text-center">
               <span className="text-3xl text-gray-900 dark:text-white">
                 {lesson.radical.character}
               </span>

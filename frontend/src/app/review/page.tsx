@@ -10,6 +10,7 @@ import { QuestionFeedbackModal } from "@/components/QuestionFeedbackModal";
 import EditKnowledgeUnitModal from "@/components/EditKnowledgeUnitModal";
 import { KnowledgeUnit } from "@/types";
 import { getSrsLevelName, getSrsLevelIndex } from "@/utils/srs";
+import { apiFetch } from "@/lib/api-client";
 
 type AnswerState = "unanswered" | "evaluating" | "correct" | "incorrect";
 
@@ -34,7 +35,9 @@ export default function ReviewPage() {
   const [dynamicAnswer, setDynamicAnswer] = useState<string | null>(null);
   const [dynamicContext, setDynamicContext] = useState<string | null>(null);
   const [dynamicAltAnswers, setDynamicAltAnswers] = useState<string[]>([]);
-  const [dynamicQuestionId, setDynamicQuestionId] = useState<string | null>(null);
+  const [dynamicQuestionId, setDynamicQuestionId] = useState<string | null>(
+    null,
+  );
   const [dynamicQuestionStatus, setDynamicQuestionStatus] = useState<
     "active" | "flagged" | "inactive" | null
   >(null);
@@ -42,7 +45,9 @@ export default function ReviewPage() {
   // --- Feedback Modal State ---
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
 
-  const [pendingSrsResult, setPendingSrsResult] = useState<"pass" | "fail" | null>(null);
+  const [pendingSrsResult, setPendingSrsResult] = useState<
+    "pass" | "fail" | null
+  >(null);
 
   const [levelStatus, setLevelStatus] = useState<{
     direction: "up" | "down";
@@ -89,7 +94,7 @@ export default function ReviewPage() {
     setIsFetchingDynamicQuestion(true);
     setError(null);
     try {
-      const response = await fetch(
+      const response = await apiFetch(
         `/api/questions/generate?topic=${encodeURIComponent(topic)}&facetId=${facetId}&kuId=${kuId}`,
         // `/api/generate-question?topic=${encodeURIComponent(topic)}&facetId=${facetId}&kuId=${kuId}`,
       );
@@ -97,8 +102,14 @@ export default function ReviewPage() {
         const errData = await response.json();
         throw new Error(errData.error || "Failed to generate question");
       }
-      const { question, answer, context, accepted_alternatives, questionId, status } =
-        await response.json();
+      const {
+        question,
+        answer,
+        context,
+        accepted_alternatives,
+        questionId,
+        status,
+      } = await response.json();
       setDynamicQuestion(question);
       setDynamicAnswer(answer);
       setDynamicContext(context || null);
@@ -120,7 +131,7 @@ export default function ReviewPage() {
         setIsLoading(true);
         setError(null);
         // TODO usenestjs backend service instead
-        const response = await fetch("/api/reviews/facets?due=true");
+        const response = await apiFetch("/api/reviews/facets?due=true");
         if (!response.ok) {
           throw new Error("Failed to fetch due review items");
         }
@@ -190,7 +201,7 @@ export default function ReviewPage() {
   const handleUpdateSrs = async (result: "pass" | "fail") => {
     if (!currentItem) return;
     try {
-      const response = await fetch(
+      const response = await apiFetch(
         `/api/reviews/facets/${currentItem.facet.id}`,
         {
           method: "PUT",
@@ -236,13 +247,15 @@ export default function ReviewPage() {
   ) => {
     try {
       // TODO use nestjs backend service instead
-      const res = await fetch(`/api/questions/${questionId}`, {
+      const res = await apiFetch(`/api/questions/${questionId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status }),
       });
       if (!res.ok) {
-        console.error(`[ReviewPage] updateQuestionStatus failed: ${res.status}`);
+        console.error(
+          `[ReviewPage] updateQuestionStatus failed: ${res.status}`,
+        );
       }
     } catch (err) {
       console.error("Failed to update question status", err);
@@ -324,7 +337,7 @@ export default function ReviewPage() {
     }
 
     try {
-      const response = await fetch("/api/reviews/evaluate", {
+      const response = await apiFetch("/api/reviews/evaluate", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -421,7 +434,7 @@ export default function ReviewPage() {
     try {
       // 1. Update backend
       // TODO needs nextjs rewrite
-      const response = await fetch(`/api/knowledge-units/${id}`, {
+      const response = await apiFetch(`/api/knowledge-units/${id}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -450,7 +463,7 @@ export default function ReviewPage() {
             };
           }
           return item;
-        })
+        }),
       );
 
       window.dispatchEvent(new CustomEvent("refreshStats"));
@@ -474,7 +487,9 @@ export default function ReviewPage() {
         currentItem.facet.currentQuestionId = dynamicQuestionId;
       }
     } else {
-      console.warn("[ReviewPage] handleFeedbackKeep: No dynamicQuestionId to update");
+      console.warn(
+        "[ReviewPage] handleFeedbackKeep: No dynamicQuestionId to update",
+      );
     }
     advanceToNext();
   };
@@ -504,7 +519,7 @@ export default function ReviewPage() {
     if (dynamicQuestionId) {
       await updateQuestionStatus(dynamicQuestionId, "flagged");
 
-      // Update local facet state so if it reappears, it's not "new"... 
+      // Update local facet state so if it reappears, it's not "new"...
       // ACTUALLY, we want the modal to show again.
       // But we update the facet's question ID to ensure we track usage.
       if (currentItem) {
@@ -584,7 +599,10 @@ export default function ReviewPage() {
       if (dynamicAnswer) {
         allExpectedAnswers.push(dynamicAnswer);
       }
-      console.log("Expected answers for AI-Generated Question:", allExpectedAnswers);
+      console.log(
+        "Expected answers for AI-Generated Question:",
+        allExpectedAnswers,
+      );
       return allExpectedAnswers;
     }
 
@@ -616,14 +634,19 @@ export default function ReviewPage() {
         }
 
         // Process: split by delimiters (comma, semicolon), trim, filter empty
-        const uniqueDefinitions = Array.from(new Set(
-          rawDefinitions
-            .flatMap((def) => def.split(/[,;]/)) // Split by , or ;
-            .map((def) => def.trim())
-            .filter((def) => def.length > 0)
-        ));
+        const uniqueDefinitions = Array.from(
+          new Set(
+            rawDefinitions
+              .flatMap((def) => def.split(/[,;]/)) // Split by , or ;
+              .map((def) => def.trim())
+              .filter((def) => def.length > 0),
+          ),
+        );
 
-        console.log("Expected answers for Content-to-Definition:", uniqueDefinitions);
+        console.log(
+          "Expected answers for Content-to-Definition:",
+          uniqueDefinitions,
+        );
         return uniqueDefinitions;
       }
       if (facet.facetType === "Content-to-Reading") {
@@ -665,20 +688,23 @@ export default function ReviewPage() {
           //return allReadings.join(', '); // e.g., "ドク, トク, よむ"
         }
         // Fallback just in case lesson is old/missing
-        console.log("Expected answers for Content-to-Reading (fallback):", [ku.data?.onyomi || ku.data?.kunyomi || ""]);
+        console.log("Expected answers for Content-to-Reading (fallback):", [
+          ku.data?.onyomi || ku.data?.kunyomi || "",
+        ]);
         return ku.data?.onyomi || ku.data?.kunyomi || [];
       }
     }
 
     // --- KANJI COMPONENT LOGIC ---
     if (facet.facetType === "Kanji-Component-Meaning") {
-
       const meaningStr = ku.data?.meaning || "";
 
-      return meaningStr.split(',').map(s => s.trim()).filter(s => s);
+      return meaningStr
+        .split(",")
+        .map((s) => s.trim())
+        .filter((s) => s);
     }
     if (facet.facetType === "Kanji-Component-Reading") {
-
       return ku.data?.onyomi || [];
     }
 
@@ -836,17 +862,20 @@ export default function ReviewPage() {
             {levelStatus && (
               <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-10 w-full">
                 <div
-                  className={`flex flex-col items-center justify-center p-6 rounded-lg shadow-xl border-2 animate-fade-slide-up mx-auto w-3/4 ${levelStatus.direction === "up"
-                    ? "bg-[#0A5C36] border-green-400 text-white"
-                    : "bg-red-800 border-red-400 text-white"
-                    }`}
+                  className={`flex flex-col items-center justify-center p-6 rounded-lg shadow-xl border-2 animate-fade-slide-up mx-auto w-3/4 ${
+                    levelStatus.direction === "up"
+                      ? "bg-[#0A5C36] border-green-400 text-white"
+                      : "bg-red-800 border-red-400 text-white"
+                  }`}
                 >
                   <span className="text-4xl font-bold mb-2">
                     {levelStatus.direction === "up" ? "▲" : "▼"}
                   </span>
                   <div className="text-center">
                     <p className="text-sm uppercase tracking-wider opacity-80 mb-1">
-                      {levelStatus.direction === "up" ? "Level Up" : "Level Down"}
+                      {levelStatus.direction === "up"
+                        ? "Level Up"
+                        : "Level Down"}
                     </p>
                     <p className="text-2xl font-bold">{levelStatus.newLevel}</p>
                   </div>
@@ -860,10 +889,11 @@ export default function ReviewPage() {
       {/* --- Answer Feedback Section --- */}
       {answerState !== "unanswered" && answerState !== "evaluating" && (
         <div
-          className={`mt-8 p-6 rounded-lg ${answerState === "correct"
-            ? "bg-green-800 border-green-600"
-            : "bg-red-800 border-red-600"
-            }`}
+          className={`mt-8 p-6 rounded-lg ${
+            answerState === "correct"
+              ? "bg-green-800 border-green-600"
+              : "bg-red-800 border-red-600"
+          }`}
         >
           <h3 className="text-2xl font-semibold text-white mb-3">
             {answerState === "correct" ? "Correct" : "Incorrect"}
@@ -894,7 +924,6 @@ export default function ReviewPage() {
                 Review lesson on {currentItem.ku.content}
               </Link>
             </div>
-
           )}
 
           <div className="mt-6 flex gap-4">

@@ -1,10 +1,10 @@
-import React from 'react';
+import React from "react";
 
 export const JsonDisplay = ({ data }: { data: any }) => {
   let content = data;
 
   // Recursively parse strings to handle double-encoded JSON
-  while (typeof content === 'string') {
+  while (typeof content === "string") {
     try {
       const parsed = JSON.parse(content);
       content = parsed;
@@ -14,15 +14,15 @@ export const JsonDisplay = ({ data }: { data: any }) => {
   }
 
   const formatForReadability = (val: any) => {
-    if (typeof val !== 'object' || val === null) return String(val);
+    if (typeof val !== "object" || val === null) return String(val);
 
     // Stringify with indentation
     const jsonString = JSON.stringify(val, null, 2);
 
     // HACK: Unescape newlines (\n) so they render as actual line breaks in the <pre> tag
     return jsonString
-      .replace(/\\n/g, '\n')  // Turn literal "\n" into actual newline
-      .replace(/\\"/g, '"');  // Turn literal \" into "
+      .replace(/\\n/g, "\n") // Turn literal "\n" into actual newline
+      .replace(/\\"/g, '"'); // Turn literal \" into "
   };
 
   return (

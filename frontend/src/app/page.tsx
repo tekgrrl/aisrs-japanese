@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import Lessons from "@/components/Lessons";
 import Reviews from "@/components/Reviews";
 import ReviewSchedule from "@/components/ReviewSchedule";
+import { apiFetch } from "@/lib/api-client";
 
 interface DashboardStats {
   learnCount: number;
@@ -23,20 +24,20 @@ interface DashboardStats {
 }
 
 export default function DashboardPage() {
-  const [stats, setStats] = useState<DashboardStats>({ 
-    learnCount: 0, 
+  const [stats, setStats] = useState<DashboardStats>({
+    learnCount: 0,
     next24HoursCount: 0,
     reviewCount: 0,
     reviewsDue: 0,
     schedule: [],
     streak: 0,
     hourlyForecast: {},
-    reviewForecast: {}
+    reviewForecast: {},
   });
 
   const fetchStats = useCallback(async () => {
     try {
-      const response = await fetch("/api/stats");
+      const response = await apiFetch("/api/stats");
       if (response.ok) {
         const data = await response.json();
         setStats(data);
@@ -77,11 +78,13 @@ export default function DashboardPage() {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [fetchStats]);
-  console.log(`stats: ${JSON.stringify(stats)}`);  
+  console.log(`stats: ${JSON.stringify(stats)}`);
   return (
     <div className="container mx-auto max-w-6xl px-4 py-8">
-      <h1 className="text-3xl font-bold mb-8 text-center text-gray-800 dark:text-white">Dashboard</h1>
-      
+      <h1 className="text-3xl font-bold mb-8 text-center text-gray-800 dark:text-white">
+        Dashboard
+      </h1>
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
         <div className="h-full">
           <Lessons lessonCount={stats.learnCount} />
@@ -93,9 +96,9 @@ export default function DashboardPage() {
 
       <div className="grid grid-cols-1 gap-8">
         <div className="h-full">
-          <ReviewSchedule 
+          <ReviewSchedule
             next24HoursCount={stats.next24HoursCount}
-            schedule={stats.schedule} 
+            schedule={stats.schedule}
             reviewsDue={stats.reviewsDue}
           />
         </div>

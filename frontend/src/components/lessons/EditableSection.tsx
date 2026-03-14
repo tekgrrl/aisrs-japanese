@@ -23,8 +23,8 @@ export default function EditableSection({
 
   const handleSave = () => {
     if (onSave) {
-        onSave(sectionKey, draft); // Call the main save handler
-        setIsEditing(false); // Close the editor
+      onSave(sectionKey, draft); // Call the main save handler
+      setIsEditing(false); // Close the editor
     }
   };
 
@@ -66,10 +66,10 @@ export default function EditableSection({
     <div className="bg-gray-100 dark:bg-gray-800 p-6 rounded-lg shadow-lg mb-8 relative border border-shodo-ink/5">
       {!readOnly && onSave && (
         <button
-            onClick={handleEdit}
-            className="absolute top-2 right-2 px-3 py-1 bg-gray-200 text-xs rounded-md"
+          onClick={handleEdit}
+          className="absolute top-2 right-2 px-3 py-1 bg-gray-200 text-xs rounded-md"
         >
-            Edit
+          Edit
         </button>
       )}
       <h2 className="text-2xl font-semibold mb-4 text-gray-900 dark:text-white">

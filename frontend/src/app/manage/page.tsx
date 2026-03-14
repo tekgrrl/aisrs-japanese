@@ -4,6 +4,7 @@ import React, { useState, useEffect, FormEvent } from "react";
 import { KnowledgeUnit, ReviewFacet } from "@/types";
 import Link from "next/link";
 import EditKnowledgeUnitModal from "@/components/EditKnowledgeUnitModal";
+import { apiFetch } from "@/lib/api-client";
 
 const kuTypes: KnowledgeUnit["type"][] = [
   "Vocab",
@@ -54,8 +55,8 @@ export default function KnowledgeManagementPage() {
       setIsLoading(true);
 
       const [kuResponse, facetResponse] = await Promise.all([
-        fetch("/api/knowledge-units/get-all"),
-        fetch("/api/reviews/facets"),
+        apiFetch("/api/knowledge-units/get-all"),
+        apiFetch("/api/reviews/facets"),
       ]);
 
       if (!kuResponse.ok) throw new Error("Failed to fetch knowledge units");
@@ -99,7 +100,7 @@ export default function KnowledgeManagementPage() {
 
     try {
       // TODO needs nextjs rewrite
-      const response = await fetch("/api/knowledge-units", {
+      const response = await apiFetch("/api/knowledge-units", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -144,7 +145,7 @@ export default function KnowledgeManagementPage() {
   const handleSaveKu = async (id: string, updates: Partial<KnowledgeUnit>) => {
     try {
       // TODO needs nextjs rewrite
-      const response = await fetch(`/api/knowledge-units/${id}`, {
+      const response = await apiFetch(`/api/knowledge-units/${id}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -342,7 +343,7 @@ export default function KnowledgeManagementPage() {
                   onChange={(e) => setNewKuReading(e.target.value)}
                   placeholder="e.g., たべる, かぞく"
                   className="w-full p-3 bg-gray-700 border-gray-600 text-white rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
-                // required removed
+                  // required removed
                 />
               </div>
               <div>
@@ -359,7 +360,7 @@ export default function KnowledgeManagementPage() {
                   onChange={(e) => setNewKuDefinition(e.target.value)}
                   placeholder="e.g., To eat, Family"
                   className="w-full p-3 bg-gray-700 border-gray-600 text-white rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
-                // required removed
+                  // required removed
                 />
               </div>
             </>
