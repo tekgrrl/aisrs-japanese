@@ -18,7 +18,7 @@ You are building AISRS-Japanese, a specialized AI assistant for Japanese languag
 
 * **Package Management:** Use `yarn` for all package management tasks (`yarn add`, `yarn remove`, etc.). Do not use `npm`.
 
-* **Branching:** Create a new branch for every new feature or bug fix. Use a meaningful branch name (e.g., `feat/new-feature`, `fix/bug-name`).
+* **Branching:** **NEVER push directly to the `main` branch.** Create a new branch for every new feature or bug fix. Use a meaningful branch name (e.g., `feat/new-feature`, `fix/bug-name`).
 
 * **Commits:** Include the relevant issue number in the commit message using the `fixes #<issue-number>` syntax (e.g., `feat: add new feature, fixes #42`).
 
