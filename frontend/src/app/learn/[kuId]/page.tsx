@@ -2,14 +2,10 @@
 
 import React, { useState, useEffect, useRef } from "react"; // <-- Import useRef
 import { useRouter, useParams, useSearchParams } from "next/navigation";
-import {
-  KnowledgeUnit,
-  Lesson,
-  VocabLesson,
-  KanjiLesson,
-} from "@/types";
+import { KnowledgeUnit, Lesson, VocabLesson, KanjiLesson } from "@/types";
 import VocabLessonView from "@/components/lessons/VocabLessonView";
 import KanjiLessonView from "@/components/lessons/KanjiLessonView";
+import { apiFetch } from "@/lib/api-client";
 
 export default function LearnItemPage() {
   const router = useRouter();
@@ -42,21 +38,21 @@ export default function LearnItemPage() {
 
     try {
       // Most recent change here. Something broke
-      const kuResponse = await fetch(`/api/knowledge-units/${kuId}`);
-      
+      const kuResponse = await apiFetch(`/api/knowledge-units/${kuId}`);
+
       if (!kuResponse.ok) {
-          if (kuResponse.status === 404) {
-            setError("Learning item not found.");
-            return;
-          }
-          throw new Error("Failed to fetch Knowledge Unit");
+        if (kuResponse.status === 404) {
+          setError("Learning item not found.");
+          return;
+        }
+        throw new Error("Failed to fetch Knowledge Unit");
       }
 
-      const kuData = await kuResponse.json() as KnowledgeUnit;
+      const kuData = (await kuResponse.json()) as KnowledgeUnit;
       setKu(kuData);
 
       // 2. Fetch the Lesson for this kuDoc by kuDoc.id
-      const lessonResponse = await fetch("/api/lessons/generate", {
+      const lessonResponse = await apiFetch("/api/lessons/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ kuId: kuData.id }),
@@ -69,14 +65,17 @@ export default function LearnItemPage() {
 
       const lessonData = (await lessonResponse.json()) as Lesson;
       setLesson(lessonData);
-      
+
       if (
         lessonData.type === "Vocab" &&
         lessonData.component_kanji &&
         lessonData.component_kanji.length > 0
       ) {
         const kanjiChars = lessonData.component_kanji.map((k) => k.kanji);
-        const response = await fetch("/api/knowledge-units/get-all?status=learning&content=" + kanjiChars.join(","));
+        const response = await apiFetch(
+          "/api/knowledge-units/get-all?status=learning&content=" +
+            kanjiChars.join(","),
+        );
 
         if (!response.ok) throw new Error(response.statusText);
 
@@ -103,18 +102,17 @@ export default function LearnItemPage() {
 
   const fetchKanjiLesson = async (ku: KnowledgeUnit) => {
     // Calls your new KanjiService endpoint
-    const response = await fetch(
-      `/api/kanji/details?char=${encodeURIComponent(ku.content)}&kuId=${ku.id}`
+    const response = await apiFetch(
+      `/api/kanji/details?char=${encodeURIComponent(ku.content)}&kuId=${ku.id}`,
     );
 
     if (!response.ok) throw new Error("Failed to fetch Kanji details");
 
     const data = await response.json();
     console.log(`data = ${JSON.stringify(data)}`);
-    setLesson(data as KanjiLesson); 
+    setLesson(data as KanjiLesson);
   };
-    
-    
+
   useEffect(() => {
     if (process.env.NODE_ENV === "development" && fetchRef.current) {
       return; // Already fetched, do nothing on the second mount
@@ -127,19 +125,18 @@ export default function LearnItemPage() {
       try {
         // 1. Fetch KU Identity First (Shared)
         // (Ideally use your new backend GET /knowledge-units/:id here)
-        const kuRes = await fetch(`/api/knowledge-units/${kuId}`);
+        const kuRes = await apiFetch(`/api/knowledge-units/${kuId}`);
         if (!kuRes.ok) throw new Error("KU not found");
-        
-        const kuData = await kuRes.json() as KnowledgeUnit;
+
+        const kuData = (await kuRes.json()) as KnowledgeUnit;
         setKu(kuData);
 
         // 2. Branch Logic
-        if (kuData.type === 'Vocab') {
-          await fetchVocabLesson(kuData); 
-        } else if (kuData.type === 'Kanji') {
+        if (kuData.type === "Vocab") {
+          await fetchVocabLesson(kuData);
+        } else if (kuData.type === "Kanji") {
           await fetchKanjiLesson(kuData);
         }
-
       } catch (err: any) {
         setError(err.message);
       } finally {
@@ -180,7 +177,9 @@ export default function LearnItemPage() {
       setIsSubmitting(false);
       return;
     }
-    console.log(`selectedFacetKeys = ${selectedFacetKeys}, type = ${lesson.type}`);
+    console.log(
+      `selectedFacetKeys = ${selectedFacetKeys}, type = ${lesson.type}`,
+    );
     const facetsToCreatePayload = selectedFacetKeys.map((key) => {
       if (key.startsWith("Kanji-Component-") && lesson.type === "Vocab") {
         const kanjiChar = key.split("-")[2]; // gets us the Kanji char. Example: Kanji-Component-食
@@ -198,11 +197,12 @@ export default function LearnItemPage() {
       }
       return { key: key };
     });
-    
 
     try {
-      console.log(`facetsToCreatePayload = ${JSON.stringify(facetsToCreatePayload)}`);
-      const response = await fetch("/api/reviews/generate", {
+      console.log(
+        `facetsToCreatePayload = ${JSON.stringify(facetsToCreatePayload)}`,
+      );
+      const response = await apiFetch("/api/reviews/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -234,7 +234,7 @@ export default function LearnItemPage() {
     if (!ku) return;
 
     try {
-      const response = await fetch(`/api/lessons/${ku.id}`, {
+      const response = await apiFetch(`/api/lessons/${ku.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ section: sectionKey, content: newContent }),
@@ -252,7 +252,6 @@ export default function LearnItemPage() {
       setError(err.message);
     }
   };
-
 
   const renderFacetChecklist = () => (
     <div className="bg-gray-100 dark:bg-gray-800 p-6 rounded-lg shadow-lg">
@@ -447,27 +446,19 @@ export default function LearnItemPage() {
           </div>
         )}
 
-        {lesson &&
-          ku?.type === "Vocab" &&
-          (
-            <VocabLessonView 
-                lesson={lesson as VocabLesson} 
-                onSaveSection={handleSaveSection} 
-            />
-          )
-        }
-        
-        {lesson &&
-          ku?.type === "Kanji" &&
-          (
-            <KanjiLessonView lesson={lesson as KanjiLesson} />
-          )
-        }
+        {lesson && ku?.type === "Vocab" && (
+          <VocabLessonView
+            lesson={lesson as VocabLesson}
+            onSaveSection={handleSaveSection}
+          />
+        )}
+
+        {lesson && ku?.type === "Kanji" && (
+          <KanjiLessonView lesson={lesson as KanjiLesson} />
+        )}
 
         {!isLoading && !error && lesson && source !== "review" && (
-          <>
-            {renderFacetChecklist()}
-          </>
+          <>{renderFacetChecklist()}</>
         )}
       </main>
     </>

@@ -11,7 +11,7 @@ declare class Kuroshiro {
       romajiSystem?: string;
       delimiter_start?: string;
       delimiter_end?: string;
-    }
+    },
   ): Promise<string>;
   Util: {
     isHiragana: (ch: string) => boolean;
@@ -28,7 +28,7 @@ declare class Kuroshiro {
     kanaToKatakana: (str: string) => string;
     kanaToRomaji: (
       str: string,
-      system: "nippon" | "passport" | "hepburn"
+      system: "nippon" | "passport" | "hepburn",
     ) => string;
   };
 }

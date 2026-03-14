@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { KnowledgeUnit } from "@/types";
+import { apiFetch } from "@/lib/api-client";
 
 export default function LearnListPage() {
   const [learningItems, setLearningItems] = useState<KnowledgeUnit[]>([]);
@@ -16,10 +17,12 @@ export default function LearnListPage() {
       // TODO use backend service instead of calling Firestore directly
 
       try {
-
-        const response = await fetch("/api/knowledge-units/get-all?status=learning", {
-          signal: controller.signal,
-        });
+        const response = await apiFetch(
+          "/api/knowledge-units/get-all?status=learning",
+          {
+            signal: controller.signal,
+          },
+        );
 
         if (!response.ok) throw new Error(response.statusText);
 
@@ -31,9 +34,9 @@ export default function LearnListPage() {
 
         setLearningItems(items);
       } catch (err: any) {
-        if (err.name === 'AbortError') {
-            return;
-        } 
+        if (err.name === "AbortError") {
+          return;
+        }
         setError(err.message || "Failed to fetch");
       } finally {
         setIsLoading(false);

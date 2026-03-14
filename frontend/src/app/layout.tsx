@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "@/app/ui/globals.css";
 import Header from "@/components/Header"; // Import the new Header
+import { AuthProvider } from "@/providers/AuthProvider";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -18,9 +19,11 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${inter.className} bg-shodo-paper text-shodo-ink`}>
-        {/* The Header component provides navigation for all pages */}
-        <Header />
-        {children}
+        <AuthProvider>
+          {/* The Header component provides navigation for all pages */}
+          <Header />
+          {children}
+        </AuthProvider>
       </body>
     </html>
   );

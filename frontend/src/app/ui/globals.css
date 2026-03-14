@@ -3,10 +3,10 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
-  
+
   /* Shodo Light Mode (Rice Paper / Sumi Ink) */
-  --shodo-paper: #F9F7F2;
-  --shodo-ink: #2B2523;
+  --shodo-paper: #f9f7f2;
+  --shodo-ink: #2b2523;
   --shodo-accent: #cc0000;
 }
 
@@ -41,8 +41,8 @@
     --foreground: #ededed;
 
     /* Shodo Dark Mode (Inverted) */
-    --shodo-paper: #1a1a1a; 
-    --shodo-ink: #F9F7F2;
+    --shodo-paper: #1a1a1a;
+    --shodo-ink: #f9f7f2;
     --shodo-accent: #ff4d4d;
   }
 }

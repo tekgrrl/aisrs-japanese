@@ -164,7 +164,8 @@ export default function EditKnowledgeUnitModal({
               </span>
             </label>
             <p className="text-xs text-shodo-ink-light mb-2">
-              Provide context for the AI (e.g., "Focus on polite forms", "Medical terminology").
+              Provide context for the AI (e.g., "Focus on polite forms",
+              "Medical terminology").
             </p>
             <textarea
               rows={2}

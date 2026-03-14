@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState, useEffect, useCallback } from "react";
+import { apiFetch } from "@/lib/api-client";
 
 /**
  * A simple navigation header that displays stats.
@@ -15,7 +16,7 @@ export default function Header() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const fetchStats = useCallback(async () => {
     try {
-      const response = await fetch("/api/stats");
+      const response = await apiFetch("/api/stats");
       if (response.ok) {
         const data = await response.json();
         setStats(data);
@@ -155,21 +156,24 @@ export default function Header() {
         {/* Settings / Toggles */}
         <button
           onClick={toggleFurigana}
-          className={`text-sm font-medium transition-colors duration-200 flex items-center gap-2 ${showFurigana
+          className={`text-sm font-medium transition-colors duration-200 flex items-center gap-2 ${
+            showFurigana
               ? "text-shodo-ink"
               : "text-shodo-ink/40 hover:text-shodo-ink/70"
-            }`}
+          }`}
           title="Toggle Furigana (Alt+F)"
           aria-pressed={showFurigana}
         >
           <span className="text-xs uppercase tracking-wider">Furigana</span>
           <div
-            className={`w-8 h-4 rounded-full relative transition-colors duration-200 ${showFurigana ? "bg-shodo-ink" : "bg-shodo-ink/20"
-              }`}
+            className={`w-8 h-4 rounded-full relative transition-colors duration-200 ${
+              showFurigana ? "bg-shodo-ink" : "bg-shodo-ink/20"
+            }`}
           >
             <div
-              className={`absolute top-0.5 bottom-0.5 w-3 h-3 rounded-full bg-shodo-paper shadow-sm transition-all duration-200 ${showFurigana ? "left-4.5" : "left-0.5"
-                }`}
+              className={`absolute top-0.5 bottom-0.5 w-3 h-3 rounded-full bg-shodo-paper shadow-sm transition-all duration-200 ${
+                showFurigana ? "left-4.5" : "left-0.5"
+              }`}
             />
           </div>
         </button>
