@@ -7,7 +7,7 @@ import { AuthProvider } from "@/providers/AuthProvider";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "AISRS - Personal Knowledge Graph",
+  title: "AIGENKI - Personal Knowledge Graph",
   description: "A flexible, AI-powered SRS",
 };
 

@@ -113,7 +113,7 @@ export default function Header() {
           href="/"
           className="text-2xl font-bold text-shodo-ink hover:text-shodo-accent transition-colors duration-200 mr-auto"
         >
-          AISRS
+          AIGENKI
         </Link>
 
         {/* Navigation Links */}
