@@ -6,7 +6,6 @@ This is the NestJS backend for the AISRS-Japanese project. It provides the REST 
 Please refer to the root project documentation for architectural guidelines and domain details:
 - [ARCHITECTURE.md](../ARCHITECTURE.md)
 - [DOMAIN_MODEL.md](../DOMAIN_MODEL.md)
-- [AGENT_INSTRUCTIONS.md](../AGENT_INSTRUCTIONS.md)
 
 ## Requirements
 - Node.js (LTS version)
