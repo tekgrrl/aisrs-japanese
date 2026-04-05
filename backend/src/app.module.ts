@@ -14,9 +14,11 @@ import { StatsModule } from './stats/stats.module';
 import { KanjiModule } from './kanji/kanji.module';
 import { ScenariosModule } from './scenarios/scenarios.module';
 import { AudioModule } from './audio/audio.module';
+import { FeedModule } from './feed/feed.module';
+import { AuthModule } from './auth/auth.module';
 
 @Module({
-  imports: [ReviewsModule, FirebaseModule, GeminiModule, ConfigModule.forRoot(), QuestionsModule, ApilogModule, LessonsModule, KnowledgeUnitsModule, StatsModule, KanjiModule, ScenariosModule, AudioModule],
+  imports: [ReviewsModule, FirebaseModule, GeminiModule, ConfigModule.forRoot(), QuestionsModule, ApilogModule, LessonsModule, KnowledgeUnitsModule, StatsModule, KanjiModule, ScenariosModule, AudioModule, AuthModule, FeedModule],
   controllers: [AppController],
   providers: [AppService, QuestionsService],
 })

@@ -23,10 +23,10 @@ import * as dotenv from 'dotenv';
 import * as path from 'path';
 
 // Load environment variables from .env.local in the project root
-dotenv.config({ path: path.resolve(process.cwd(), '.env.local') });
+dotenv.config({ path: path.resolve(process.cwd(), 'backend/.env') });
 
 // ─── Constants ───────────────────────────────────────────────────────────────
-const TARGET_USER_ID = 'default-user';
+const TARGET_USER_ID = 'EnBuzutzldhTJdMCSf5dH2ZTzSi2';
 const LEGACY_USER_ID = 'user_default'; // The userId used in legacy collections (see backend/src/lib/constants.ts)
 const BATCH_LIMIT = 499; // Firestore batch limit is 500 ops; leave 1 margin
 
@@ -141,7 +141,7 @@ class BatchWriter {
 async function migrateUserRoot(db: admin.firestore.Firestore): Promise<void> {
   console.log('\n━━━ 1/6: Migrating UserRoot ━━━');
 
-  const legacyRef = db.collection('user-stats').doc(TARGET_USER_ID);
+  const legacyRef = db.collection('user-stats').doc(LEGACY_USER_ID);
   const legacyDoc = await legacyRef.get();
 
   // Build default stats — will be overridden by legacy data if it exists
@@ -162,13 +162,13 @@ async function migrateUserRoot(db: admin.firestore.Firestore): Promise<void> {
 
   if (legacyDoc.exists) {
     const data = legacyDoc.data()!;
-    console.log(`   ✔ Found legacy user-stats for '${TARGET_USER_ID}'`);
+    console.log(`   ✔ Found legacy user-stats for '${LEGACY_USER_ID}'`);
     // Strip ID/userId fields — they move to the document path
     const { userId, id, ...rest } = data;
     statsData = { ...defaultStats, ...rest };
   } else {
     console.log(
-      `   ⚠ No legacy user-stats found for '${TARGET_USER_ID}'. Using defaults.`,
+      `   ⚠ No legacy user-stats found for '${LEGACY_USER_ID}'. Using defaults.`,
     );
   }
 

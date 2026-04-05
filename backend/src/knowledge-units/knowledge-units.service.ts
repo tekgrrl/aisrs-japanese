@@ -2,7 +2,7 @@ import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { FIRESTORE_CONNECTION, KNOWLEDGE_UNITS_COLLECTION } from '../firebase/firebase.module';
 import { Firestore, Timestamp } from '@google-cloud/firestore';
 import { Inject } from '@nestjs/common';
-import { CURRENT_USER_ID } from '../lib/constants';
+// Removed CURRENT_USER_ID import
 import { KnowledgeUnit } from '@/types';
 import { KnowledgeUnitType } from '@/types';
 import { NotFoundException } from '@nestjs/common';
@@ -17,10 +17,10 @@ export class KnowledgeUnitsService {
         @Inject(FIRESTORE_CONNECTION) private readonly db: Firestore,
     ) { }
 
-    async findAll({ status, type, content }: { status?: string, type?: string, content?: string[] }) {
+    async findAll(uid: string, { status, type, content }: { status?: string, type?: string, content?: string[] }) {
         try {
             let query: Query = this.db.collection(KNOWLEDGE_UNITS_COLLECTION)
-                .where("userId", "==", CURRENT_USER_ID);
+                .where("userId", "==", uid);
 
             if (status) {
                 query = query.where("status", "==", status);
@@ -51,7 +51,7 @@ export class KnowledgeUnitsService {
                     ...data,
                     // Convert Firestore Timestamp to string for client-side
                     createdAt: ts.toDate().toISOString(),
-                    userId: data.userId || CURRENT_USER_ID, // Ensure userId is present
+                    userId: data.userId || uid, // Ensure userId is present
                 } as unknown as KnowledgeUnit);
             });
 
@@ -62,14 +62,14 @@ export class KnowledgeUnitsService {
         }
     }
 
-    async findByContent(content: string, type: KnowledgeUnitType): Promise<KnowledgeUnit | null> {
+    async findByContent(uid: string, content: string, type: KnowledgeUnitType): Promise<KnowledgeUnit | null> {
 
         // Use Cases: Component Kanji Lookup
 
         const contentQuery = this.db
             .collection(KNOWLEDGE_UNITS_COLLECTION)
             .where("type", "==", type)
-            .where("userId", "==", CURRENT_USER_ID)
+            .where("userId", "==", uid)
             .where("content", "==", content)
             .limit(1);
         const contentSnapshot = await contentQuery.get();
@@ -82,7 +82,7 @@ export class KnowledgeUnitsService {
                 ...data,
                 // Convert Firestore Timestamp to string for client-side
                 createdAt: (data.createdAt as Timestamp).toDate().toISOString(),
-                userId: data.userId || CURRENT_USER_ID, // Ensure userId is present
+                userId: data.userId || uid, // Ensure userId is present
             } as unknown as KnowledgeUnit;
         } else {
             this.logger.warn("No knowledge units found for user");
@@ -90,7 +90,7 @@ export class KnowledgeUnitsService {
         }
     }
 
-    async findByKanjiComponent(kanjiChar: string): Promise<KnowledgeUnit[]> {
+    async findByKanjiComponent(uid: string, kanjiChar: string): Promise<KnowledgeUnit[]> {
         // Note: Firestore doesn't support substring search (LIKE %char%).
         // If you don't have a 'components' array on Vocab KUs, you have to do a client-side filter
         // or rely on the fact that you might have stored this relationship.
@@ -99,7 +99,7 @@ export class KnowledgeUnitsService {
         // Better long term: Add an array field `containedKanji` to Vocab KUs.
 
         const snapshot = await this.db.collection(KNOWLEDGE_UNITS_COLLECTION)
-            .where('userId', '==', CURRENT_USER_ID)
+            .where('userId', '==', uid)
             .where('type', '==', 'Vocab')
             .get();
 
@@ -116,9 +116,9 @@ export class KnowledgeUnitsService {
         return matches;
     }
 
-    async ensureKanjiStub(char: string, metadata: any): Promise<string> {
+    async ensureKanjiStub(uid: string, char: string, metadata: any): Promise<string> {
         // 1. Try to find existing
-        const existing = await this.findByContent(char, 'Kanji');
+        const existing = await this.findByContent(uid, char, 'Kanji');
 
         if (existing) {
             // Optional: Ensure status is 'learning' if it was 'suspended'
@@ -145,15 +145,15 @@ export class KnowledgeUnitsService {
             createdAt: Timestamp.now(), // Use ISO strings for consistency
             relatedUnits: [],
             personalNotes: `Auto-generated component`,
-            userId: CURRENT_USER_ID,
+            userId: uid,
         });
 
         return newRef.id;
     }
 
-    async ensureVocab(content: string): Promise<string> {
+    async ensureVocab(uid: string, content: string): Promise<string> {
         // 1. Try to find existing
-        const existing = await this.findByContent(content, 'Vocab');
+        const existing = await this.findByContent(uid, content, 'Vocab');
 
         if (existing) {
             return existing.id;
@@ -173,18 +173,18 @@ export class KnowledgeUnitsService {
             createdAt: Timestamp.now(),
             relatedUnits: [],
             personalNotes: '',
-            userId: CURRENT_USER_ID,
+            userId: uid,
         });
 
         return newRef.id;
     }
 
-    async update(id: string, updates: Partial<any>) { // typed as 'any' or a DTO to allow flexible updates
+    async update(uid: string, id: string, updates: Partial<any>) { // typed as 'any' or a DTO to allow flexible updates
         const ref = this.db.collection(KNOWLEDGE_UNITS_COLLECTION).doc(id);
 
         // verify existence and ownership before writing
         const doc = await ref.get();
-        if (!doc.exists || doc.data()?.userId !== CURRENT_USER_ID) {
+        if (!doc.exists || doc.data()?.userId !== uid) {
             throw new NotFoundException(`Knowledge Unit ${id} not found`);
         }
 
@@ -192,7 +192,7 @@ export class KnowledgeUnitsService {
         return { id, ...updates };
     }
 
-    async create(body: any) {
+    async create(uid: string, body: any) {
         // Validate body (basic)
         if (!body.type || !body.content) {
             this.logger.warn("POST /knowledge-units - Validation failed", body);
@@ -206,7 +206,7 @@ export class KnowledgeUnitsService {
             createdAt: Timestamp.now(), // Add Firestore timestamp
             status: "learning",
             facet_count: 0,
-            userId: CURRENT_USER_ID,
+            userId: uid,
         };
 
         const newDocRef = await this.db
@@ -217,7 +217,7 @@ export class KnowledgeUnitsService {
         return { id: newDocRef.id };
     } // END create
 
-    async findOne(id: string): Promise<KnowledgeUnit> {
+    async findOne(uid: string, id: string): Promise<KnowledgeUnit> {
         const docRef = this.db.collection(KNOWLEDGE_UNITS_COLLECTION).doc(id);
         const doc = await docRef.get();
 
@@ -228,7 +228,7 @@ export class KnowledgeUnitsService {
         const data = doc.data();
 
         // Enforce Data Isolation
-        if (data?.userId !== CURRENT_USER_ID) {
+        if (data?.userId !== uid) {
             throw new NotFoundException(`Knowledge Unit ${id} not found`);
         }
 

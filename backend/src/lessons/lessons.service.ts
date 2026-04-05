@@ -5,7 +5,7 @@ import { GeminiService } from '../gemini/gemini.service';
 import { QuestionsService } from '../questions/questions.service';
 import { KnowledgeUnit, Lesson, VocabLesson, KanjiLesson } from '../types';
 import { performance } from 'perf_hooks';
-import { CURRENT_USER_ID } from '@/lib/constants';
+// Removed CURRENT_USER_ID import
 
 import { KnowledgeUnitsService } from '../knowledge-units/knowledge-units.service';
 
@@ -19,7 +19,7 @@ export class LessonsService {
     private readonly knowledgeUnitsService: KnowledgeUnitsService,
   ) { }
 
-  async generateLesson(kuId: string, cachedContentName?: string) {
+  async generateLesson(uid: string, kuId: string, cachedContentName?: string) {
     this.logger.log(`in generateLesson(): kuId=${kuId}, cachedContentName=${cachedContentName}`);
     // 1. Fetch the KU
     const kuRef = this.db.collection(KNOWLEDGE_UNITS_COLLECTION).doc(kuId);
@@ -116,7 +116,7 @@ ${VOCAB_INSTRUCTIONS}`;
     try {
       lessonJson = JSON.parse(lessonString) as Lesson;
       (lessonJson as VocabLesson | KanjiLesson).kuId = kuId;
-      (lessonJson as any).userId = CURRENT_USER_ID;
+      (lessonJson as any).userId = uid;
 
       // --- MERGE USER DEFINITIONS (if Vocab) ---
       // Rely on the KnowledgeUnit type, which is the source of truth
@@ -178,7 +178,7 @@ ${VOCAB_INSTRUCTIONS}`;
       if (Object.keys(updates).length > 0) {
         try {
           this.logger.log(`Updating KU ${kuId} with lesson data: ${JSON.stringify(updates)}`);
-          await this.knowledgeUnitsService.update(kuId, updates);
+          await this.knowledgeUnitsService.update(uid, kuId, updates);
         } catch (e) {
           this.logger.error(`Failed to backfill KU ${kuId} with lesson data`, e);
           // Don't fail the response, just log error
@@ -189,11 +189,11 @@ ${VOCAB_INSTRUCTIONS}`;
     return lessonJson;
   }
 
-  async updateLesson(kuId: string, section: string, content: string) {
+  async updateLesson(uid: string, kuId: string, section: string, content: string) {
     // 1. Find the lesson document
     const snapshot = await this.db.collection(LESSONS_COLLECTION)
       .where('kuId', '==', kuId)
-      .where('userId', '==', CURRENT_USER_ID)
+      .where('userId', '==', uid)
       .limit(1)
       .get();
 
@@ -225,10 +225,10 @@ ${VOCAB_INSTRUCTIONS}`;
     return { success: true };
   }
 
-  async findByKuId(kuId: string): Promise<Lesson | null> {
+  async findByKuId(uid: string, kuId: string): Promise<Lesson | null> {
     const snapshot = await this.db.collection(LESSONS_COLLECTION)
       .where('kuId', '==', kuId)
-      .where('userId', '==', CURRENT_USER_ID)
+      .where('userId', '==', uid)
       .limit(1)
       .get();
 
@@ -241,7 +241,7 @@ ${VOCAB_INSTRUCTIONS}`;
   } // END findByKuId
 
 
-  async processBatch(vocabValues: { id: string; content: string }[]) {
+  async processBatch(uid: string, vocabValues: { id: string; content: string }[]) {
     const instructions = `${VOCAB_INSTRUCTIONS}\n\n${VOCAB_EXAMPLES}`;
     const cacheName = await this.geminiService.createContextCache(
       `You are an expert Japanese tutor. You will be asked to generate a lesson for a Japanese word.\n${instructions}`,
@@ -275,14 +275,14 @@ ${VOCAB_INSTRUCTIONS}`;
           // Set status to generating
           await lessonRef.set({
             kuId: item.id,
-            userId: CURRENT_USER_ID,
+            userId: uid,
             status: 'generating',
             createdAt: new Date(),
           }, { merge: true });
 
           // --- GENERATE ---
           this.logger.log(`Generating lesson for ${item.content} using cache ${cacheName}`);
-          const lesson = await this.generateLesson(item.id, cacheName);
+          const lesson = await this.generateLesson(uid, item.id, cacheName);
 
           // --- SAVE ---
           void bulkWriter.set(lessonRef, {

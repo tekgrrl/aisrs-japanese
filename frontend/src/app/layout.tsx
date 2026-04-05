@@ -17,7 +17,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" className="overflow-y-scroll">
       <body className={`${inter.className} bg-shodo-paper text-shodo-ink`}>
         <AuthProvider>
           {/* The Header component provides navigation for all pages */}

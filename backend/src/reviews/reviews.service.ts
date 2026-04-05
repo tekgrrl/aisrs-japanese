@@ -14,7 +14,7 @@ import {
 } from '../firebase/firebase.module';
 import { GeminiService } from '../gemini/gemini.service';
 import { QuestionsService } from '../questions/questions.service';
-import { CURRENT_USER_ID } from '@/lib/constants';
+// Removed CURRENT_USER_ID import
 import { FacetType, KnowledgeUnit, Lesson, ReviewFacet } from '@/types';
 import { KnowledgeUnitsService } from '../knowledge-units/knowledge-units.service';
 import { LessonsService } from '@/lessons/lessons.service';
@@ -56,12 +56,12 @@ export class ReviewsService {
         return doc.data();
     }
 
-    async updateFacetSrs(facetId: string, result: 'pass' | 'fail') {
+    async updateFacetSrs(uid: string, facetId: string, result: 'pass' | 'fail') {
         return this.db.runTransaction(async (transaction) => {
             const query = this.db
                 .collection(REVIEW_FACETS_COLLECTION)
                 .where(FieldPath.documentId(), '==', facetId)
-                .where('userId', '==', CURRENT_USER_ID);
+                .where('userId', '==', uid);
 
             const snapshot = await query.get();
 
@@ -91,7 +91,7 @@ export class ReviewsService {
                 : (facetData.nextReviewAt ? new Date(facetData.nextReviewAt) : new Date());
 
             await this.statsService.updateReviewScheduleStats(
-                CURRENT_USER_ID,
+                uid,
                 oldNextReviewDate,
                 nextReviewDate,
                 result,
@@ -178,6 +178,7 @@ export class ReviewsService {
     }
 
     async evaluateAnswer(
+        uid: string,
         userAnswer: string,
         expectedAnswers: string[],
         question: string,
@@ -244,6 +245,7 @@ Example for a fail: {"result": "fail", "explanation": "Incorrect. The expected r
     } // END evaluateAnswer
 
     async generateReviewFacets(
+        uid: string,
         kuId: string,
         facetsToCreate: { key: string; data?: any }[],
     ) {
@@ -262,7 +264,7 @@ Example for a fail: {"result": "fail", "explanation": "Incorrect. The expected r
                 const parts = key.split('-');
                 if (parts.length === 3) {
                     const kanjiChar = parts[2];
-                    targetKuId = await this.knowledgeUnitsService.ensureKanjiStub(kanjiChar, data);
+                    targetKuId = await this.knowledgeUnitsService.ensureKanjiStub(uid, kanjiChar, data);
                 }
                 // At this point we should have a KU for the Kanji Component, so skip the rest of the loop
                 continue;
@@ -278,7 +280,7 @@ Example for a fail: {"result": "fail", "explanation": "Incorrect. The expected r
                 nextReviewAt: now,
                 createdAt: now,
                 history: [],
-                userId: CURRENT_USER_ID,
+                userId: uid,
             });
 
             count++;
@@ -286,7 +288,7 @@ Example for a fail: {"result": "fail", "explanation": "Incorrect. The expected r
 
         if (count > 0) {
             try {
-                await this.knowledgeUnitsService.update(kuId, {
+                await this.knowledgeUnitsService.update(uid, kuId, {
                     status: 'reviewing',
                     // Atomically increment existing value by count
                     facet_count: FieldValue.increment(count)
@@ -301,17 +303,17 @@ Example for a fail: {"result": "fail", "explanation": "Incorrect. The expected r
         return { success: true, count };
     } // END generateReviewFacets
 
-    async getDueReviews() {
+    async getDueReviews(uid: string) {
         const now = Timestamp.now();
 
         const snapshot = await this.db.collection(REVIEW_FACETS_COLLECTION)
-            .where('userId', '==', CURRENT_USER_ID)
+            .where('userId', '==', uid)
             .where('nextReviewAt', '<=', now)
             .orderBy('nextReviewAt', 'asc')
             .get();
 
         if (snapshot.empty) {
-            this.logger.log(`No due reviews found for user ${CURRENT_USER_ID}`);
+            this.logger.log(`No due reviews found for user ${uid}`);
             return [];
         }
 
@@ -330,7 +332,7 @@ Example for a fail: {"result": "fail", "explanation": "Incorrect. The expected r
             // you might want to try/catch here if data integrity is loose)
             let ku: KnowledgeUnit | null = null;
             try {
-                ku = await this.knowledgeUnitsService.findOne(facet.kuId);
+                ku = await this.knowledgeUnitsService.findOne(uid, facet.kuId);
             } catch (e) {
                 this.logger.warn(`Orphaned facet ${facet.id}: KU ${facet.kuId} not found`);
             }
@@ -338,7 +340,7 @@ Example for a fail: {"result": "fail", "explanation": "Incorrect. The expected r
             // Fetch related Lesson
             let lesson: Lesson | null = null;
             if (ku) {
-                lesson = await this.lessonsService.findByKuId(ku.id);
+                lesson = await this.lessonsService.findByKuId(uid, ku.id);
             }
 
             return {
@@ -353,9 +355,9 @@ Example for a fail: {"result": "fail", "explanation": "Incorrect. The expected r
         return reviewItems.filter(item => item !== null && item.ku !== null);
     } // END getDueReviews
 
-    async getAllFacets() {
+    async getAllFacets(uid: string) {
         const snapshot = await this.db.collection(REVIEW_FACETS_COLLECTION)
-            .where('userId', '==', CURRENT_USER_ID)
+            .where('userId', '==', uid)
             .get();
 
         if (snapshot.empty) {

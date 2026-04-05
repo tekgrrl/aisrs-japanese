@@ -18,7 +18,7 @@ export class KanjiService {
         this.rapidApiKey = this.configService.get<string>('RAPIDAPI_KEY') || '';
     }
 
-    async getKanjiDetails(kanjiChar: string, kuId?: string): Promise<KanjiLesson> {
+    async getKanjiDetails(uid: string, kanjiChar: string, kuId?: string): Promise<KanjiLesson> {
         // 1. Fetch Deterministic Data (Kanji Alive via RapidAPI)
         let apiData = await this.fetchKanjiAliveData(kanjiChar);
 
@@ -31,13 +31,13 @@ export class KanjiService {
         this.logger.log(`apiData = ${JSON.stringify(apiData)}`);
 
         // 2. Fetch Contextual Data (Related Vocab from DB)
-        const relatedVocab = await this.knowledgeUnitsService.findByKanjiComponent(kanjiChar);
+        const relatedVocab = await this.knowledgeUnitsService.findByKanjiComponent(uid, kanjiChar);
 
         // 3. Fetch User Data (Personal Mnemonic) if kuId exists
         let personalMnemonic = '';
         if (kuId) {
             try {
-                const ku = await this.knowledgeUnitsService.findOne(kuId);
+                const ku = await this.knowledgeUnitsService.findOne(uid, kuId);
                 personalMnemonic = ku.personalNotes || ''; // Or a specific field if you added one
             } catch (e) {
                 // Ignore if KU doesn't exist yet (unlikely if coming from lesson page)

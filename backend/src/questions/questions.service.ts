@@ -12,7 +12,7 @@ import { ReviewFacet, QuestionItem, KnowledgeUnit } from '@/types';
 import { GeminiService } from '../gemini/gemini.service';
 import { ReviewsService } from '../reviews/reviews.service';
 import { KnowledgeUnitsService } from '../knowledge-units/knowledge-units.service';
-import { CURRENT_USER_ID } from '@/lib/constants';
+// Removed CURRENT_USER_ID import
 
 
 
@@ -58,7 +58,7 @@ export class QuestionsService {
     }
   }
 
-  async generateQuestion(topic: string, kuId: string, facetId: string) {
+  async generateQuestion(uid: string, topic: string, kuId: string, facetId: string) {
 
     const questionOptions = {
       "conjugation": "if the word is a verb, conjugate the verb to a specific form e.g.: Give the past potential form of the verb in question",
@@ -114,7 +114,7 @@ Rules:
     let reading: string | undefined;
     let meaning: string | undefined;
     if (kuId) {
-      const kuData = await this.knowledgeUnitsService.findOne(kuId);
+      const kuData = await this.knowledgeUnitsService.findOne(uid, kuId);
       reading = kuData.data?.reading;
       // Use 'meaning' (Kanji) or 'definition' (Vocab) depending on what's available
       meaning = kuData.data?.meaning || kuData.data?.definition;
@@ -224,7 +224,7 @@ Rules:
           },
           createdAt: Timestamp.now(),
           lastUsed: Timestamp.now(),
-          userId: CURRENT_USER_ID,
+          userId: uid,
           status: "active", // Default status
         };
 
@@ -248,7 +248,7 @@ Rules:
 
   } // end generateQuestion
 
-  async updateStatus(id: string, status: 'active' | 'flagged' | 'inactive') {
+  async updateStatus(uid: string, id: string, status: 'active' | 'flagged' | 'inactive') {
     const docRef = this.db.collection(QUESTIONS_COLLECTION).doc(id);
     const doc = await docRef.get();
 
@@ -256,8 +256,9 @@ Rules:
       throw new NotFoundException('Question not found');
     }
 
-    // Ideally check userId here too if questions are user-owned in your model
-    // if (doc.data()?.userId !== CURRENT_USER_ID) ...
+    if (doc.data()?.userId !== uid) {
+      throw new NotFoundException('Question not found');
+    }
 
     await docRef.update({ status });
 
