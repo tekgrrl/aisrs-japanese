@@ -1,15 +1,17 @@
-import { Controller, Post, Body, BadRequestException, Put, Param, Get, Query } from '@nestjs/common';
+import { Controller, Post, Body, BadRequestException, Put, Param, Get, Query, Logger, UseGuards } from '@nestjs/common';
 import { ReviewsService } from './reviews.service';
-import { Logger } from '@nestjs/common';
+import { FirebaseAuthGuard } from '../auth/firebase-auth.guard';
+import { UserId } from '../auth/user-id.decorator';
 
 @Controller('reviews')
+@UseGuards(FirebaseAuthGuard)
 export class ReviewsController {
   private readonly logger = new Logger(ReviewsController.name);
 
   constructor(private readonly reviewsService: ReviewsService) { }
 
   @Post('evaluate')
-  async evaluate(@Body() body: { userAnswer: string; expectedAnswers: string[]; question: string; topic: string; questionId: string }) {
+  async evaluate(@UserId() uid: string, @Body() body: { userAnswer: string; expectedAnswers: string[]; question: string; topic: string; questionId: string }) {
     const { userAnswer, expectedAnswers, question, topic, questionId } = body;
 
     this.logger.log(`body ${JSON.stringify(body)}`);
@@ -23,11 +25,12 @@ export class ReviewsController {
       throw new BadRequestException('Missing userAnswer or expectedAnswer');
     }
 
-    return this.reviewsService.evaluateAnswer(userAnswer, expectedAnswers, question, topic, questionId);
+    return this.reviewsService.evaluateAnswer(uid, userAnswer, expectedAnswers, question, topic, questionId);
   }
 
   @Put('facets/:id')
   async updateSrs(
+    @UserId() uid: string,
     @Param('id') id: string,
     @Body() body: { result: 'pass' | 'fail' }
   ) {
@@ -35,11 +38,12 @@ export class ReviewsController {
       throw new BadRequestException('Result must be "pass" or "fail"');
     }
 
-    return this.reviewsService.updateFacetSrs(id, body.result);
+    return this.reviewsService.updateFacetSrs(uid, id, body.result);
   }
 
   @Post('generate')
   async generateReviewFacets(
+    @UserId() uid: string,
     @Body() body: { kuId: string, facetsToCreate: { key: string; data?: any }[] }
   ) {
     if (!body.kuId || !body.facetsToCreate || body.facetsToCreate.length === 0) {
@@ -47,14 +51,14 @@ export class ReviewsController {
     }
 
     console.log(`Generating review facets for KU ${body.kuId}`);
-    return this.reviewsService.generateReviewFacets(body.kuId, body.facetsToCreate);
+    return this.reviewsService.generateReviewFacets(uid, body.kuId, body.facetsToCreate);
   }
 
   @Get('facets')
-  async getFacets(@Query('due') due: string) {
+  async getFacets(@UserId() uid: string, @Query('due') due: string) {
     if (due === 'true') {
-      return this.reviewsService.getDueReviews();
+      return this.reviewsService.getDueReviews(uid);
     }
-    return this.reviewsService.getAllFacets();
+    return this.reviewsService.getAllFacets(uid);
   }
 }

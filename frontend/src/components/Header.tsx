@@ -120,13 +120,13 @@ export default function Header() {
         <div className="flex items-center space-x-2 sm:space-x-4">
           <Link
             href="/learn"
-            className="px-4 py-2 rounded-md text-shodo-ink font-medium hover:bg-shodo-ink/5 transition-colors duration-200"
+            className="whitespace-nowrap px-4 py-2 rounded-md text-shodo-ink font-medium hover:bg-shodo-ink/5 transition-colors duration-200"
           >
             Learn ({stats.learnCount})
           </Link>
           <Link
             href="/review"
-            className="px-4 py-2 rounded-md text-shodo-ink font-medium hover:bg-shodo-ink/5 transition-colors duration-200"
+            className="whitespace-nowrap px-4 py-2 rounded-md text-shodo-ink font-medium hover:bg-shodo-ink/5 transition-colors duration-200"
           >
             Review ({stats.reviewsDue})
           </Link>

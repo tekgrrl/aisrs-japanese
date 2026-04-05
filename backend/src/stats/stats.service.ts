@@ -7,7 +7,7 @@ import {
     USER_STATS_COLLECTION // Make sure this is exported in firebase.module/constants
 } from '../firebase/firebase.module';
 
-const CURRENT_USER_ID = 'user_default';
+// Removed CURRENT_USER_ID
 
 @Injectable()
 export class StatsService {
@@ -15,28 +15,28 @@ export class StatsService {
 
     constructor(@Inject(FIRESTORE_CONNECTION) private readonly db: Firestore) { }
 
-    async getDashboardStats() {
+    async getDashboardStats(uid: string) {
         // ... existing queries ...
         const learnQuery = this.db.collection(KNOWLEDGE_UNITS_COLLECTION)
-            .where("userId", "==", CURRENT_USER_ID)
+            .where("userId", "==", uid)
             .where("status", "==", "learning")
             .count()
             .get();
 
         const reviewQuery = this.db.collection(KNOWLEDGE_UNITS_COLLECTION)
-            .where("userId", "==", CURRENT_USER_ID)
+            .where("userId", "==", uid)
             .where("status", "==", "reviewing")
             .count()
             .get();
 
         const reviewsDueQuery = this.db.collection(REVIEW_FACETS_COLLECTION)
-            .where("userId", "==", CURRENT_USER_ID)
+            .where("userId", "==", uid)
             .where("nextReviewAt", "<=", Timestamp.now()) // Safe timestamp comparison
             .count()
             .get();
 
         // New: Fetch User Stats Document
-        const userStatsQuery = this.db.collection(USER_STATS_COLLECTION).doc(CURRENT_USER_ID).get();
+        const userStatsQuery = this.db.collection(USER_STATS_COLLECTION).doc(uid).get();
 
         const [learnSnapshot, reviewingSnapshot, reviewsSnapshot, userStatsDoc] = await Promise.all([
             learnQuery,
@@ -46,7 +46,7 @@ export class StatsService {
         ]);
 
         const reviewsDueCount = reviewsSnapshot.data().count;
-        this.logger.log(`Reviews due for user ${CURRENT_USER_ID}: ${reviewsDueCount}`);
+        this.logger.log(`Reviews due for user ${uid}: ${reviewsDueCount}`);
 
         const userStatsDocData = userStatsDoc.data();
         const userStats = userStatsDocData ? userStatsDocData : {};

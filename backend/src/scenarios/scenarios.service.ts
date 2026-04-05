@@ -57,10 +57,12 @@ export class ScenariosService {
     return SCENARIO_TEMPLATES;
   }
 
-  async getScenario(id: string): Promise<Scenario | null> {
+  async getScenario(uid: string, id: string): Promise<Scenario | null> {
     const doc = await this.collectionRef.doc(id).get();
     if (!doc.exists) return null;
-    return doc.data() as Scenario;
+    const data = doc.data() as Scenario;
+    if (data.userId !== uid) return null;
+    return data;
   }
 
   async generateScenario(userId: string, dto: GenerateScenarioDto): Promise<string> {
@@ -115,9 +117,9 @@ export class ScenariosService {
     }
   }
 
-  async advanceState(id: string): Promise<void> {
+  async advanceState(uid: string, id: string): Promise<void> {
     this.logger.log(`Advancing state for scenario ${id}`);
-    const scenario = await this.getScenario(id);
+    const scenario = await this.getScenario(uid, id);
     if (!scenario) throw new NotFoundException('Scenario not found');
 
     let newState: ScenarioState = scenario.state;
@@ -145,7 +147,7 @@ export class ScenariosService {
               const kuType = 'Vocab';
 
               // Check existing
-              const existing = await this.knowledgeUnitsService.findByContent(ku.content, kuType);
+              const existing = await this.knowledgeUnitsService.findByContent(uid, ku.content, kuType);
 
               if (existing) {
                 this.logger.log(`Smart Link: Found existing KU for "${ku.content}" (ID: ${existing.id})`);
@@ -154,7 +156,7 @@ export class ScenariosService {
                 // Create New
                 this.logger.log(`Smart Link: Creating new KU for "${ku.content}"`);
 
-                const newIdObj = await this.knowledgeUnitsService.create({
+                const newIdObj = await this.knowledgeUnitsService.create(uid, {
                   content: ku.content,
                   type: kuType,
                   data: {
@@ -218,9 +220,9 @@ export class ScenariosService {
 
 
 
-  async resetSession(id: string, archive: boolean): Promise<void> {
+  async resetSession(uid: string, id: string, archive: boolean): Promise<void> {
     this.logger.log(`Resetting session for scenario ${id} (Archive: ${archive})`);
-    const scenario = await this.getScenario(id);
+    const scenario = await this.getScenario(uid, id);
     if (!scenario) throw new NotFoundException('Scenario not found');
 
     const updateData: any = {
@@ -244,8 +246,8 @@ export class ScenariosService {
     await this.collectionRef.doc(id).update(updateData);
   }
 
-  async handleChat(id: string, userMessage: string): Promise<ChatMessage[]> {
-    const scenario = await this.getScenario(id);
+  async handleChat(uid: string, id: string, userMessage: string): Promise<ChatMessage[]> {
+    const scenario = await this.getScenario(uid, id);
     if (!scenario) throw new NotFoundException('Scenario not found');
 
     // 1. Construct User Message
