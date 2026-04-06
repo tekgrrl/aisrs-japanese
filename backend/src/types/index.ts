@@ -94,6 +94,14 @@ export interface UserRoot {
 
     /** Topics or themes the user brings up frequently or has shown interest in. */
     suggestedThemes: string[];
+
+    /** User-configurable feed/learning preferences. Defaults applied by the feed engine if undefined. */
+    preferences?: {
+      /** Maximum total items (reviews + learns + leeches) in a single feed generation. Default: 20. */
+      dailyMaxTotal?: number;
+      /** Maximum new learn items introduced per feed generation. Default: 5. */
+      dailyMaxNew?: number;
+    };
   };
 }
 
@@ -280,6 +288,12 @@ export interface GlobalKnowledgeUnit {
     [key: string]: any;
   };
   relatedUnits: string[];
+  /**
+   * Array of GlobalKnowledgeUnit IDs that must be in 'reviewing' or 'mastered' status
+   * in the user's personal KU collection before this node is eligible for the learning queue.
+   * If empty or undefined, the node is treated as immediately available.
+   */
+  prerequisites?: string[];
 }
 
 export interface UserKnowledgeUnit {
@@ -397,4 +411,46 @@ export interface UserQuestionState {
     timestamp: Timestamp;
   }[];
 }
+
+// ─── Feed Engine Types ────────────────────────────────────────────────
+
+export type FeedItemType = 'review' | 'learn' | 'leech-repair';
+
+/**
+ * A single item in the user's daily feed queue.
+ * Stored in `users/{uid}/feed` subcollection.
+ */
+export interface FeedItem {
+  id: string;
+  type: FeedItemType;
+  /** The review-facet ID (for reviews) or global KU ID (for learn/leech items). */
+  targetId: string;
+  /** The KU ID — always present for cross-referencing. */
+  kuId: string;
+  /** Denormalized content string for display (e.g., "食べる"). */
+  kuContent: string;
+  /** The KU type (Vocab, Kanji, etc.). */
+  kuType: KnowledgeUnitType;
+  /** Lower = higher priority. 1 = review, 2 = leech-repair, 3 = learn. */
+  priority: number;
+  status: 'pending' | 'completed' | 'skipped';
+  addedAt: Timestamp;
+  completedAt?: Timestamp;
+}
+
+/**
+ * Summary returned by the feed generation endpoint.
+ */
+export interface FeedQueueSummary {
+  success: boolean;
+  uid: string;
+  added: {
+    reviews: number;
+    leeches: number;
+    learns: number;
+  };
+  totalPending: number;
+  message: string;
+}
+
 export * from './scenario';

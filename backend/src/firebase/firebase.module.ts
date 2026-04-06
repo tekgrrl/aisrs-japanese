@@ -11,6 +11,8 @@ export const API_LOGS_COLLECTION = "api-logs";
 export const QUESTIONS_COLLECTION = "questions";
 export const USER_STATS_COLLECTION = 'user-stats';
 export const SCENARIOS_COLLECTION = 'scenarios';
+export const GLOBAL_KNOWLEDGE_UNITS_COLLECTION = 'global-knowledge-units';
+export const GLOBAL_LESSONS_COLLECTION = 'global-lessons';
 export const Timestamp = admin.firestore.Timestamp;
 export const FieldValue = admin.firestore.FieldValue;
 
