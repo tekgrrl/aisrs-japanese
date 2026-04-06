@@ -1,7 +1,7 @@
 import { Injectable, Inject, Logger } from '@nestjs/common';
 import { Firestore, Timestamp } from 'firebase-admin/firestore';
 import { FIRESTORE_CONNECTION } from '../firebase/firebase.module';
-import { UsersService } from '../users/users.service';
+import { UserService } from '../users/user.service';
 
 @Injectable()
 export class FeedService {
@@ -9,14 +9,14 @@ export class FeedService {
 
   constructor(
     @Inject(FIRESTORE_CONNECTION) private readonly db: Firestore,
-    private readonly usersService: UsersService,
+    private readonly userService: UserService,
   ) {}
 
   async generateDailyFeedQueue(uid: string) {
     this.logger.log(`Starting Daily Feed generation for user: ${uid}`);
 
     // Delegate user initialization to UsersService (idempotent find-or-create)
-    const userData = await this.usersService.findOrCreate(uid);
+    const userData = await this.userService.findOrCreate(uid);
     const tutorContext = userData.tutorContext || {};
 
     // SKELETON LOGIC: Evaluate global curriculum graph against user progress

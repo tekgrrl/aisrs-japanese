@@ -1,14 +1,14 @@
 import { Controller, Get, UseGuards, Logger } from '@nestjs/common';
-import { UsersService } from './users.service';
+import { UserService } from './user.service';
 import { FirebaseAuthGuard } from '../auth/firebase-auth.guard';
 import { UserId } from '../auth/user-id.decorator';
 
 @Controller('users')
 @UseGuards(FirebaseAuthGuard)
-export class UsersController {
-  private readonly logger = new Logger(UsersController.name);
+export class UserController {
+  private readonly logger = new Logger(UserController.name);
 
-  constructor(private readonly usersService: UsersService) {}
+  constructor(private readonly userService: UserService) {}
 
   /**
    * GET /api/users/me
@@ -22,7 +22,7 @@ export class UsersController {
   @Get('me')
   async getOrInitializeMe(@UserId() uid: string) {
     this.logger.log(`GET /users/me called for uid: ${uid}`);
-    const user = await this.usersService.findOrCreate(uid);
+    const user = await this.userService.findOrCreate(uid);
     return user;
   }
 }

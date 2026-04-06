@@ -1,10 +1,10 @@
 import { Module } from '@nestjs/common';
 import { FeedService } from './feed.service';
 import { FeedController } from './feed.controller';
-import { UsersModule } from '../users/users.module';
+import { UserModule } from '../users/user.module';
 
 @Module({
-  imports: [UsersModule],
+  imports: [UserModule],
   controllers: [FeedController],
   providers: [FeedService],
   exports: [FeedService],

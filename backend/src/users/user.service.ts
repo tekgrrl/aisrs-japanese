@@ -4,8 +4,8 @@ import { FIRESTORE_CONNECTION } from '../firebase/firebase.module';
 import { UserRoot } from '../types';
 
 @Injectable()
-export class UsersService {
-  private readonly logger = new Logger(UsersService.name);
+export class UserService {
+  private readonly logger = new Logger(UserService.name);
 
   constructor(@Inject(FIRESTORE_CONNECTION) private readonly db: Firestore) {}
 
