@@ -1,37 +1,27 @@
-import { Injectable, Inject, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, Inject, Logger } from '@nestjs/common';
 import { Firestore, Timestamp } from 'firebase-admin/firestore';
 import { FIRESTORE_CONNECTION } from '../firebase/firebase.module';
+import { UsersService } from '../users/users.service';
 
 @Injectable()
 export class FeedService {
   private readonly logger = new Logger(FeedService.name);
 
-  constructor(@Inject(FIRESTORE_CONNECTION) private readonly db: Firestore) {}
+  constructor(
+    @Inject(FIRESTORE_CONNECTION) private readonly db: Firestore,
+    private readonly usersService: UsersService,
+  ) {}
 
   async generateDailyFeedQueue(uid: string) {
     this.logger.log(`Starting Daily Feed generation for user: ${uid}`);
 
-    // Fetch the UserRoot document
-    const userRootRef = this.db.collection('users').doc(uid);
-    const userRootDoc = await userRootRef.get();
-
-    if (!userRootDoc.exists) {
-        this.logger.warn(`UserRoot document not found for uid: ${uid}. Automatically creating a default one for progression.`);
-        await userRootRef.set({
-            tutorContext: {
-                level: 1,
-                focusArea: 'general'
-            },
-            createdAt: Timestamp.now(),
-        }, { merge: true });
-    }
-
-    const userData = (await userRootRef.get()).data() || {};
+    // Delegate user initialization to UsersService (idempotent find-or-create)
+    const userData = await this.usersService.findOrCreate(uid);
     const tutorContext = userData.tutorContext || {};
 
     // SKELETON LOGIC: Evaluate global curriculum graph against user progress
     // Assume we have a global collection holding the curriculum structure.
-    this.logger.log(`Evaluating global curriculum graph for User level: ${tutorContext.level}`);
+    this.logger.log(`Evaluating global curriculum graph for User node: ${tutorContext.currentCurriculumNode}`);
 
     // Simulation of evaluating curriculum
     const upcomingConcepts = [
@@ -40,6 +30,7 @@ export class FeedService {
     ];
 
     // Build the Daily Feed queue
+    const userRootRef = this.db.collection('users').doc(uid);
     const dailyFeedRef = userRootRef.collection('feed');
     
     // As a skeleton, we just append to the feed collection
@@ -80,3 +71,4 @@ export class FeedService {
     };
   }
 }
+
