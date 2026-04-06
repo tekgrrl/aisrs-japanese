@@ -37,6 +37,10 @@ export class UserService {
         communicationStyle: 'balanced',
         semanticWeaknesses: [],
         suggestedThemes: [],
+        preferences: {
+          dailyMaxTotal: 20,
+          dailyMaxNew: 5,
+        },
       },
     };
   }
