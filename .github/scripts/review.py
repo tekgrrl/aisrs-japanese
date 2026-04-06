@@ -108,7 +108,7 @@ for c in inline_comments:
         )
 
 # 5. Post the Review
-review_url = f"https://api.github.com/repos/){REPO}/pulls/{PR_NUMBER}/reviews"
+review_url = f"https://api.github.com/repos/{REPO}/pulls/{PR_NUMBER}/reviews"
 post_headers = {
     "Authorization": f"Bearer {GH_TOKEN}",
     "Accept": "application/vnd.github+json",
