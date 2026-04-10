@@ -21,6 +21,7 @@ export class AudioController {
             res.set({
                 'Content-Type': 'audio/mpeg',
                 'Content-Length': audioBuffer.length,
+                'Cache-Control': 'public, max-age=31536000',
             });
 
             res.send(audioBuffer);

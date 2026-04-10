@@ -232,6 +232,16 @@ export default function LearnItemPage() {
             },
           };
         }
+        if (key === "audio" && lesson.type === "Vocab") {
+          const vocabLesson = lesson as VocabLesson;
+          const ex = vocabLesson.context_examples && vocabLesson.context_examples.length > 0
+            ? vocabLesson.context_examples[Math.floor(Math.random() * vocabLesson.context_examples.length)]
+            : null;
+          return {
+            key: key,
+            data: ex ? { contextExample: ex } : undefined,
+          };
+        }
         return { key: key };
       });
 
@@ -328,6 +338,20 @@ export default function LearnItemPage() {
                 />
                 <span className="ml-3 text-lg text-gray-900 dark:text-white">
                   Reading
+                </span>
+              </label>
+            )}
+
+            {lesson.type === "Vocab" && (lesson as VocabLesson).context_examples && (lesson as VocabLesson).context_examples!.length > 0 && (
+              <label className="flex items-center p-4 bg-gray-200 dark:bg-gray-700 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="h-5 w-5 rounded bg-gray-300 dark:bg-gray-900 border-gray-400 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
+                  checked={!!selectedFacets["audio"]}
+                  onChange={() => handleCheckboxChange("audio")}
+                />
+                <span className="ml-3 text-lg text-gray-900 dark:text-white">
+                  Audio Comprehension
                 </span>
               </label>
             )}

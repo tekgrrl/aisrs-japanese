@@ -306,7 +306,8 @@ export type FacetType =
   | "AI-Generated-Question"
   | "Reading-to-Content"
   | "Kanji-Component-Meaning" // e.g., "食" -> "eat"
-  | "Kanji-Component-Reading"; // e.g., "食" -> "ショク"
+  | "Kanji-Component-Reading" // e.g., "食" -> "ショク"
+  | "audio";
 
 export interface ReviewFacet {
   id: string;
@@ -323,6 +324,7 @@ export interface ReviewFacet {
   }>;
   currentQuestionId?: string;
   questionAttempts?: number;
+  data?: any;
 }
 
 /**
