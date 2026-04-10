@@ -105,7 +105,11 @@ export class ScenariosService {
         state: 'encounter',
         createdAt: Timestamp.now(),
         chatHistory: [],
-        isObjectiveMet: false
+        isObjectiveMet: false,
+        isActive: true,
+        sourceType: dto.sourceType,
+        sourceContextSentence: dto.sourceContextSentence,
+        targetVocab: dto.targetVocab
       };
 
       await docRef.set(newScenario);
@@ -231,6 +235,7 @@ export class ScenariosService {
       evaluation: FieldValue.delete(), // clear evaluation
       completedAt: FieldValue.delete(), // clear completedAt
       isObjectiveMet: false, // Reset objective met status
+      isActive: true, // Reset to active too
     };
 
     // Archiving Logic
@@ -244,6 +249,13 @@ export class ScenariosService {
     }
 
     await this.collectionRef.doc(id).update(updateData);
+  }
+
+  async deactivateScenario(uid: string, id: string): Promise<void> {
+    this.logger.log(`Deactivating scenario ${id}`);
+    const scenario = await this.getScenario(uid, id);
+    if (!scenario) throw new NotFoundException('Scenario not found');
+    await this.collectionRef.doc(id).update({ isActive: false });
   }
 
   async handleChat(uid: string, id: string, userMessage: string): Promise<ChatMessage[]> {
@@ -343,6 +355,7 @@ export class ScenariosService {
     // If the AI says the scene is finished, update isObjectiveMet
     if (aiResponse.sceneFinished) {
       updateData.isObjectiveMet = true;
+      updateData.isActive = false; // Auto-deactivate
     }
 
     await this.collectionRef.doc(id).update(updateData);
@@ -354,14 +367,17 @@ export class ScenariosService {
   }
 
   private buildArchitectPrompt(dto: GenerateScenarioDto): string {
+    const contextExampleDirective = dto.sourceType === 'context-example' && dto.sourceContextSentence && dto.targetVocab
+      ? `\n**Context Example Constraints:**\n- You MUST create a roleplay scenario where the user MUST use the target vocab ('${dto.targetVocab}') in a situation matching the following sentence: '${dto.sourceContextSentence}'.\n- The scenario goal MUST involve using this word in context.\n`
+      : '';
+
     return `
 You are an expert Japanese language curriculum designer.
 Create a "Genki-style" learning scenario for an ADULT traveler/expat (not a student).
 
 **Parameters:**
 - Target Level: ${dto.difficulty}
-- Theme/Setting: ${dto.theme || 'A common situation for an adult living in Japan'}
-
+- Theme/Setting: ${dto.theme || 'A common situation for an adult living in Japan'}${contextExampleDirective}
 
 **Requirements:**
 1. **Dialogue:** Create a natural, realistic dialogue (6-12 lines). Use a mix of polite (Desu/Masu) and casual forms appropriate for the setting.

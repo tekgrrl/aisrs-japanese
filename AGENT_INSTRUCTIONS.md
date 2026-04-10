@@ -1,6 +1,6 @@
 # Agent Instructions & Project Guidelines
 
-> **Notice to AI Agents**: `RULE[GEMINI.md]` is the definitive source of truth regarding the behavior and goals of AISRS-Japanese. This document aggregates the core technical directives from that master ruleset for quick indexing.
+> **Notice to AI Agents**: `ARCHITECTURE.md` and `DOMAIN_MODEL.md` are the definitive sources of truth regarding the architecture and domain model of AISRS-Japanese. AISRS-Japanese is sometimes referred to as AIGENKI.
 
 ## Core Directives
 1. **Be Objective & Critical**: Do not act as a sycophant. Question impractical ideas and offer constructive criticism.

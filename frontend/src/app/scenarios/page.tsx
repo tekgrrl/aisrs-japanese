@@ -66,6 +66,23 @@ export default function ScenariosDashboard() {
     }
   };
 
+  const handleDeactivate = async (e: React.MouseEvent, id: string) => {
+    e.preventDefault();
+    try {
+      const res = await apiFetch(`${API_BASE_URL}/scenarios/${id}/deactivate`, { method: "POST" });
+      if (res.ok) {
+        setScenarios(prev => prev.map(s => s.id === id ? { ...s, isActive: false } : s));
+      } else {
+        alert("Failed to deactivate scenario.");
+      }
+    } catch (error) {
+      console.error("Error deactivating scenario:", error);
+    }
+  };
+
+  const activeContextScenarios = scenarios.filter(s => s.sourceType === 'context-example' && s.isActive !== false);
+  const otherScenarios = scenarios.filter(s => s.sourceType !== 'context-example' || s.isActive === false);
+
   return (
     <div className="max-w-4xl mx-auto p-6 space-y-8">
       <header className="flex justify-between items-center">
@@ -134,6 +151,57 @@ export default function ScenariosDashboard() {
         </form>
       </section>
 
+      {/* Active Context Scenarios Section */}
+      {activeContextScenarios.length > 0 && (
+        <section className="mb-8">
+          <h2 className="text-xl font-semibold mb-4 text-slate-700">
+            Review Context Example Scenarios
+          </h2>
+          <div className="grid gap-4">
+            {activeContextScenarios.map((scenario) => (
+              <Link
+                href={`/scenarios/${scenario.id}`}
+                key={scenario.id}
+                className="block group"
+              >
+                <div className="bg-white p-5 rounded-xl border border-indigo-200 shadow-sm hover:shadow-md transition-shadow group-hover:border-indigo-400">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <h3 className="font-bold text-lg text-indigo-800 group-hover:text-indigo-600">
+                        {scenario.title}
+                      </h3>
+                      <p className="text-sm text-slate-600 mt-1">
+                        <strong>Target:</strong> {scenario.targetVocab} <br/>
+                        <em>"{scenario.sourceContextSentence}"</em>
+                      </p>
+
+                      <div className="flex gap-2 mt-3">
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
+                          Context Example
+                        </span>
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                          {scenario.difficultyLevel}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col items-end gap-3 text-xs text-slate-400">
+                      <span>Created Action</span>
+                      <button 
+                        onClick={(e) => handleDeactivate(e, scenario.id)}
+                        className="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded border border-slate-300 transition-colors"
+                      >
+                        Remove from active
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
+
       {/* List Section */}
       <section>
         <h2 className="text-xl font-semibold mb-4 text-slate-700">
@@ -143,9 +211,9 @@ export default function ScenariosDashboard() {
           <div className="text-center py-10 text-slate-400">
             Loading recent activity...
           </div>
-        ) : scenarios.length === 0 ? (
+        ) : otherScenarios.length === 0 ? (
           <div className="text-center py-10 bg-slate-50 rounded-lg border border-dashed border-slate-300">
-            <p className="text-slate-500">No recent activity.</p>
+            <p className="text-slate-500">No other recent activity.</p>
             <Link
               href="/scenarios/library"
               className="text-indigo-600 hover:underline mt-2 inline-block"
@@ -155,7 +223,7 @@ export default function ScenariosDashboard() {
           </div>
         ) : (
           <div className="grid gap-4">
-            {scenarios.map((scenario) => (
+            {otherScenarios.map((scenario) => (
               <Link
                 href={`/scenarios/${scenario.id}`}
                 key={scenario.id}

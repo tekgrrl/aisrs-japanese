@@ -170,59 +170,94 @@ export default function LearnItemPage() {
       (key) => selectedFacets[key],
     );
 
-    console.log(`facets = ${selectedFacets}`);
-
     if (selectedFacetKeys.length === 0) {
       setError("Please select at least one facet to learn.");
       setIsSubmitting(false);
       return;
     }
-    console.log(
-      `selectedFacetKeys = ${selectedFacetKeys}, type = ${lesson.type}`,
-    );
-    const facetsToCreatePayload = selectedFacetKeys.map((key) => {
-      if (key.startsWith("Kanji-Component-") && lesson.type === "Vocab") {
-        const kanjiChar = key.split("-")[2]; // gets us the Kanji char. Example: Kanji-Component-食
-        const kanjiData = (lesson as VocabLesson).component_kanji?.find(
-          (k) => k.kanji === kanjiChar,
-        );
-        return {
-          key: key,
-          data: {
-            meaning: kanjiData?.meaning,
-            onyomi: kanjiData?.onyomi,
-            kunyomi: kanjiData?.kunyomi,
-          },
-        };
-      }
-      return { key: key };
-    });
 
-    try {
-      console.log(
-        `facetsToCreatePayload = ${JSON.stringify(facetsToCreatePayload)}`,
-      );
-      const response = await apiFetch("/api/reviews/generate", {
+    const contextExampleKeys = selectedFacetKeys.filter((key) =>
+      key.startsWith("Context-Example-"),
+    );
+    const reviewFacetKeys = selectedFacetKeys.filter(
+      (key) => !key.startsWith("Context-Example-"),
+    );
+
+    const promises: Promise<any>[] = [];
+
+    // 1. Process Context Example Scenarios
+    if (contextExampleKeys.length > 0 && lesson.type === "Vocab") {
+      const vocabLesson = lesson as VocabLesson;
+      contextExampleKeys.forEach((key) => {
+        const indexStr = key.replace("Context-Example-", "");
+        const index = parseInt(indexStr, 10);
+        const ex = vocabLesson.context_examples?.[index];
+
+        if (ex) {
+          const p = apiFetch("/api/scenarios/generate", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              difficulty: "N4", // Default baseline for context examples
+              theme: "Practice vocabulary in context",
+              sourceType: "context-example",
+              sourceContextSentence: ex.sentence,
+              targetVocab: ku.content,
+            }),
+          }).then(async (res) => {
+            if (!res.ok) {
+              const err = await res.json();
+              throw new Error(err.error || "Failed to generate scenario");
+            }
+          });
+          promises.push(p);
+        }
+      });
+    }
+
+    // 2. Process Standard Review Facets
+    if (reviewFacetKeys.length > 0) {
+      const facetsToCreatePayload = reviewFacetKeys.map((key) => {
+        if (key.startsWith("Kanji-Component-") && lesson.type === "Vocab") {
+          const kanjiChar = key.split("-")[2];
+          const kanjiData = (lesson as VocabLesson).component_kanji?.find(
+            (k) => k.kanji === kanjiChar,
+          );
+          return {
+            key: key,
+            data: {
+              meaning: kanjiData?.meaning,
+              onyomi: kanjiData?.onyomi,
+              kunyomi: kanjiData?.kunyomi,
+            },
+          };
+        }
+        return { key: key };
+      });
+
+      const reviewPromise = apiFetch("/api/reviews/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           kuId: ku.id,
           facetsToCreate: facetsToCreatePayload,
         }),
+      }).then(async (res) => {
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.error || "Failed to create facets");
+        }
       });
+      promises.push(reviewPromise);
+    }
 
-      if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err.error || "Failed to create facets");
-      }
+    try {
+      await Promise.all(promises);
 
-      // --- New: Dispatch event to refresh header stats ---
       window.dispatchEvent(new CustomEvent("refreshStats"));
-      // --- End New ---
-
       router.push("/learn");
     } catch (err: any) {
-      setError(err.message);
+      setError(err.message || "An unknown error occurred.");
     } finally {
       setIsSubmitting(false);
     }
@@ -355,6 +390,35 @@ export default function LearnItemPage() {
                 );
               })}
             {/* --- END REFACTOR --- */}
+
+            {/* --- Context Example Scenarios --- */}
+            {lesson.type === "Vocab" && (lesson as VocabLesson).context_examples && ((lesson as VocabLesson).context_examples?.length || 0) > 0 && (
+              <div className="p-4 bg-gray-300 dark:bg-gray-800 rounded-md">
+                <h3 className="text-xl font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                  Context Example Scenarios
+                </h3>
+                <p className="text-gray-600 dark:text-gray-400 mb-3 block">
+                  Select examples to instantly architect roleplay scenarios where you must use the word <strong>{ku?.content}</strong> in context.
+                </p>
+                <div className="space-y-3">
+                  {(lesson as VocabLesson).context_examples?.map((ex, index) => (
+                    <label key={index} className="flex items-start p-3 rounded-md hover:bg-gray-400 dark:hover:bg-gray-700 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        className="mt-1 h-5 w-5 rounded bg-gray-400 dark:bg-gray-900 border-gray-500 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
+                        checked={!!selectedFacets[`Context-Example-${index}`]}
+                        onChange={() => handleCheckboxChange(`Context-Example-${index}`)}
+                      />
+                      <span className="ml-3 text-lg text-gray-900 dark:text-white flex flex-col">
+                        <span>{ex.sentence}</span>
+                        <span className="text-sm text-gray-600 dark:text-gray-400">{ex.translation}</span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+            {/* --- End Context Example Scenarios --- */}
           </>
         )}
 
@@ -458,7 +522,9 @@ export default function LearnItemPage() {
         )}
 
         {!isLoading && !error && lesson && source !== "review" && (
-          <>{renderFacetChecklist()}</>
+          <>
+            {renderFacetChecklist()}
+          </>
         )}
       </main>
     </>

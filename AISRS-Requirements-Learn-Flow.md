@@ -1,5 +1,7 @@
 # **AISRS Requirements: The "Learn" Flow (Phase 3.A)**
 
+### **Status:** Complete
+
 ## **1\. Overview**
 
 This document outlines the requirements for a fundamental change to the AISRS application, pivoting from a simple "review" model to a "teach-first" model.
