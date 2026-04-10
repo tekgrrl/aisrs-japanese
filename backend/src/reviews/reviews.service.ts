@@ -270,6 +270,23 @@ Example for a fail: {"result": "fail", "explanation": "Incorrect. The expected r
                 continue;
             }
 
+            let modifiedData: any = undefined;
+            if (data) {
+                modifiedData = { ...data };
+            }
+
+            if (key === 'audio' && modifiedData?.contextExample) {
+                try {
+                    const ku = await this.knowledgeUnitsService.findOne(uid, targetKuId);
+                    if (ku && ku.content) {
+                        const clozeSentence = await this.geminiService.generateClozeSentence(ku.content, modifiedData.contextExample.sentence);
+                        modifiedData.clozeSentence = clozeSentence;
+                    }
+                } catch (err) {
+                    this.logger.error(`Failed to generate cloze for audio facet ${kuId}`, err);
+                }
+            }
+
             // --- Create the Facet (Batch) ---
             // Now we just create the facet pointing to whichever ID we resolved (Vocab or Kanji)
             const newFacetRef = this.db.collection(REVIEW_FACETS_COLLECTION).doc();
@@ -281,6 +298,7 @@ Example for a fail: {"result": "fail", "explanation": "Incorrect. The expected r
                 createdAt: now,
                 history: [],
                 userId: uid,
+                ...(modifiedData ? { data: modifiedData } : {}),
             });
 
             count++;

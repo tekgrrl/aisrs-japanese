@@ -58,6 +58,39 @@ export default function ReviewPage() {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingKu, setEditingKu] = useState<KnowledgeUnit | null>(null);
 
+  // --- Audio State ---
+  const audioCache = useRef<Record<string, string>>({});
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  const fetchAndPlayAudio = async (text: string) => {
+    if (audioCache.current[text]) {
+      if (audioRef.current) {
+        audioRef.current.src = audioCache.current[text];
+        audioRef.current.play();
+      }
+      return;
+    }
+    
+    try {
+      const response = await apiFetch("/api/audio/speak", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
+      });
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        audioCache.current[text] = url;
+        if (audioRef.current) {
+          audioRef.current.src = url;
+          audioRef.current.play();
+        }
+      }
+    } catch (e) {
+      console.error("Failed to play audio", e);
+    }
+  };
+
   const currentItem = reviewQueue[currentIndex];
 
   const reviewCount = reviewQueue.length;
@@ -149,6 +182,13 @@ export default function ReviewPage() {
 
   // --- Effect to handle current item changes ---
   useEffect(() => {
+    if (currentItem && currentItem.facet.facetType === "audio") {
+      // Small timeout to let UI mount
+      setTimeout(() => {
+        fetchAndPlayAudio(currentItem.ku.data?.reading || currentItem.ku.content);
+      }, 50);
+    }
+
     if (
       currentItem &&
       currentItem.facet.facetType === "AI-Generated-Question"
@@ -541,6 +581,8 @@ export default function ReviewPage() {
   const getQuestion = (item: ReviewItem): string | null => {
     const { ku, facet } = item;
     switch (facet.facetType) {
+      case "audio":
+        return facet.data?.clozeSentence || facet.data?.contextExample?.sentence || "Context not found";
       case "AI-Generated-Question":
         return dynamicQuestion; // Returns null if loading
       case "Content-to-Definition":
@@ -573,6 +615,8 @@ export default function ReviewPage() {
       case "Definition-to-Content":
       case "Reading-to-Content":
         return "Vocab/Kanji";
+      case "audio":
+        return "Audio Comprehension";
       default:
         return "...";
     }
@@ -619,7 +663,7 @@ export default function ReviewPage() {
     if (ku.type === "Vocab") {
       // --- VOCAB LOGIC ---
       const lesson = item.lesson as VocabLesson | undefined;
-      if (facet.facetType === "Content-to-Definition") {
+      if (facet.facetType === "Content-to-Definition" || facet.facetType === "audio") {
         // Collect all potential definition strings
         const rawDefinitions: string[] = [];
 
@@ -642,6 +686,10 @@ export default function ReviewPage() {
               .filter((def) => def.length > 0),
           ),
         );
+
+        if (facet.facetType === "audio") {
+          return uniqueDefinitions;
+        }
 
         console.log(
           "Expected answers for Content-to-Definition:",
@@ -789,10 +837,26 @@ export default function ReviewPage() {
 
               {/* Main Question Text */}
               <p
-                className={`${currentItem.facet.facetType === "AI-Generated-Question" || currentItem.facet.facetType === "Definition-to-Content" ? "text-2xl" : "text-5xl"} font-bold text-white break-words`}
+                className={`${currentItem.facet.facetType === "AI-Generated-Question" || currentItem.facet.facetType === "Definition-to-Content" || currentItem.facet.facetType === "audio" ? "text-2xl" : "text-5xl"} font-bold text-white break-words`}
               >
                 {questionText || "[Question not loaded]"}
               </p>
+
+              {currentItem.facet.facetType === "audio" && (
+                <div className="mt-6 flex justify-center">
+                  <button
+                    type="button"
+                    onClick={() => fetchAndPlayAudio(currentItem.ku.data?.reading || currentItem.ku.content)}
+                    className="flex items-center gap-2 px-6 py-3 bg-blue-500 hover:bg-blue-600 rounded-full text-white font-semibold transition-transform transform active:scale-95 shadow-md"
+                  >
+                    <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+                      <path d="M4.018 14L14.41 9 4.018 4v10z"></path>
+                    </svg>
+                    Play Audio
+                  </button>
+                  <audio ref={audioRef} style={{ display: 'none' }} />
+                </div>
+              )}
             </>
           )}
         </div>
@@ -819,9 +883,11 @@ export default function ReviewPage() {
               }
             }}
             placeholder={
-              getQuestionType(currentItem) === "Definition"
-                ? "Type your answer..."
-                : "回答を入力して..."
+              isJapaneseInput(currentItem)
+                ? "回答を入力して..."
+                : currentItem.facet.facetType === "audio"
+                  ? "Type the English meaning..."
+                  : "Type your answer..."
             }
             disabled={answerState !== "unanswered" || isDynamicLoading}
             className="w-full p-4 bg-gray-700 border-2 border-gray-600 text-white text-xl rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-800 disabled:text-gray-500"
@@ -906,6 +972,21 @@ export default function ReviewPage() {
               <span className="font-semibold">Correct answer:</span>{" "}
               {getExpectedAnswer(currentItem).join(" / ")}
             </p>
+          )}
+          {currentItem.facet.facetType === "audio" && (
+            <div className="mb-4">
+              <p className="text-lg text-gray-200">
+                <span className="font-semibold">Word:</span>{" "}
+                <span className="text-2xl font-bold text-white">{currentItem.ku.content}</span>
+                {currentItem.ku.data?.reading && currentItem.ku.data.reading !== currentItem.ku.content && (
+                  <span className="ml-2 text-gray-300">({currentItem.ku.data.reading})</span>
+                )}
+              </p>
+              <p className="text-lg text-gray-200 mt-2">
+                <span className="font-semibold">In context:</span>{" "}
+                {currentItem.facet.data?.contextExample?.sentence}
+              </p>
+            </div>
           )}
           {aiExplanation === "No answer provided." ? (
             <p className="text-lg text-gray-200 italic">{aiExplanation}</p>
