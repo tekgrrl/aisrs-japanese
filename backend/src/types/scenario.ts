@@ -93,6 +93,11 @@ export interface Scenario {
         user: string;
         ai: string;
     };
+
+    sourceType?: 'library' | 'custom' | 'context-example';
+    sourceContextSentence?: string;
+    targetVocab?: string;
+    isActive?: boolean;
 }
 
 export interface ScenarioTemplate {
@@ -133,6 +138,9 @@ export interface ScenarioSession {
 export class GenerateScenarioDto {
     difficulty!: ScenarioDifficulty;
     theme?: string;
+    sourceType?: 'library' | 'custom' | 'context-example';
+    sourceContextSentence?: string;
+    targetVocab?: string;
 }
 
 // FIX: DTOs must be Classes for NestJS reflection/validation to work

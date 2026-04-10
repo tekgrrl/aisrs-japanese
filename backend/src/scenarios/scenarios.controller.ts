@@ -63,6 +63,12 @@ export class ScenariosController {
     return { success: true };
   }
 
+  @Post(':id/deactivate')
+  async deactivateScenario(@UserId() uid: string, @Param('id') id: string) {
+    await this.scenariosService.deactivateScenario(uid, id);
+    return { success: true };
+  }
+
   @Post(':id/chat')
   async handleChat(@UserId() uid: string, @Param('id') id: string, @Body() dto: ChatTurnDto) {
     return this.scenariosService.handleChat(uid, id, dto.userMessage);
