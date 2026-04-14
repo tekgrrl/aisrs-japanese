@@ -25,6 +25,8 @@ export default function KnowledgeManagementPage() {
   const [newKuContent, setNewKuContent] = useState("");
   const [newKuReading, setNewKuReading] = useState("");
   const [newKuDefinition, setNewKuDefinition] = useState("");
+  const [newKuJlptLevel, setNewKuJlptLevel] = useState("");
+  const [newKuWanikaniLevel, setNewKuWanikaniLevel] = useState<number | "">("");
   const [newKuNotes, setNewKuNotes] = useState(""); // Personal Notes
   const [newUserNotes, setNewUserNotes] = useState(""); // User Notes (Context)
   const [generatingFacetKuId, setGeneratingFacetKuId] = useState<string | null>(
@@ -92,10 +94,12 @@ export default function KnowledgeManagementPage() {
     }
     // --- END VALIDATION ---
 
-    let kuData: Record<string, string> = {};
+    let kuData: Record<string, any> = {};
     if (newKuType === "Vocab") {
       kuData.reading = newKuReading;
       kuData.definition = newKuDefinition;
+      if (newKuJlptLevel !== "") kuData.jlptLevel = newKuJlptLevel;
+      if (newKuWanikaniLevel !== "") kuData.wanikaniLevel = Number(newKuWanikaniLevel);
     }
 
     try {
@@ -123,6 +127,8 @@ export default function KnowledgeManagementPage() {
       setNewKuType("Vocab");
       setNewKuReading("");
       setNewKuDefinition("");
+      setNewKuJlptLevel("");
+      setNewKuWanikaniLevel("");
       setNewKuNotes("");
       setNewUserNotes("");
 
@@ -362,6 +368,50 @@ export default function KnowledgeManagementPage() {
                   className="w-full p-3 bg-gray-700 border-gray-600 text-white rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
                   // required removed
                 />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label
+                    htmlFor="kuJlptLevel"
+                    className="block text-sm font-medium text-gray-300 mb-1"
+                  >
+                    JLPT Level
+                  </label>
+                  <select
+                    id="kuJlptLevel"
+                    value={newKuJlptLevel}
+                    onChange={(e) => setNewKuJlptLevel(e.target.value)}
+                    className="w-full p-3 bg-gray-700 border-gray-600 text-white rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="">None</option>
+                    <option value="N5">N5</option>
+                    <option value="N4">N4</option>
+                    <option value="N3">N3</option>
+                    <option value="N2">N2</option>
+                    <option value="N1">N1</option>
+                  </select>
+                </div>
+                <div>
+                  <label
+                    htmlFor="kuWanikaniLevel"
+                    className="block text-sm font-medium text-gray-300 mb-1"
+                  >
+                    WaniKani Level
+                  </label>
+                  <input
+                    type="number"
+                    id="kuWanikaniLevel"
+                    min="1"
+                    max="60"
+                    placeholder="1-60"
+                    value={newKuWanikaniLevel}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setNewKuWanikaniLevel(val === "" ? "" : Number(val));
+                    }}
+                    className="w-full p-3 bg-gray-700 border-gray-600 text-white rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
               </div>
             </>
           )}

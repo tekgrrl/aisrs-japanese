@@ -252,6 +252,8 @@ export interface KnowledgeUnit {
     reading?: string;
     definition?: string;
     meaning?: string; // For Kanji
+    jlptLevel?: string | null;
+    wanikaniLevel?: number | null;
     // We can add more specific fields here later
     [key: string]: any;
   };
@@ -278,6 +280,8 @@ export interface GlobalKnowledgeUnit {
     reading?: string;
     definition?: string;
     meaning?: string;
+    jlptLevel?: string | null;
+    wanikaniLevel?: number | null;
     [key: string]: any;
   };
   relatedUnits: string[];

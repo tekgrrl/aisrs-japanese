@@ -19,6 +19,8 @@ export default function EditKnowledgeUnitModal({
   const [content, setContent] = useState("");
   const [reading, setReading] = useState("");
   const [definition, setDefinition] = useState("");
+  const [jlptLevel, setJlptLevel] = useState("");
+  const [wanikaniLevel, setWanikaniLevel] = useState<number | "">("");
   const [userNotes, setUserNotes] = useState("");
   const [personalNotes, setPersonalNotes] = useState("");
   const [isSaving, setIsSaving] = useState(false);
@@ -28,6 +30,8 @@ export default function EditKnowledgeUnitModal({
       setContent(knowledgeUnit.content || "");
       setReading(knowledgeUnit.data?.reading || "");
       setDefinition(knowledgeUnit.data?.definition || "");
+      setJlptLevel(knowledgeUnit.data?.jlptLevel || "");
+      setWanikaniLevel(knowledgeUnit.data?.wanikaniLevel || "");
       setUserNotes(knowledgeUnit.userNotes || "");
       setPersonalNotes(knowledgeUnit.personalNotes || "");
     }
@@ -39,6 +43,8 @@ export default function EditKnowledgeUnitModal({
     if (!knowledgeUnit) return false;
     const currentReading = knowledgeUnit.data?.reading || "";
     const currentDefinition = knowledgeUnit.data?.definition || "";
+    const currentJlptLevel = knowledgeUnit.data?.jlptLevel || "";
+    const currentWanikaniLevel = knowledgeUnit.data?.wanikaniLevel || "";
     const currentUserNotes = knowledgeUnit.userNotes || "";
     const currentPersonalNotes = knowledgeUnit.personalNotes || "";
 
@@ -46,6 +52,8 @@ export default function EditKnowledgeUnitModal({
       content !== knowledgeUnit.content ||
       reading !== currentReading ||
       definition !== currentDefinition ||
+      jlptLevel !== currentJlptLevel ||
+      wanikaniLevel !== currentWanikaniLevel ||
       userNotes !== currentUserNotes ||
       personalNotes !== currentPersonalNotes
     );
@@ -62,6 +70,8 @@ export default function EditKnowledgeUnitModal({
           ...knowledgeUnit.data,
           reading,
           definition,
+          jlptLevel: jlptLevel !== "" ? jlptLevel : null,
+          wanikaniLevel: wanikaniLevel !== "" ? Number(wanikaniLevel) : null,
         },
         userNotes,
         personalNotes,
@@ -129,30 +139,68 @@ export default function EditKnowledgeUnitModal({
 
           {/* Vocab Specific Fields */}
           {knowledgeUnit.type === "Vocab" && (
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-bold text-shodo-ink-light uppercase tracking-wide mb-1">
-                  Reading
-                </label>
-                <input
-                  type="text"
-                  value={reading}
-                  onChange={(e) => setReading(e.target.value)}
-                  className="w-full px-3 py-2 bg-white border border-shodo-mist rounded text-gray-900 focus:outline-none focus:border-shodo-indigo"
-                />
+            <>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-shodo-ink-light uppercase tracking-wide mb-1">
+                    Reading
+                  </label>
+                  <input
+                    type="text"
+                    value={reading}
+                    onChange={(e) => setReading(e.target.value)}
+                    className="w-full px-3 py-2 bg-white border border-shodo-mist rounded text-gray-900 focus:outline-none focus:border-shodo-indigo"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-shodo-ink-light uppercase tracking-wide mb-1">
+                    Definition
+                  </label>
+                  <input
+                    type="text"
+                    value={definition}
+                    onChange={(e) => setDefinition(e.target.value)}
+                    className="w-full px-3 py-2 bg-white border border-shodo-mist rounded text-gray-900 focus:outline-none focus:border-shodo-indigo"
+                  />
+                </div>
               </div>
-              <div>
-                <label className="block text-xs font-bold text-shodo-ink-light uppercase tracking-wide mb-1">
-                  Definition
-                </label>
-                <input
-                  type="text"
-                  value={definition}
-                  onChange={(e) => setDefinition(e.target.value)}
-                  className="w-full px-3 py-2 bg-white border border-shodo-mist rounded text-gray-900 focus:outline-none focus:border-shodo-indigo"
-                />
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-shodo-ink-light uppercase tracking-wide mb-1">
+                    JLPT Level
+                  </label>
+                  <select
+                    value={jlptLevel}
+                    onChange={(e) => setJlptLevel(e.target.value)}
+                    className="w-full px-3 py-2 bg-white border border-shodo-mist rounded text-gray-900 focus:outline-none focus:border-shodo-indigo"
+                  >
+                    <option value="">None</option>
+                    <option value="N5">N5</option>
+                    <option value="N4">N4</option>
+                    <option value="N3">N3</option>
+                    <option value="N2">N2</option>
+                    <option value="N1">N1</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-shodo-ink-light uppercase tracking-wide mb-1">
+                    WaniKani Level
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="60"
+                    placeholder="1-60"
+                    value={wanikaniLevel}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setWanikaniLevel(val === "" ? "" : Number(val));
+                    }}
+                    className="w-full px-3 py-2 bg-white border border-shodo-mist rounded text-gray-900 focus:outline-none focus:border-shodo-indigo"
+                  />
+                </div>
               </div>
-            </div>
+            </>
           )}
 
           {/* User Notes (Context for AI) */}
