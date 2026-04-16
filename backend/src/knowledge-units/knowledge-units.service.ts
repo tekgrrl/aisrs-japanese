@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { FIRESTORE_CONNECTION, KNOWLEDGE_UNITS_COLLECTION } from '../firebase/firebase.module';
-import { Firestore, Timestamp } from '@google-cloud/firestore';
+import { Firestore, Timestamp, DocumentReference } from '@google-cloud/firestore';
 import { Inject } from '@nestjs/common';
 // Removed CURRENT_USER_ID import
 import { KnowledgeUnit } from '@/types';
@@ -216,6 +216,128 @@ export class KnowledgeUnitsService {
         this.logger.log(`POST /knowledge-units - Created unit ${newDocRef.id}`);
         return { id: newDocRef.id };
     } // END create
+
+    async bulkUpdate(uid: string, items: Partial<KnowledgeUnit>[]): Promise<{ updated: number; skipped: number; ids: string[] }> {
+        if (!Array.isArray(items) || items.length === 0) {
+            throw new BadRequestException('items must be a non-empty array');
+        }
+
+        // Fields that must never be overwritten by an external caller
+        const IMMUTABLE = new Set(['id', 'userId', 'createdAt', 'status', 'facet_count']);
+
+        const toUpdate: { ref: DocumentReference; data: Record<string, any> }[] = [];
+        let skipped = 0;
+
+        for (const item of items) {
+            if (!item.id) {
+                this.logger.warn('bulkUpdate - skipping item missing id', item);
+                skipped++;
+                continue;
+            }
+            const payload: Record<string, any> = {};
+            for (const [k, v] of Object.entries(item)) {
+                if (!IMMUTABLE.has(k)) payload[k] = v;
+            }
+            if (Object.keys(payload).length === 0) {
+                skipped++;
+                continue;
+            }
+            toUpdate.push({
+                ref: this.db.collection(KNOWLEDGE_UNITS_COLLECTION).doc(item.id),
+                data: payload,
+            });
+        }
+
+        const BATCH_SIZE = 500;
+        const updatedIds: string[] = [];
+
+        for (let i = 0; i < toUpdate.length; i += BATCH_SIZE) {
+            const chunk = toUpdate.slice(i, i + BATCH_SIZE);
+            const batch = this.db.batch();
+            for (const { ref, data } of chunk) {
+                // merge: true patches without overwriting unmentioned fields
+                batch.set(ref, data, { merge: true });
+                updatedIds.push(ref.id);
+            }
+            await batch.commit();
+        }
+
+        this.logger.log(`bulkUpdate - updated ${updatedIds.length}, skipped ${skipped}`);
+        return { updated: updatedIds.length, skipped, ids: updatedIds };
+    }
+
+    async bulkIngest(uid: string, items: Partial<KnowledgeUnit>[]): Promise<{ created: number; skipped: number; ids: string[] }> {
+        if (!Array.isArray(items) || items.length === 0) {
+            throw new BadRequestException('items must be a non-empty array');
+        }
+
+        // Fetch existing content+type combos for this user to support dedup
+        const existingSnapshot = await this.db
+            .collection(KNOWLEDGE_UNITS_COLLECTION)
+            .where('userId', '==', uid)
+            .select('content', 'type')
+            .get();
+
+        const existingKeys = new Set<string>();
+        existingSnapshot.forEach(doc => {
+            const d = doc.data();
+            if (d.content && d.type) {
+                existingKeys.add(`${d.type}::${d.content}`);
+            }
+        });
+
+        const toCreate: { ref: DocumentReference; data: Record<string, any> }[] = [];
+        let skipped = 0;
+
+        for (const item of items) {
+            if (!item.content || !item.type) {
+                this.logger.warn('bulkIngest - skipping item missing content or type', item);
+                skipped++;
+                continue;
+            }
+            const key = `${item.type}::${item.content}`;
+            if (existingKeys.has(key)) {
+                skipped++;
+                continue;
+            }
+            existingKeys.add(key); // prevent dupes within the same request
+            const ref = item.id
+                ? this.db.collection(KNOWLEDGE_UNITS_COLLECTION).doc(item.id)
+                : this.db.collection(KNOWLEDGE_UNITS_COLLECTION).doc();
+            toCreate.push({
+                ref,
+                data: {
+                    content: item.content,
+                    type: item.type,
+                    data: item.data || {},
+                    relatedUnits: item.relatedUnits || [],
+                    personalNotes: item.personalNotes || '',
+                    userNotes: item.userNotes || '',
+                    status: 'learning',
+                    facet_count: 0,
+                    createdAt: Timestamp.now(),
+                    userId: uid,
+                },
+            });
+        }
+
+        // Firestore batch limit is 500 writes per commit
+        const BATCH_SIZE = 500;
+        const createdIds: string[] = [];
+
+        for (let i = 0; i < toCreate.length; i += BATCH_SIZE) {
+            const chunk = toCreate.slice(i, i + BATCH_SIZE);
+            const batch = this.db.batch();
+            for (const { ref, data } of chunk) {
+                batch.set(ref, data);
+                createdIds.push(ref.id);
+            }
+            await batch.commit();
+        }
+
+        this.logger.log(`bulkIngest - created ${createdIds.length}, skipped ${skipped}`);
+        return { created: createdIds.length, skipped, ids: createdIds };
+    }
 
     async findOne(uid: string, id: string): Promise<KnowledgeUnit> {
         const docRef = this.db.collection(KNOWLEDGE_UNITS_COLLECTION).doc(id);

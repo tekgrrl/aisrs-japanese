@@ -1,4 +1,4 @@
-import { Controller, Get, Put, Param, Body, Query, Post, BadRequestException, UseGuards } from '@nestjs/common';
+import { Controller, Get, Put, Patch, Param, Body, Query, Post, BadRequestException, UseGuards, HttpCode } from '@nestjs/common';
 import { KnowledgeUnitsService } from './knowledge-units.service';
 import { FirebaseAuthGuard } from '../auth/firebase-auth.guard';
 import { UserId } from '../auth/user-id.decorator';
@@ -30,6 +30,24 @@ export class KnowledgeUnitsController {
     @Get(':id')
     async findOne(@UserId() uid: string, @Param('id') id: string) {
         return this.knowledgeUnitsService.findOne(uid, id);
+    }
+
+    @Patch('bulk')
+    @HttpCode(200)
+    async bulkUpdate(@UserId() uid: string, @Body() body: any) {
+        if (!Array.isArray(body)) {
+            throw new BadRequestException('Request body must be an array of Knowledge Units');
+        }
+        return this.knowledgeUnitsService.bulkUpdate(uid, body);
+    }
+
+    @Post('bulk')
+    @HttpCode(200)
+    async bulkIngest(@UserId() uid: string, @Body() body: any) {
+        if (!Array.isArray(body)) {
+            throw new BadRequestException('Request body must be an array of Knowledge Units');
+        }
+        return this.knowledgeUnitsService.bulkIngest(uid, body);
     }
 
     @Post()

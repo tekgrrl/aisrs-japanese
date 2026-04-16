@@ -170,53 +170,6 @@ export interface KanjiLesson {
   }[];
 }
 
-export interface GlobalVocabLesson {
-  type: "Vocab";
-  vocab: string;
-  reading: string;
-  definitions: string[];
-  definition?: string;
-  partOfSpeech: PartOfSpeech;
-  meaning_explanation: string;
-  reading_explanation: string;
-  context_examples?: { sentence: string; translation: string }[];
-  component_kanji?: {
-    kanji: string;
-    reading: string;
-    meaning: string;
-    onyomi?: string[];
-    kunyomi?: string[];
-  }[];
-}
-
-export interface GlobalKanjiLesson {
-  type: "Kanji";
-  kanji: string;
-  meaning: string;
-  onyomi: string[];
-  kunyomi: string[];
-  strokeCount: number;
-  strokeImages: string[];
-  radical?: {
-    character: string;
-    meaning: string;
-    image: string;
-    animation?: string[];
-  };
-  references?: {
-    grade: number;
-    kodansha: number;
-    classic_nelson: number;
-  };
-  mnemonic_meaning: string;
-  mnemonic_reading: string;
-  relatedVocab: {
-    id: string;
-    content: string;
-    reading: string;
-  }[];
-}
-
 export interface UserLessonData {
   lessonId: string; // The ID of the generic lesson it adapts
   userId: string;
@@ -224,7 +177,7 @@ export interface UserLessonData {
   personalMnemonic?: string;
 }
 
-export type Lesson = VocabLesson | KanjiLesson | GlobalVocabLesson | GlobalKanjiLesson;
+export type Lesson = VocabLesson | KanjiLesson;
 
 export type KnowledgeUnitType =
   | "Vocab"
@@ -279,27 +232,6 @@ export interface KnowledgeUnit {
   history?: any[]; // Or define a proper history type
 }
 
-export interface GlobalKnowledgeUnit {
-  id: string;
-  type: KnowledgeUnitType;
-  content: string;
-  data: {
-    reading?: string;
-    definition?: string;
-    meaning?: string;
-    jlptLevel?: string | null;
-    wanikaniLevel?: number | null;
-    [key: string]: any;
-  };
-  relatedUnits: string[];
-  /**
-   * Array of GlobalKnowledgeUnit IDs that must be in 'reviewing' or 'mastered' status
-   * in the user's personal KU collection before this node is eligible for the learning queue.
-   * If empty or undefined, the node is treated as immediately available.
-   */
-  prerequisites?: string[];
-}
-
 export interface UserKnowledgeUnit {
   id: string;
   userId: string;
@@ -350,8 +282,8 @@ export interface ReviewFacet {
  */
 export interface ReviewItem {
   facet: ReviewFacet;
-  ku: KnowledgeUnit | (GlobalKnowledgeUnit & UserKnowledgeUnit);
-  lesson?: Lesson | (GlobalVocabLesson & UserLessonData) | (GlobalKanjiLesson & UserLessonData);
+  ku: KnowledgeUnit | (KnowledgeUnit & UserKnowledgeUnit);
+  lesson?: Lesson | (VocabLesson & UserLessonData) | (KanjiLesson & UserLessonData);
 }
 
 // This represents the structure of our old db.json
@@ -391,19 +323,6 @@ export interface QuestionItem {
     result: "pass" | "fail";
     timestamp: Timestamp;
   }[];
-}
-
-export interface GlobalQuestion {
-  id: string;
-  kuId: string;
-  data: {
-    context?: string;
-    question: string;
-    answer: string;
-    acceptedAlternatives?: string[];
-    difficulty: LessonDifficulty;
-  };
-  createdAt: string | Timestamp;
 }
 
 export interface UserQuestionState {
