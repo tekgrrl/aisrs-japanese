@@ -64,7 +64,7 @@ Basic Vocab data was extracted from Wanikani and then boiled down to non-proprie
 - (Done) User KU metadata is stored in `users/{uid}/user-kus` as `UserKnowledgeUnit` documents referencing global KUs via `kuId`. Managed by `UserKnowledgeUnitsService`.
 - (Done) Users can sign up and log in via passwordless email-link auth.
 - (Done) When a user interacts with a scenario and clicks "Start Drilling", `UserKnowledgeUnit` documents are created in their sub-collection — this populates their Learning Queue.
-- (ToDo) Questions need a design overhaul — reuse/rotation logic for AI-Generated-Question facets is broken (always reuses the same question regardless of attempt count).
+- (Done) Questions have been overhauled — see **Question Corpus** section below and Migration History.
 
 ## User Management, Authentication & Multi-Tenancy
 
@@ -145,7 +145,8 @@ The database uses **flat top-level collections** (not Firestore sub-collections 
 | `users/{uid}/review-facets` | Yes — sub-collection path | Per-user SRS facets (non-admin users) |
 | `review-facets` | Yes (field) | Admin (`user_default`) SRS facets only; `userId` field still required |
 | `lessons` | Yes (field) | AI-generated lesson documents |
-| `questions` | Yes (field) | Question documents (global pool, referenced by facet `currentQuestionId`) |
+| `questions` | **No** | Global question corpus — no `userId` on new docs. `rank` and `rejectionCount` fields drive selection. |
+| `users/{uid}/question-states` | Yes — sub-collection path | Per-user `UserQuestionState`: `rejected`, `consecutiveFailures`, `kuId` |
 | `scenarios` | Yes (field) | Roleplay scenario state |
 | `user-stats` | Yes — doc ID is uid | Legacy stats; `USER_STATS_COLLECTION.doc(uid)` |
 | `users` | Yes — doc path `users/{uid}` | `UserRoot` document (stats, tutorContext, preferences) |
@@ -159,7 +160,8 @@ The database uses **flat top-level collections** (not Firestore sub-collections 
 - **`KnowledgeUnit`** (~line 205) — has `userId` field (marked `@deprecated` as part of future migration to a separate `user-kus` sub-collection). `data` bag holds `jlptLevel`, `wanikaniLevel`, `reading`, `meaning`.
 - **`UserKnowledgeUnit`** (~line 235) — intended future shape: user metadata (`status`, `personalNotes`, `facet_count`) pointing at a global KU via `kuId`. **Not yet used in queries.**
 - **`ReviewFacet`** (~line 261) — bridges to `KnowledgeUnit` via `kuId`; carries `srsStage` (0–8) and `nextReviewAt`.
-- **`UserQuestionState`** (~line 290) — bridges to a global `Question` via `questionId`; tracks answer history per user.
+- **`QuestionItem`** — global question document. `rank: number` (0–100, starts 50, suitable threshold 30); `rejectionCount: number` (observability only). Deprecated fields (`userId`, `status`, `lastUsed`, `previousAnswers`) may exist on legacy docs but are ignored.
+- **`UserQuestionState`** — stored at `users/{uid}/question-states/{questionId}`. `rejected: boolean` (user never sees this question again); `consecutiveFailures: number` (persists across sessions, resets on correct answer, triggers rotation at 3); `kuId` (denormalised for querying).
 
 ---
 
@@ -206,6 +208,35 @@ The following work is required to complete proper multi-user support. Each item 
 **5. Scope `api-logs` by user (optional)**
 - Add `userId` field to log documents so per-user activity can be audited.
 
+## Question Corpus
+
+`AI-Generated-Question` facets draw from a **global question corpus** shared across all users for the same KU.
+
+### Selection logic (`QuestionsService.selectQuestion`)
+1. If the facet has a `currentQuestionId`, try to reuse it — passes if `rank >= 30`, not rejected by this user, and `consecutiveFailures < 3`.
+2. Otherwise query all questions for the KU, apply the same suitability filters, pick the first passing candidate.
+3. If no suitable question exists, generate a new one via Gemini and save it to the global corpus.
+
+### Ranking
+| Event | `questions/{id}.rank` | `UserQuestionState` |
+|---|---|---|
+| Correct answer | +5 | `consecutiveFailures = 0` |
+| Wrong answer | no change | `consecutiveFailures++` |
+| Keep feedback | +5 | — |
+| Request New | no change | `rejected = true`; global `rejectionCount++` |
+| Report feedback | -25 | — |
+
+Rank nominally 0–100 but is not hard-clamped; `>= 30` is the only gate used in queries.
+
+### Key endpoints
+- `GET /api/questions/generate?topic=&facetId=&kuId=` — returns `{ question, answer, context, accepted_alternatives, questionId, isNew }`. `isNew: true` means no `UserQuestionState` exists yet for this user; the frontend uses this to decide whether to show the feedback modal.
+- `PATCH /api/questions/:id/feedback` — body `{ feedback: 'keep' | 'request-new' | 'report' }`.
+
+### Migration note for existing question documents
+Legacy docs lack `rank` and `rejectionCount`. They are served correctly on first use (`rank ?? 50` at read time) but fall below the suitability threshold after their first correct answer or feedback write (`FieldValue.increment` initialises missing fields from 0). Run a one-time backfill of `{ rank: 50, rejectionCount: 0 }` across the `questions` collection to restore them.
+
+---
+
 ## Migration History
 
 **Note**: This section is very much outdated but should be used to summarize the history of the project. 
@@ -239,6 +270,20 @@ Previously, the Next.js `frontend` app hosted Next API Routes (`/src/app/api/...
 - **`review-facets` per-user sub-collection**: `ReviewsService` routes all facet reads/writes to `users/{uid}/review-facets` for non-admin users; `user_default` continues to use the top-level `review-facets` collection with `userId` field scoping. Same routing applied in `StatsService`.
 - **`ADMIN_USER_ID` constant**: `CURRENT_USER_ID` renamed to `ADMIN_USER_ID` in `backend/src/lib/constants.ts`. The string `'user_default'` remains hardcoded in `firebase-auth.guard.ts` pending a follow-up cleanup.
 - **Frontend**: `refreshStats` event dispatched after successful encounter→drill advance so the Learn tab badge updates immediately.
+
+**Question corpus overhaul (2026-04)**
+
+- Replaced the broken per-facet `questionAttempts` reuse logic with a global question corpus and per-user state model.
+- `questions` collection is now user-agnostic (no `userId` on new docs). Added `rank: number` (starts 50) and `rejectionCount: number` fields.
+- New `users/{uid}/question-states/{questionId}` sub-collection stores per-user `UserQuestionState` (`rejected`, `consecutiveFailures`, `kuId`).
+- `QuestionsService` rewritten: `selectQuestion` (reuse → corpus → generate), `recordAnswer` (rank/failure tracking), `recordFeedback` (keep / request-new / report).
+- `PATCH /api/questions/:id` replaced by `PATCH /api/questions/:id/feedback` with `{ feedback }` body.
+- `GET /api/questions/generate` now returns `isNew: boolean` instead of `status`; frontend uses it to gate the feedback modal.
+- `POST /api/reviews/evaluate` now accepts optional `kuId` and calls `recordAnswer` on every evaluation.
+- `ReviewFacet.questionAttempts` deprecated; `updateFacetQuestion` no longer resets it.
+- Frontend `review/page.tsx`: `dynamicQuestionStatus` state replaced by `dynamicQuestionIsNew`; `isNewAiQuestion` simplified; feedback handlers call `recordFeedback`.
+
+---
 
 - **Firebase Console prerequisites** for project `gen-lang-client-0878434798`:
   1. Authentication → Sign-in method → **Email/Password** enabled.

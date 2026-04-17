@@ -327,6 +327,7 @@ export interface ReviewFacet {
     stage: number;
   }>;
   currentQuestionId?: string;
+  /** @deprecated - failure tracking moved to UserQuestionState.consecutiveFailures */
   questionAttempts?: number;
   data?: any;
 }
@@ -360,8 +361,6 @@ export type LessonDifficulty =
 
 export interface QuestionItem {
   id: string;
-  /** @deprecated - migrating to User state models */
-  userId: string;
   kuId: string;
   data: {
     context?: string;
@@ -370,40 +369,26 @@ export interface QuestionItem {
     acceptedAlternatives?: string[];
     difficulty: LessonDifficulty;
   };
-  /** @deprecated - migrating to User state models */
-  status?: "active" | "flagged" | "inactive"; // Default is 'active' if undefined
+  rank: number;
+  rejectionCount: number;
   createdAt: string | Timestamp;
-  /** @deprecated - migrating to User state models */
+  /** @deprecated */
+  userId?: string;
+  /** @deprecated */
+  status?: "active" | "flagged" | "inactive";
+  /** @deprecated */
   lastUsed?: string | Timestamp;
-  /** @deprecated - migrating to User state models */
+  /** @deprecated */
   previousAnswers?: {
     answer: string;
     result: "pass" | "fail";
     timestamp: Timestamp;
   }[];
-}
-
-export interface GlobalQuestion {
-  id: string;
-  kuId: string;
-  data: {
-    context?: string;
-    question: string;
-    answer: string;
-    acceptedAlternatives?: string[];
-    difficulty: LessonDifficulty;
-  };
-  createdAt: string | Timestamp;
 }
 
 export interface UserQuestionState {
-  userId: string;
-  questionId: string; // Bridges to GlobalQuestion.id
-  status: "active" | "flagged" | "inactive";
-  lastUsed?: string | Timestamp;
-  previousAnswers?: {
-    answer: string;
-    result: "pass" | "fail";
-    timestamp: Timestamp;
-  }[];
+  questionId: string;
+  kuId: string;
+  rejected: boolean;
+  consecutiveFailures: number;
 }

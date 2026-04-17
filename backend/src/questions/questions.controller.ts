@@ -6,31 +6,28 @@ import { UserId } from '../auth/user-id.decorator';
 @Controller('questions')
 @UseGuards(FirebaseAuthGuard)
 export class QuestionsController {
-  constructor(private readonly questionsService: QuestionsService) { }
+  constructor(private readonly questionsService: QuestionsService) {}
 
   @Get('generate')
   async generate(
     @UserId() uid: string,
     @Query('topic') topic: string,
-    @Query('facetId') facetId: string, // Optional depending on your logic
-    @Query('kuId') kuId: string,       // Optional depending on your logic
+    @Query('facetId') facetId: string,
+    @Query('kuId') kuId: string,
   ) {
-    if (!topic) {
-      throw new BadRequestException('Topic is required');
-    }
-    return this.questionsService.generateQuestion(uid, topic, kuId, facetId);
+    if (!topic) throw new BadRequestException('Topic is required');
+    return this.questionsService.selectQuestion(uid, kuId, facetId, topic);
   }
 
-  @Patch(':id')
-  async updateStatus(
+  @Patch(':id/feedback')
+  async recordFeedback(
     @UserId() uid: string,
     @Param('id') id: string,
-    @Body() body: { status: 'active' | 'flagged' | 'inactive' }
+    @Body() body: { feedback: 'keep' | 'request-new' | 'report' },
   ) {
-    if (!body.status || !['active', 'flagged', 'inactive'].includes(body.status)) {
-      throw new BadRequestException('Valid status is required');
+    if (!body.feedback || !['keep', 'request-new', 'report'].includes(body.feedback)) {
+      throw new BadRequestException('feedback must be keep, request-new, or report');
     }
-
-    return this.questionsService.updateStatus(uid, id, body.status);
+    return this.questionsService.recordFeedback(uid, id, body.feedback);
   }
 }

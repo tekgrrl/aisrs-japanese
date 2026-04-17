@@ -1,20 +1,31 @@
-import { Injectable, Inject, Logger, forwardRef, NotFoundException } from '@nestjs/common';
+import { Injectable, Inject, Logger, forwardRef, NotFoundException, BadRequestException } from '@nestjs/common';
 import { Firestore } from 'firebase-admin/firestore';
 import {
   FIRESTORE_CONNECTION,
   QUESTIONS_COLLECTION,
-  REVIEW_FACETS_COLLECTION,
+  QUESTION_STATES_SUBCOLLECTION,
   Timestamp,
   FieldValue,
 } from '../firebase/firebase.module';
-import { BadRequestException } from '@nestjs/common';
-import { ReviewFacet, QuestionItem, KnowledgeUnit } from '@/types';
+import { ReviewFacet, QuestionItem, UserQuestionState } from '@/types';
 import { GeminiService } from '../gemini/gemini.service';
 import { ReviewsService } from '../reviews/reviews.service';
 import { KnowledgeUnitsService } from '../knowledge-units/knowledge-units.service';
-// Removed CURRENT_USER_ID import
 
+const SUITABLE_RANK_THRESHOLD = 30;
+const RANK_CORRECT_DELTA = 5;
+const RANK_KEEP_DELTA = 5;
+const RANK_REPORT_DELTA = -25;
+const MAX_CONSECUTIVE_FAILURES = 3;
 
+type QuestionResponse = {
+  question: string;
+  context: string | undefined;
+  answer: string;
+  accepted_alternatives: string[] | undefined;
+  questionId: string;
+  isNew: boolean;
+};
 
 @Injectable()
 export class QuestionsService {
@@ -26,53 +37,123 @@ export class QuestionsService {
     @Inject(forwardRef(() => ReviewsService))
     private readonly reviewsService: ReviewsService,
     private readonly knowledgeUnitsService: KnowledgeUnitsService,
+  ) {}
 
-  ) { }
+  private questionStatesRef(uid: string) {
+    return this.db.collection('users').doc(uid).collection(QUESTION_STATES_SUBCOLLECTION);
+  }
+
+  private toResponse(question: QuestionItem, isNew: boolean): QuestionResponse {
+    return {
+      question: question.data.question,
+      context: question.data.context,
+      answer: question.data.answer,
+      accepted_alternatives: question.data.acceptedAlternatives,
+      questionId: question.id,
+      isNew,
+    };
+  }
 
   async testConnection() {
     const snapshot = await this.db.collection(QUESTIONS_COLLECTION).limit(1).get();
     this.logger.log(`Found ${snapshot.size} questions`);
   }
 
+  async selectQuestion(uid: string, kuId: string, facetId: string, topic: string): Promise<QuestionResponse> {
+    if (!topic) throw new BadRequestException('Topic is required');
 
-  async updateQuestionHistory(questionId: string, userAnswer: string, result: string) {
-    if (questionId) {
-      try {
-        const questionRef = this.db
-          .collection(QUESTIONS_COLLECTION)
-          .doc(questionId);
-        await questionRef.update({
-          previousAnswers: FieldValue.arrayUnion({
-            answer: userAnswer,
-            result: "pass",
-            timestamp: Timestamp.now(),
-          }),
-        });
-        this.logger.log(`Updated question ${questionId} with pass history`);
-      } catch (histError) {
-        this.logger.error(
-          "Failed to update question history (local pass)",
-          histError,
-        );
+    const facetData = facetId
+      ? await this.reviewsService.getByFacetId(uid, facetId) as ReviewFacet | null
+      : null;
+
+    // 1. Try to reuse the question already on the facet
+    if (facetData?.currentQuestionId) {
+      const reused = await this.tryReuseQuestion(uid, facetData.currentQuestionId);
+      if (reused) {
+        this.logger.log(`Reusing question ${facetData.currentQuestionId} for facet ${facetId}`);
+        return reused;
       }
     }
+
+    // 2. Find another suitable question from the global corpus
+    const suitable = await this.findSuitableQuestion(uid, kuId, facetData?.currentQuestionId);
+    if (suitable) {
+      this.logger.log(`Found suitable question ${suitable.questionId} for KU ${kuId}`);
+      if (facetId) await this.reviewsService.updateFacetQuestion(uid, facetId, suitable.questionId);
+      return suitable;
+    }
+
+    // 3. Generate a new question via AI
+    this.logger.log(`No suitable questions for KU ${kuId} — generating new one`);
+    return this.generateAndSave(uid, topic, kuId, facetId);
   }
 
-  async generateQuestion(uid: string, topic: string, kuId: string, facetId: string) {
+  private async tryReuseQuestion(uid: string, questionId: string): Promise<QuestionResponse | null> {
+    const [questionDoc, stateDoc] = await Promise.all([
+      this.db.collection(QUESTIONS_COLLECTION).doc(questionId).get(),
+      this.questionStatesRef(uid).doc(questionId).get(),
+    ]);
 
+    if (!questionDoc.exists) return null;
+
+    const question = { id: questionDoc.id, ...questionDoc.data() } as QuestionItem;
+    const state = stateDoc.exists ? stateDoc.data() as UserQuestionState : null;
+
+    const rank = question.rank ?? 50;
+    if (
+      !state?.rejected &&
+      rank >= SUITABLE_RANK_THRESHOLD &&
+      (state?.consecutiveFailures ?? 0) < MAX_CONSECUTIVE_FAILURES
+    ) {
+      return this.toResponse(question, !stateDoc.exists);
+    }
+
+    return null;
+  }
+
+  private async findSuitableQuestion(uid: string, kuId: string, excludeId?: string): Promise<QuestionResponse | null> {
+    const snapshot = await this.db.collection(QUESTIONS_COLLECTION)
+      .where('kuId', '==', kuId)
+      .get();
+
+    if (snapshot.empty) return null;
+
+    const candidates = snapshot.docs
+      .map(d => ({ id: d.id, ...d.data() } as QuestionItem))
+      .filter(q => q.id !== excludeId && (q.rank ?? 50) >= SUITABLE_RANK_THRESHOLD);
+
+    if (candidates.length === 0) return null;
+
+    const stateDocs = await Promise.all(
+      candidates.map(q => this.questionStatesRef(uid).doc(q.id).get())
+    );
+
+    for (let i = 0; i < candidates.length; i++) {
+      const question = candidates[i];
+      const stateDoc = stateDocs[i];
+      const state = stateDoc.exists ? stateDoc.data() as UserQuestionState : null;
+
+      if (state?.rejected) continue;
+      if ((state?.consecutiveFailures ?? 0) >= MAX_CONSECUTIVE_FAILURES) continue;
+
+      return this.toResponse(question, !stateDoc.exists);
+    }
+
+    return null;
+  }
+
+  private async generateAndSave(uid: string, topic: string, kuId: string, facetId?: string): Promise<QuestionResponse> {
     const questionOptions = {
       "conjugation": "if the word is a verb, conjugate the verb to a specific form e.g.: Give the past potential form of the verb in question",
       "particle": "Match up the Vocab in question with a particle to give a particular meaning in a sentence that you specify, you can represent the particle with a blank '[____]'",
       "translation": "Create a sentence in English for the user to translate into Japanese. The English sentence must naturally force the use of the Target Input.",
-      "fill-in-the-blank": "A context-based, fill-in-the-blank style question with a single blank '[____]'"
-    }
-
+      "fill-in-the-blank": "A context-based, fill-in-the-blank style question with a single blank '[____]'",
+    };
     const questionOptionTypes = Object.keys(questionOptions);
     const selectedType = questionOptionTypes[Math.floor(Math.random() * questionOptionTypes.length)];
 
-    // --- System Prompt ---
-    const systemPrompt = `You are an expert Japanese tutor and quiz generator. 
-You will be prompted with a single piece of Japanese Vocab: a word or grammar concept (the 'topic') and an optional reading and meaning. 
+    const systemPrompt = `You are an expert Japanese tutor and quiz generator.
+You will be prompted with a single piece of Japanese Vocab: a word or grammar concept (the 'topic') and an optional reading and meaning.
 Your task is to create a single, context-based question to test the user's understanding of that word or grammar concept.
 If a reading and/or meaning are provided, you MUST generate a question where the topic matches those specific constraints. Do not generate questions for alternative readings or meanings of the same word.
 You MUST generate a question using the following form:
@@ -100,169 +181,99 @@ Rules:
 12. If the question requires conjugation of a verb and the answer is not the base form, provide enough context to disambiguate the answer.
 13. Do not add any text before or after the JSON object.`;
 
-    let parsedJson: {
-      question: string;
-      answer: string;
-      context?: string;
-      accepted_alternatives?: string[];
-    } | undefined; // Capture parsed result
-
-    if (!topic) {
-      throw new BadRequestException('Topic is required');
-    }
-
     let reading: string | undefined;
     let meaning: string | undefined;
     if (kuId) {
       const kuData = await this.knowledgeUnitsService.findOne(kuId);
       reading = kuData.data?.reading;
-      // Use 'meaning' (Kanji) or 'definition' (Vocab) depending on what's available
       meaning = kuData.data?.meaning || kuData.data?.definition;
     }
-
-    // --- Persistence Logic ---
-    let facetData: ReviewFacet | undefined;
-    let returnedQuestionId: string | null = null;
-
-    if (facetId) {
-      facetData = (await this.reviewsService.getByFacetId(uid, facetId)) as ReviewFacet;
-
-      if (facetData) {
-
-        if (
-          facetData.currentQuestionId &&
-          (facetData.questionAttempts || 0) < 3
-        ) {
-          this.logger.log(
-            `Reusing question ${facetData.currentQuestionId} for facet ${facetId} (attempts: ${facetData.questionAttempts})`,
-          );
-
-
-          const questionDoc = await this.db
-            .collection(QUESTIONS_COLLECTION)
-            .doc(facetData.currentQuestionId)
-            .get();
-
-          if (questionDoc.exists) {
-            const questionItem = questionDoc.data() as QuestionItem;
-
-            // Check if the question is active
-            if (questionItem.status === "inactive") {
-              this.logger.log(`Question ${facetData.currentQuestionId} is inactive. Generating new one.`);
-            } else {
-              this.logger.log(`Question ${facetData.currentQuestionId} found and active. Returning it.`);
-              // Return the stored question data directly
-              // We need to map it back to the expected response format
-              return {
-                question: questionItem.data.question,
-                context: questionItem.data.context,
-                answer: questionItem.data.answer,
-                accepted_alternatives: questionItem.data.acceptedAlternatives,
-                questionId: questionItem.id, // Return the ID
-                status: questionItem.status, // Return the status
-              };
-            }
-          } else {
-            this.logger.log(`Question ${facetData.currentQuestionId} not found. Generating new one.`);
-          }
-        } else {
-          this.logger.log(
-            `Not reusing question. currentQuestionId: ${facetData.currentQuestionId}, attempts: ${facetData.questionAttempts}`,
-          );
-        }
-      } else {
-        this.logger.log`Facet ${facetId} not found`
-      }
-    }
-
-    const runningListSummary = "No weak points identified yet."; // TODO: re-implement running list
 
     let userMessage = `Topic: ${topic}`;
     if (reading) userMessage += `\nReading: ${reading}`;
     if (meaning) userMessage += `\nMeaning: ${meaning}`;
-    userMessage += `\n`;
 
-    // TODO: What to do about the empty LogContext argument?
     const questionString = await this.geminiService.generateQuestionAI(userMessage, systemPrompt, {});
 
-    // Here we get back the json text from Gemini. We need to check we got something and then parse it
-    if (!questionString) {
-      this.logger.error("AI response was empty.");
-      throw new Error("AI response was empty.");
-    }
+    if (!questionString) throw new Error('AI response was empty.');
 
-    // 4. Parse and validate (keeping existing robust parsing logic)
+    let parsed: { question: string; answer: string; context?: string; accepted_alternatives?: string[] };
     try {
-      parsedJson = JSON.parse(questionString);
-    } catch (parseError) {
-      this.logger.error("Failed to parse AI JSON response", {
-        questionString,
-        parseError,
-      });
-      throw new Error("Failed to parse AI JSON response");
+      parsed = JSON.parse(questionString);
+    } catch {
+      throw new Error('Failed to parse AI JSON response');
     }
 
-    if (!parsedJson) {
-      throw new Error(
-        "Evaluation result is missing after AI response parsing.",
-      );
-    }
-
-    // --- Save Generated Question ---
-    if (facetId) {
-      try {
-        const newQuestionRef = this.db.collection(QUESTIONS_COLLECTION).doc();
-        const newQuestionItem: QuestionItem = {
-          id: newQuestionRef.id,
-          kuId: kuId || topic, // Use kuId if available, fallback to topic
-          data: {
-            question: parsedJson.question,
-            context: parsedJson.context,
-            answer: parsedJson.answer,
-            acceptedAlternatives: parsedJson.accepted_alternatives,
-            difficulty: "JLPT-N5", // TODO Need to get this value from the generate-question response eventually
-          },
-          createdAt: Timestamp.now(),
-          lastUsed: Timestamp.now(),
-          userId: uid,
-          status: "active", // Default status
-        };
-
-        await newQuestionRef.set(newQuestionItem);
-        this.logger.log(`Saved new question: ${newQuestionRef.id}`);
-
-        // Update Facet
-        await this.reviewsService.updateFacetQuestion(uid, facetId, newQuestionRef.id);
-        returnedQuestionId = newQuestionRef.id;
-      } catch (saveError) {
-        this.logger.error("Failed to save generated question", saveError);
-        // Don't fail the request if saving fails, just log it
-      }
-    }
-
-    return {
-      ...parsedJson,
-      questionId: returnedQuestionId,
-      status: 'active', // New questions are always active
+    const ref = this.db.collection(QUESTIONS_COLLECTION).doc();
+    const newQuestion: QuestionItem = {
+      id: ref.id,
+      kuId,
+      data: {
+        question: parsed.question,
+        context: parsed.context,
+        answer: parsed.answer,
+        acceptedAlternatives: parsed.accepted_alternatives,
+        difficulty: 'JLPT-N5',
+      },
+      rank: 50,
+      rejectionCount: 0,
+      createdAt: Timestamp.now(),
     };
 
-  } // end generateQuestion
+    await ref.set(newQuestion);
+    this.logger.log(`Saved new question ${ref.id} for KU ${kuId}`);
 
-  async updateStatus(uid: string, id: string, status: 'active' | 'flagged' | 'inactive') {
-    const docRef = this.db.collection(QUESTIONS_COLLECTION).doc(id);
-    const doc = await docRef.get();
-
-    if (!doc.exists) {
-      throw new NotFoundException('Question not found');
+    if (facetId) {
+      await this.reviewsService.updateFacetQuestion(uid, facetId, ref.id);
     }
 
-    if (doc.data()?.userId !== uid) {
-      throw new NotFoundException('Question not found');
+    return this.toResponse(newQuestion, true);
+  }
+
+  async recordAnswer(uid: string, questionId: string, kuId: string, result: 'pass' | 'fail') {
+    const questionRef = this.db.collection(QUESTIONS_COLLECTION).doc(questionId);
+    const stateRef = this.questionStatesRef(uid).doc(questionId);
+
+    const batch = this.db.batch();
+
+    if (result === 'pass') {
+      batch.update(questionRef, { rank: FieldValue.increment(RANK_CORRECT_DELTA) });
+      batch.set(stateRef, { questionId, kuId, consecutiveFailures: 0 }, { merge: true });
+    } else {
+      batch.set(stateRef, { questionId, kuId, consecutiveFailures: FieldValue.increment(1) }, { merge: true });
     }
 
-    await docRef.update({ status });
+    try {
+      await batch.commit();
+    } catch (err) {
+      this.logger.error(`Failed to record answer for question ${questionId}`, err);
+    }
+  }
 
-    this.logger.log(`Updated question ${id} status to ${status}`);
-    return { id, status };
-  } // end updateStatus
+  async recordFeedback(uid: string, questionId: string, feedback: 'keep' | 'request-new' | 'report') {
+    const questionRef = this.db.collection(QUESTIONS_COLLECTION).doc(questionId);
+    const doc = await questionRef.get();
+
+    if (!doc.exists) throw new NotFoundException('Question not found');
+
+    const stateRef = this.questionStatesRef(uid).doc(questionId);
+    const batch = this.db.batch();
+
+    switch (feedback) {
+      case 'keep':
+        batch.update(questionRef, { rank: FieldValue.increment(RANK_KEEP_DELTA) });
+        break;
+      case 'request-new':
+        batch.update(questionRef, { rejectionCount: FieldValue.increment(1) });
+        batch.set(stateRef, { rejected: true }, { merge: true });
+        break;
+      case 'report':
+        batch.update(questionRef, { rank: FieldValue.increment(RANK_REPORT_DELTA) });
+        break;
+    }
+
+    await batch.commit();
+    this.logger.log(`Recorded feedback '${feedback}' for question ${questionId}`);
+    return { questionId, feedback };
+  }
 }

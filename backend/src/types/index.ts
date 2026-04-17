@@ -272,6 +272,7 @@ export interface ReviewFacet {
     stage: number;
   }>;
   currentQuestionId?: string;
+  /** @deprecated - failure tracking moved to UserQuestionState.consecutiveFailures */
   questionAttempts?: number;
   data?: any;
 }
@@ -302,8 +303,6 @@ export type LessonDifficulty =
 
 export interface QuestionItem {
   id: string;
-  /** @deprecated - migrating to User state models */
-  userId: string;
   kuId: string;
   data: {
     context?: string;
@@ -312,12 +311,16 @@ export interface QuestionItem {
     acceptedAlternatives?: string[];
     difficulty: LessonDifficulty;
   };
-  /** @deprecated - migrating to User state models */
-  status?: "active" | "flagged" | "inactive"; // Default is 'active' if undefined
+  rank: number;        // 0–100, starts at 50; suitable threshold is 30
+  rejectionCount: number; // tracked for observability; not used for ranking
   createdAt: string | Timestamp;
-  /** @deprecated - migrating to User state models */
+  /** @deprecated */
+  userId?: string;
+  /** @deprecated */
+  status?: "active" | "flagged" | "inactive";
+  /** @deprecated */
   lastUsed?: string | Timestamp;
-  /** @deprecated - migrating to User state models */
+  /** @deprecated */
   previousAnswers?: {
     answer: string;
     result: "pass" | "fail";
@@ -326,15 +329,10 @@ export interface QuestionItem {
 }
 
 export interface UserQuestionState {
-  userId: string;
-  questionId: string; // Bridges to GlobalQuestion.id
-  status: "active" | "flagged" | "inactive";
-  lastUsed?: string | Timestamp;
-  previousAnswers?: {
-    answer: string;
-    result: "pass" | "fail";
-    timestamp: Timestamp;
-  }[];
+  questionId: string;
+  kuId: string;
+  rejected: boolean;       // user will never see this question again
+  consecutiveFailures: number; // resets on correct answer; 3+ triggers rotation
 }
 
 // ─── Feed Engine Types ────────────────────────────────────────────────

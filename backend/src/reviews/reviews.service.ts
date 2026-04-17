@@ -178,10 +178,7 @@ export class ReviewsService {
     }
 
     async updateFacetQuestion(uid: string, facetId: string, questionId: string) {
-        await this.facetsColRef(uid).doc(facetId).update({
-            currentQuestionId: questionId,
-            questionAttempts: 0,
-        });
+        await this.facetsColRef(uid).doc(facetId).update({ currentQuestionId: questionId });
         this.logger.log(`Updated facet ${facetId} with new question ${questionId}`);
     }
 
@@ -192,6 +189,7 @@ export class ReviewsService {
         question: string,
         topic: string,
         questionId: string,
+        kuId: string,
     ) {
         // 1. Local Check
         const isLocalMatch = expectedAnswers.some(
@@ -200,15 +198,10 @@ export class ReviewsService {
 
         if (isLocalMatch) {
             this.logger.log(`Local match passed for topic: ${topic}`);
-            this.questionsService.updateQuestionHistory(
-                questionId,
-                userAnswer,
-                'pass',
-            );
-            return {
-                result: 'pass',
-                explanation: 'Correct!',
-            };
+            if (questionId) {
+                await this.questionsService.recordAnswer(uid, questionId, kuId, 'pass');
+            }
+            return { result: 'pass', explanation: 'Correct!' };
         }
 
         // 2. AI Fallback
@@ -223,7 +216,7 @@ export class ReviewsService {
 Your task is to evaluate if the user's answer is correct.
 1.  Read the "expected answer(s)". This may be a single answer (e.g., "Family") or a comma-separated list of possible correct answers (e.g., "ドク, トク, よむ").
 2.  Compare the user's answer to the list. The user is correct if their answer is *any one* of the items in the list.
-3.  If you feel that the answer is correct but not in the list, return a pass with an explanation.  
+3.  If you feel that the answer is correct but not in the list, return a pass with an explanation.
 4.  Be lenient with hiragana vs katakana (e.g., if expected is "ドク" and user typed "どく", it's a pass).
 5.  Be lenient with extra punctuation or whitespace.
 6.  Provide your evaluation ONLY as a valid JSON object with the following schema:
@@ -235,21 +228,18 @@ Example for a pass: {"result": "pass", "explanation": "Correct! よむ is one of
 Example for a fail: {"result": "fail", "explanation": "Incorrect. The expected readings were ドク, トク, or よむ."}
 `;
 
-        const schema = {
-            type: 'OBJECT',
-            properties: {
-                result: { type: 'STRING', enum: ['pass', 'fail'] },
-                explanation: { type: 'STRING' },
-            },
-            required: ['result', 'explanation'],
-        };
-
-        return this.geminiService.evaluateAnswer(
+        const evalResult = await this.geminiService.evaluateAnswer(
             systemPrompt,
             userAnswer,
             expectedAnswers,
             { userAnswer, expectedAnswers, question, topic },
-        );
+        ) as { result: 'pass' | 'fail'; explanation: string };
+
+        if (questionId) {
+            await this.questionsService.recordAnswer(uid, questionId, kuId, evalResult.result);
+        }
+
+        return evalResult;
     } // END evaluateAnswer
 
     async generateReviewFacets(

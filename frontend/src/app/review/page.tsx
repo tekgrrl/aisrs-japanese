@@ -38,9 +38,7 @@ export default function ReviewPage() {
   const [dynamicQuestionId, setDynamicQuestionId] = useState<string | null>(
     null,
   );
-  const [dynamicQuestionStatus, setDynamicQuestionStatus] = useState<
-    "active" | "flagged" | "inactive" | null
-  >(null);
+  const [dynamicQuestionIsNew, setDynamicQuestionIsNew] = useState<boolean>(false);
 
   // --- Feedback Modal State ---
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
@@ -141,14 +139,14 @@ export default function ReviewPage() {
         context,
         accepted_alternatives,
         questionId,
-        status,
+        isNew,
       } = await response.json();
       setDynamicQuestion(question);
       setDynamicAnswer(answer);
       setDynamicContext(context || null);
       setDynamicAltAnswers(accepted_alternatives || null);
       setDynamicQuestionId(questionId || null);
-      setDynamicQuestionStatus(status || "active");
+      setDynamicQuestionIsNew(isNew ?? false);
     } catch (err) {
       if (err instanceof Error) setError(err.message);
       else setError("An unknown error occurred");
@@ -206,9 +204,8 @@ export default function ReviewPage() {
       setDynamicAnswer(null);
       setDynamicAltAnswers([]);
       setDynamicContext(null);
-      setDynamicContext(null);
       setDynamicQuestionId(null);
-      setDynamicQuestionStatus(null);
+      setDynamicQuestionIsNew(false);
 
       fetchDynamicQuestion(
         currentItem.ku.content,
@@ -220,9 +217,8 @@ export default function ReviewPage() {
       setDynamicAnswer(null);
       setDynamicAltAnswers([]);
       setDynamicContext(null);
-      setDynamicContext(null);
       setDynamicQuestionId(null);
-      setDynamicQuestionStatus(null);
+      setDynamicQuestionIsNew(false);
     }
   }, [currentItem, currentIndex]); // Re-run whenever the currentItem OR the index changes
 
@@ -281,46 +277,27 @@ export default function ReviewPage() {
     }
   };
 
-  const updateQuestionStatus = async (
+  const recordFeedback = async (
     questionId: string,
-    status: "active" | "flagged" | "inactive",
+    feedback: "keep" | "request-new" | "report",
   ) => {
     try {
-      // TODO use nestjs backend service instead
-      const res = await apiFetch(`/api/questions/${questionId}`, {
+      const res = await apiFetch(`/api/questions/${questionId}/feedback`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status }),
+        body: JSON.stringify({ feedback }),
       });
       if (!res.ok) {
-        console.error(
-          `[ReviewPage] updateQuestionStatus failed: ${res.status}`,
-        );
+        console.error(`[ReviewPage] recordFeedback failed: ${res.status}`);
       }
     } catch (err) {
-      console.error("Failed to update question status", err);
+      console.error("Failed to record feedback", err);
     }
   };
 
   const isNewAiQuestion = (item: ReviewItem) => {
     if (item.facet.facetType !== "AI-Generated-Question") return false;
-
-    // If we don't have a dynamic question ID yet, we can't determine.
-    // But this is called during answer evaluation, so it should be set.
-    if (!dynamicQuestionId) return false;
-
-    // If the facet has a recorded question ID that matches the current one,
-    // it means we've seen this question before... UNLESS it is flagged.
-    // If it is flagged (Undecided), we treat it as new so the user can rate it again.
-    if (
-      item.facet.currentQuestionId === dynamicQuestionId &&
-      dynamicQuestionStatus !== "flagged"
-    ) {
-      return false;
-    }
-
-    // Otherwise (no recorded ID, or different ID, or flagged), it's a new question (or needs input).
-    return true;
+    return dynamicQuestionIsNew;
   };
 
   const handleEvaluateAnswer = async (e: FormEvent) => {
@@ -387,8 +364,9 @@ export default function ReviewPage() {
           expectedAnswers,
           question,
           topic,
-          questionType, // Add questionType to the payload
-          questionId, // Add questionId to the payload
+          questionType,
+          questionId,
+          kuId: currentItem.ku.id,
         }),
       });
 
@@ -514,65 +492,20 @@ export default function ReviewPage() {
   };
 
   const handleFeedbackKeep = async () => {
-    if (pendingSrsResult) {
-      await handleUpdateSrs(pendingSrsResult);
-    }
-    // Status is already 'active' by default, so no need to patch unless we want to be explicit
-    // But let's be safe and ensure it's active if it was somehow not
-    if (dynamicQuestionId) {
-      await updateQuestionStatus(dynamicQuestionId, "active");
-
-      // Update local facet state so if it reappears, it's not "new"
-      if (currentItem) {
-        currentItem.facet.currentQuestionId = dynamicQuestionId;
-      }
-    } else {
-      console.warn(
-        "[ReviewPage] handleFeedbackKeep: No dynamicQuestionId to update",
-      );
-    }
+    if (pendingSrsResult) await handleUpdateSrs(pendingSrsResult);
+    if (dynamicQuestionId) await recordFeedback(dynamicQuestionId, "keep");
     advanceToNext();
   };
 
   const handleFeedbackRequestNew = async () => {
-    // Mark as inactive
-    if (dynamicQuestionId) {
-      await updateQuestionStatus(dynamicQuestionId, "inactive");
-    }
-    // Do NOT record SRS history (skip handleUpdateSrs)
-    // But we DO need to make sure this item stays in the queue?
-    // The requirement says: "Re-queue the review facet so it appears again later (with a fresh question)."
-    // If we just advance index, it's gone from this session (unless we re-add it?)
-    // But `reviewQueue` is static for the session usually.
-    // If we want it to appear *later*, we can just leave it alone.
-    // But we are advancing index.
-    // If we want it to appear *in this session* again, we should append it to queue?
-    // "Re-queue... so it appears again later". This could mean "next session".
-    // If we don't update SRS, `nextReviewAt` is still in the past. So it will be fetched next time.
-    // So advancing index is fine. It will just be skipped for now.
-
+    if (dynamicQuestionId) await recordFeedback(dynamicQuestionId, "request-new");
+    // Don't update SRS — facet stays due so it reappears with a fresh question next session
     advanceToNext();
   };
 
   const handleFeedbackUndecided = async () => {
-    // Mark as flagged (so it shows up again next time)
-    if (dynamicQuestionId) {
-      await updateQuestionStatus(dynamicQuestionId, "flagged");
-
-      // Update local facet state so if it reappears, it's not "new"...
-      // ACTUALLY, we want the modal to show again.
-      // But we update the facet's question ID to ensure we track usage.
-      if (currentItem) {
-        currentItem.facet.currentQuestionId = dynamicQuestionId;
-      }
-    }
-
-    // Record SRS tracking data based on the ACTUAL result (pass or fail)
-    // Just like "Keep", we respect the user's answer.
-    if (pendingSrsResult) {
-      await handleUpdateSrs(pendingSrsResult);
-    }
-
+    if (dynamicQuestionId) await recordFeedback(dynamicQuestionId, "report");
+    if (pendingSrsResult) await handleUpdateSrs(pendingSrsResult);
     advanceToNext();
   };
 
