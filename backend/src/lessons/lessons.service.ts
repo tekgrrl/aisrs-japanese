@@ -178,8 +178,9 @@ ${VOCAB_INSTRUCTIONS}`;
       if (Object.keys(updates).length > 0) {
         try {
           this.logger.log(`Updating KU ${kuId} with lesson data: ${JSON.stringify(updates)}`);
-          await this.knowledgeUnitsService.update(uid, kuId, updates);
+          await this.knowledgeUnitsService.update(kuId, updates);
         } catch (e) {
+          console.log(e);
           this.logger.error(`Failed to backfill KU ${kuId} with lesson data`, e);
           // Don't fail the response, just log error
         }

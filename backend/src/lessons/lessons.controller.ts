@@ -34,7 +34,7 @@ export class LessonsController {
             const trimmed = content.trim();
             if (!trimmed) continue;
 
-            const id = await this.knowledgeUnitsService.ensureVocab(uid, trimmed);
+            const id = await this.knowledgeUnitsService.ensureVocab(trimmed);
             batchItems.push({ id, content: trimmed });
           } catch (e) {
             this.logger.error(`Failed to ensure KU for ${content}`, e);

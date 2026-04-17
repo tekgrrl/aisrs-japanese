@@ -60,10 +60,11 @@ Basic Vocab data was extracted from Wanikani and then boiled down to non-proprie
 - **Meta requirement**: The manage page should eventually be just and admin function and not a list of the Vocab the User has in their learning or review queues or in their overall user context (if we go down that route). This requires a lot of other work to be done first.
 
 ### Users
-- (Given) Global KU data is stored in the `knowledge-units` collection in Firestore and accessed via the `knowledge-units` service.
-- (ToDo)User KU data **should be** metadata that references global KU data (not replicates). It should be stored in users/{uid}/user-kus
-- (ToDo) We need to fully implement users and provide a way for users to sign up and log in.
-  - When a new user logs in for the first time they'll start with a clean slate. Once we have this condition in place we can start to implement a way to add KUs to a user's learning queue using Scenarios and other tools.
+- (Done) Global KU data is stored in the `knowledge-units` collection in Firestore, accessed via the `knowledge-units` service. The service is now user-agnostic — no `userId` filtering on reads, no `userId` written to new documents.
+- (Done) User KU metadata is stored in `users/{uid}/user-kus` as `UserKnowledgeUnit` documents referencing global KUs via `kuId`. Managed by `UserKnowledgeUnitsService`.
+- (Done) Users can sign up and log in via passwordless email-link auth.
+- (Done) When a user interacts with a scenario and clicks "Start Drilling", `UserKnowledgeUnit` documents are created in their sub-collection — this populates their Learning Queue.
+- (ToDo) Questions need a design overhaul — reuse/rotation logic for AI-Generated-Question facets is broken (always reuses the same question regardless of attempt count).
 
 ## User Management, Authentication & Multi-Tenancy
 
@@ -71,7 +72,7 @@ This section documents the current implementation of auth and user scoping so th
 
 ### Current State Summary
 
-Authentication plumbing exists end-to-end but the system effectively operates as **single-tenant** today because the only real user in development is the hardcoded `user_default`. Firebase anonymous auth is wired up on the frontend and real Firebase ID tokens are passed to the backend, but the backend guard silently falls back to `user_default` on any failure or missing token in dev mode.
+The system is now **multi-tenant**. Real users sign in via passwordless email-link auth and get fully isolated data in Firestore sub-collections. The admin user (`user_default`) retains access to top-level collections for corpus management. The backend guard falls back to `user_default` in dev mode when no token is present.
 
 ---
 
@@ -98,9 +99,9 @@ Authentication plumbing exists end-to-end but the system effectively operates as
 
 `backend/src/auth/user-id.decorator.ts` — `@UserId()` param decorator that reads `request.user?.uid`. Used on every protected controller method.
 
-**Hardcoded default user**
+**Admin/default user**
 
-`backend/src/lib/constants.ts` exports `CURRENT_USER_ID = 'user_default'`. The string `'user_default'` is also used directly in the guard. All Firestore documents written during local development will have `userId: 'user_default'`.
+`backend/src/lib/constants.ts` exports `ADMIN_USER_ID = 'user_default'`. The string `'user_default'` is also hardcoded directly in `firebase-auth.guard.ts` (dev-mode fallback) — a TODO exists in `constants.ts` to consolidate this. The admin user manages the global KU corpus and writes to top-level Firestore collections; all other users write to per-user sub-collections.
 
 ---
 
@@ -139,12 +140,14 @@ The database uses **flat top-level collections** (not Firestore sub-collections 
 
 | Collection | Scoped by userId? | Notes |
 |---|---|---|
-| `knowledge-units` | Yes (field) | All vocab KUs live here; `userId` field set on every doc |
-| `review-facets` | Yes (field) | SRS state per KU facet |
+| `knowledge-units` | **No** | Global corpus — no `userId` on new docs; legacy docs may still have `userId: 'user_default'` |
+| `users/{uid}/user-kus` | Yes — sub-collection path | Per-user KU metadata; `kuId` references global KU |
+| `users/{uid}/review-facets` | Yes — sub-collection path | Per-user SRS facets (non-admin users) |
+| `review-facets` | Yes (field) | Admin (`user_default`) SRS facets only; `userId` field still required |
 | `lessons` | Yes (field) | AI-generated lesson documents |
-| `questions` | Yes (field) | Question documents |
+| `questions` | Yes (field) | Question documents (global pool, referenced by facet `currentQuestionId`) |
 | `scenarios` | Yes (field) | Roleplay scenario state |
-| `user-stats` | Yes — doc ID is uid | Legacy stats; `USER_STATS_COLLECTION).doc(uid)` |
+| `user-stats` | Yes — doc ID is uid | Legacy stats; `USER_STATS_COLLECTION.doc(uid)` |
 | `users` | Yes — doc path `users/{uid}` | `UserRoot` document (stats, tutorContext, preferences) |
 | `api-logs` | **No** | Centralised logging; no user field |
 
@@ -189,11 +192,12 @@ The following work is required to complete proper multi-user support. Each item 
 - When a new UID is seen for the first time, create a `users/{uid}` document (default `UserRoot`) and seed any required initial state.
 - This can live in the `UsersService` (`backend/src/users/user.service.ts`) called from an `onAuthStateChanged` or a dedicated `/users/init` endpoint.
 
-**3. Migrate KU user-data to `users/{uid}/user-kus`**
-- Currently all KU data (including user-specific fields like `status`, `personalNotes`, `facet_count`) is stored in the flat `knowledge-units` collection with a `userId` field.
-- Target: split into a **global** `knowledge-units` collection (content, reading, meaning, jlptLevel, wanikaniLevel — no `userId`) and a **per-user** sub-collection `users/{uid}/user-kus` (status, personalNotes, facet_count, kuId pointer).
-- The `UserKnowledgeUnit` type already captures this intended shape.
-- Update `KnowledgeUnitsService` to join the two on reads and write to the correct collection on creates/updates.
+**3. ~~Migrate KU user-data to `users/{uid}/user-kus`~~ — Done**
+- `knowledge-units` is now a global corpus with no `userId` on new documents.
+- `users/{uid}/user-kus` sub-collection holds per-user KU metadata via `UserKnowledgeUnitsService`.
+- `users/{uid}/review-facets` sub-collection holds per-user SRS facets for non-admin users.
+- The Learning Queue (`GET /api/knowledge-units/get-all?status=learning`) returns only the user's UKU-joined global KUs.
+- `KnowledgeUnitsController.findOne` authorises access via direct ownership (admin) OR existence of a UKU for that `kuId`.
 
 **4. Harden the dev guard bypass**
 - The current fallback to `user_default` on any token failure in dev mode is useful but should log a warning so it is obvious when a real token is being silently dropped.
@@ -227,6 +231,15 @@ Previously, the Next.js `frontend` app hosted Next API Routes (`/src/app/api/...
   NEXT_PUBLIC_DEV_SKIP_AUTH=true NEXT_PUBLIC_DEV_USER_ID=<uid> yarn dev
   ```
   Omit `NEXT_PUBLIC_DEV_USER_ID` to fall back to `user_default`.
+**Multi-tenant data isolation (2026-04)**
+
+- **`knowledge-units` made global**: Removed `userId` from all `KnowledgeUnitsService` method signatures and Firestore queries. New KU documents are written without a `userId` field. `KnowledgeUnitsService` is now user-agnostic; `findByContent` absorbs the former `findByContentGlobal`.
+- **`UserKnowledgeUnitsService`** added (`backend/src/user-knowledge-units/`): manages `users/{uid}/user-kus` sub-collection. `create(uid, kuId)` is idempotent. `findLearningQueueAsKUs(uid)` batch-joins UKUs with their global KUs for the learning queue endpoint.
+- **Scenario → UKU flow**: `ScenariosService.advanceState` (encounter→drill) now creates `UserKnowledgeUnit` records instead of `KnowledgeUnit` records. Vocab not found in the global corpus is skipped with a warning.
+- **`review-facets` per-user sub-collection**: `ReviewsService` routes all facet reads/writes to `users/{uid}/review-facets` for non-admin users; `user_default` continues to use the top-level `review-facets` collection with `userId` field scoping. Same routing applied in `StatsService`.
+- **`ADMIN_USER_ID` constant**: `CURRENT_USER_ID` renamed to `ADMIN_USER_ID` in `backend/src/lib/constants.ts`. The string `'user_default'` remains hardcoded in `firebase-auth.guard.ts` pending a follow-up cleanup.
+- **Frontend**: `refreshStats` event dispatched after successful encounter→drill advance so the Learn tab badge updates immediately.
+
 - **Firebase Console prerequisites** for project `gen-lang-client-0878434798`:
   1. Authentication → Sign-in method → **Email/Password** enabled.
   2. Authentication → Sign-in method → **Email link (passwordless sign-in)** enabled (sub-toggle under Email/Password).

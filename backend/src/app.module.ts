@@ -16,9 +16,10 @@ import { ScenariosModule } from './scenarios/scenarios.module';
 import { AudioModule } from './audio/audio.module';
 import { AuthModule } from './auth/auth.module';
 import { UserModule } from './users/user.module';
+import { UserKnowledgeUnitsModule } from './user-knowledge-units/user-knowledge-units.module';
 
 @Module({
-  imports: [ReviewsModule, FirebaseModule, GeminiModule, ConfigModule.forRoot(), QuestionsModule, ApilogModule, LessonsModule, KnowledgeUnitsModule, StatsModule, KanjiModule, ScenariosModule, AudioModule, AuthModule, UserModule],
+  imports: [ReviewsModule, FirebaseModule, GeminiModule, ConfigModule.forRoot(), QuestionsModule, ApilogModule, LessonsModule, KnowledgeUnitsModule, StatsModule, KanjiModule, ScenariosModule, AudioModule, AuthModule, UserModule, UserKnowledgeUnitsModule],
   controllers: [AppController],
   providers: [AppService, QuestionsService],
 })
