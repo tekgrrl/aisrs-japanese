@@ -226,6 +226,7 @@ export default function ScenarioPage({
       // Refresh scenario data to reflect new state
       await fetchScenario();
       if (scenario.state === "encounter") {
+        window.dispatchEvent(new CustomEvent("refreshStats"));
         alert("Vocabulary added to your queue!");
       } else if (scenario.state === "drill") {
         // Moved to simulate

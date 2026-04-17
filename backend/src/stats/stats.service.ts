@@ -4,10 +4,12 @@ import {
     FIRESTORE_CONNECTION,
     KNOWLEDGE_UNITS_COLLECTION,
     REVIEW_FACETS_COLLECTION,
-    USER_STATS_COLLECTION // Make sure this is exported in firebase.module/constants
+    USER_STATS_COLLECTION,
+    USER_KUS_SUBCOLLECTION,
 } from '../firebase/firebase.module';
+import { ADMIN_USER_ID } from '../lib/constants';
 
-// Removed CURRENT_USER_ID
+// Removed ADMIN_USER_ID
 
 @Injectable()
 export class StatsService {
@@ -23,23 +25,33 @@ export class StatsService {
             .count()
             .get();
 
+        const ukuLearnQuery = this.db.collection('users').doc(uid)
+            .collection(USER_KUS_SUBCOLLECTION)
+            .where("status", "==", "learning")
+            .count()
+            .get();
+
         const reviewQuery = this.db.collection(KNOWLEDGE_UNITS_COLLECTION)
             .where("userId", "==", uid)
             .where("status", "==", "reviewing")
             .count()
             .get();
 
-        const reviewsDueQuery = this.db.collection(REVIEW_FACETS_COLLECTION)
-            .where("userId", "==", uid)
-            .where("nextReviewAt", "<=", Timestamp.now()) // Safe timestamp comparison
+        const facetsCol = uid === ADMIN_USER_ID
+            ? this.db.collection(REVIEW_FACETS_COLLECTION).where('userId', '==', uid)
+            : this.db.collection('users').doc(uid).collection(REVIEW_FACETS_COLLECTION);
+
+        const reviewsDueQuery = facetsCol
+            .where("nextReviewAt", "<=", Timestamp.now())
             .count()
             .get();
 
         // New: Fetch User Stats Document
         const userStatsQuery = this.db.collection(USER_STATS_COLLECTION).doc(uid).get();
 
-        const [learnSnapshot, reviewingSnapshot, reviewsSnapshot, userStatsDoc] = await Promise.all([
+        const [learnSnapshot, ukuLearnSnapshot, reviewingSnapshot, reviewsSnapshot, userStatsDoc] = await Promise.all([
             learnQuery,
+            ukuLearnQuery,
             reviewQuery,
             reviewsDueQuery,
             userStatsQuery
@@ -119,7 +131,7 @@ export class StatsService {
         }
 
         return {
-            learnCount: learnSnapshot.data().count,
+            learnCount: learnSnapshot.data().count + ukuLearnSnapshot.data().count,
             reviewCount: totalActive,
             reviewsDue: reviewsDueCount,
 

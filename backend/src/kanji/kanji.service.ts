@@ -31,13 +31,13 @@ export class KanjiService {
         this.logger.log(`apiData = ${JSON.stringify(apiData)}`);
 
         // 2. Fetch Contextual Data (Related Vocab from DB)
-        const relatedVocab = await this.knowledgeUnitsService.findByKanjiComponent(uid, kanjiChar);
+        const relatedVocab = await this.knowledgeUnitsService.findByKanjiComponent(kanjiChar);
 
         // 3. Fetch User Data (Personal Mnemonic) if kuId exists
         let personalMnemonic = '';
         if (kuId) {
             try {
-                const ku = await this.knowledgeUnitsService.findOne(uid, kuId);
+                const ku = await this.knowledgeUnitsService.findOne(kuId);
                 personalMnemonic = ku.personalNotes || ''; // Or a specific field if you added one
             } catch (e) {
                 // Ignore if KU doesn't exist yet (unlikely if coming from lesson page)

@@ -7,7 +7,8 @@ import {
 } from '@nestjs/common';
 import { Firestore, CollectionReference, Timestamp, FieldValue } from 'firebase-admin/firestore';
 import { Scenario, GenerateScenarioDto, ScenarioState, ExtractedKU, ChatMessage, ScenarioEvaluation, ScenarioAttempt } from '../types/scenario';
-import { KnowledgeUnitsService } from '../knowledge-units/knowledge-units.service'; // Import Service
+import { KnowledgeUnitsService } from '../knowledge-units/knowledge-units.service';
+import { UserKnowledgeUnitsService } from '../user-knowledge-units/user-knowledge-units.service';
 import { FIRESTORE_CONNECTION, SCENARIOS_COLLECTION } from '../firebase/firebase.module';
 import { GeminiService } from '../gemini/gemini.service';
 
@@ -32,7 +33,8 @@ export class ScenariosService {
   constructor(
     @Inject(FIRESTORE_CONNECTION) private readonly db: Firestore,
     private readonly geminiService: GeminiService,
-    private readonly knowledgeUnitsService: KnowledgeUnitsService, // Inject Service
+    private readonly knowledgeUnitsService: KnowledgeUnitsService,
+    private readonly userKnowledgeUnitsService: UserKnowledgeUnitsService,
   ) {
     this.collectionRef = this.db.collection(SCENARIOS_COLLECTION);
   }
@@ -112,7 +114,14 @@ export class ScenariosService {
         targetVocab: dto.targetVocab
       };
 
-      await docRef.set(newScenario);
+      // console.log(newScenario);
+      console.dir(dto, { depth: null, colors: true });
+
+      const cleanData = Object.fromEntries(
+        Object.entries(newScenario).filter(([_, value]) => value !== undefined)
+      );
+
+      await docRef.set(cleanData);
       return id;
 
     } catch (error) {
@@ -133,55 +142,33 @@ export class ScenariosService {
     switch (scenario.state) {
       case 'encounter':
         // Transition Encounter -> Drill
-        // 1. Process Extracted KUs (Smart Linking)
+        // Link each extracted KU to its global KU and create a UserKnowledgeUnit.
         if (scenario.extractedKUs && scenario.extractedKUs.length > 0) {
           const updatedKUs: ExtractedKU[] = [];
 
           for (const ku of scenario.extractedKUs) {
-            // Only process if it doesn't already have an ID (idempotency)
             if (ku.kuId) {
               updatedKUs.push(ku);
               continue;
             }
 
             try {
-              // Map 'vocab' (scenario) to 'Vocab' (KU type)
-              // Currently scenarios only produce 'vocab', but handled generically if possible
-              // or just hardcoded for now since Scenario only has 'vocab' and 'kanji' logic is undefined there
-              const kuType = 'Vocab';
+              const globalKu = await this.knowledgeUnitsService.findByContent(ku.content, 'Vocab');
 
-              // Check existing
-              const existing = await this.knowledgeUnitsService.findByContent(uid, ku.content, kuType);
-
-              if (existing) {
-                this.logger.log(`Smart Link: Found existing KU for "${ku.content}" (ID: ${existing.id})`);
-                updatedKUs.push({ ...ku, kuId: existing.id, status: 'learning' }); // Linked!
+              if (globalKu) {
+                this.logger.log(`Linking "${ku.content}" to global KU ${globalKu.id}`);
+                await this.userKnowledgeUnitsService.create(uid, globalKu.id);
+                updatedKUs.push({ ...ku, kuId: globalKu.id, status: 'learning' });
               } else {
-                // Create New
-                this.logger.log(`Smart Link: Creating new KU for "${ku.content}"`);
-
-                const newIdObj = await this.knowledgeUnitsService.create(uid, {
-                  content: ku.content,
-                  type: kuType,
-                  data: {
-                    reading: ku.reading,
-                    definition: ku.meaning,
-                  },
-                  userId: scenario.userId,
-                  // Add metadata from scenario if needed, e.g. source scenario
-                });
-
-                updatedKUs.push({ ...ku, kuId: newIdObj.id, status: 'new' });
+                this.logger.warn(`No global KU found for "${ku.content}" — skipping UKU creation`);
+                updatedKUs.push(ku);
               }
-
             } catch (error) {
               this.logger.error(`Failed to process KU "${ku.content}" during advanceState`, error);
-              // Keep original KU without ID if failed, to avoid data loss, or throw?
-              // For now, keep original, maybe retry later. 
               updatedKUs.push(ku);
             }
           }
-          // Save updated KUs back to scenario
+
           updateData.extractedKUs = updatedKUs;
         }
 

@@ -114,7 +114,7 @@ Rules:
     let reading: string | undefined;
     let meaning: string | undefined;
     if (kuId) {
-      const kuData = await this.knowledgeUnitsService.findOne(uid, kuId);
+      const kuData = await this.knowledgeUnitsService.findOne(kuId);
       reading = kuData.data?.reading;
       // Use 'meaning' (Kanji) or 'definition' (Vocab) depending on what's available
       meaning = kuData.data?.meaning || kuData.data?.definition;
@@ -125,7 +125,7 @@ Rules:
     let returnedQuestionId: string | null = null;
 
     if (facetId) {
-      facetData = (await this.reviewsService.getByFacetId(facetId)) as ReviewFacet;
+      facetData = (await this.reviewsService.getByFacetId(uid, facetId)) as ReviewFacet;
 
       if (facetData) {
 
@@ -232,7 +232,7 @@ Rules:
         this.logger.log(`Saved new question: ${newQuestionRef.id}`);
 
         // Update Facet
-        await this.reviewsService.updateFacetQuestion(facetId, newQuestionRef.id);
+        await this.reviewsService.updateFacetQuestion(uid, facetId, newQuestionRef.id);
         returnedQuestionId = newQuestionRef.id;
       } catch (saveError) {
         this.logger.error("Failed to save generated question", saveError);

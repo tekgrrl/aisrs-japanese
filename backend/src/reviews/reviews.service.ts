@@ -5,16 +5,17 @@ import {
     NotFoundException,
     forwardRef,
 } from '@nestjs/common';
-import { FieldPath, FieldValue, Firestore, Timestamp } from 'firebase-admin/firestore';
+import { CollectionReference, FieldPath, FieldValue, Firestore, Query, Timestamp } from 'firebase-admin/firestore';
 import {
     FIRESTORE_CONNECTION,
     REVIEW_FACETS_COLLECTION,
     KNOWLEDGE_UNITS_COLLECTION,
     USER_STATS_COLLECTION,
 } from '../firebase/firebase.module';
+import { ADMIN_USER_ID } from '../lib/constants';
 import { GeminiService } from '../gemini/gemini.service';
 import { QuestionsService } from '../questions/questions.service';
-// Removed CURRENT_USER_ID import
+// Removed ADMIN_USER_ID import
 import { FacetType, KnowledgeUnit, Lesson, ReviewFacet } from '@/types';
 import { KnowledgeUnitsService } from '../knowledge-units/knowledge-units.service';
 import { LessonsService } from '@/lessons/lessons.service';
@@ -47,30 +48,38 @@ export class ReviewsService {
         private readonly statsService: StatsService,
     ) { }
 
-    async getByFacetId(facetId: string) {
-        const doc = await this.db
-            .collection(REVIEW_FACETS_COLLECTION)
-            .doc(facetId)
-            .get();
+    private facetsColRef(uid: string): CollectionReference {
+        if (uid === ADMIN_USER_ID) {
+            return this.db.collection(REVIEW_FACETS_COLLECTION);
+        }
+        return this.db.collection('users').doc(uid).collection(REVIEW_FACETS_COLLECTION);
+    }
+
+    private facetsBaseQuery(uid: string): Query {
+        const col = this.facetsColRef(uid);
+        return uid === ADMIN_USER_ID ? col.where('userId', '==', uid) : col;
+    }
+
+    async getByFacetId(uid: string, facetId: string) {
+        const doc = await this.facetsColRef(uid).doc(facetId).get();
         if (!doc.exists) return null;
         return doc.data();
     }
 
     async updateFacetSrs(uid: string, facetId: string, result: 'pass' | 'fail') {
         return this.db.runTransaction(async (transaction) => {
-            const query = this.db
-                .collection(REVIEW_FACETS_COLLECTION)
-                .where(FieldPath.documentId(), '==', facetId)
-                .where('userId', '==', uid);
+            const facetRef = this.facetsColRef(uid).doc(facetId);
+            const facetDoc = await transaction.get(facetRef);
 
-            const snapshot = await query.get();
-
-            if (snapshot.empty) {
+            if (!facetDoc.exists) {
                 throw new NotFoundException('Facet not found');
             }
 
-            const facetDoc = snapshot.docs[0];
-            const facetRef = facetDoc.ref;
+            // For user_default using the shared top-level collection, verify ownership
+            if (uid === ADMIN_USER_ID && facetDoc.data()?.userId !== uid) {
+                throw new NotFoundException('Facet not found');
+            }
+
             const facetData = facetDoc.data() as ReviewFacet;
 
             // Determine the new SRS stage and time of next review
@@ -168,9 +177,8 @@ export class ReviewsService {
         }
     }
 
-    async updateFacetQuestion(facetId: string, questionId: string) {
-        const facetRef = this.db.collection(REVIEW_FACETS_COLLECTION).doc(facetId);
-        await facetRef.update({
+    async updateFacetQuestion(uid: string, facetId: string, questionId: string) {
+        await this.facetsColRef(uid).doc(facetId).update({
             currentQuestionId: questionId,
             questionAttempts: 0,
         });
@@ -264,7 +272,7 @@ Example for a fail: {"result": "fail", "explanation": "Incorrect. The expected r
                 const parts = key.split('-');
                 if (parts.length === 3) {
                     const kanjiChar = parts[2];
-                    targetKuId = await this.knowledgeUnitsService.ensureKanjiStub(uid, kanjiChar, data);
+                    targetKuId = await this.knowledgeUnitsService.ensureKanjiStub(kanjiChar, data);
                 }
                 // At this point we should have a KU for the Kanji Component, so skip the rest of the loop
                 continue;
@@ -277,7 +285,7 @@ Example for a fail: {"result": "fail", "explanation": "Incorrect. The expected r
 
             if (key === 'audio' && modifiedData?.contextExample) {
                 try {
-                    const ku = await this.knowledgeUnitsService.findOne(uid, targetKuId);
+                    const ku = await this.knowledgeUnitsService.findOne(targetKuId);
                     if (ku && ku.content) {
                         const clozeSentence = await this.geminiService.generateClozeSentence(ku.content, modifiedData.contextExample.sentence);
                         modifiedData.clozeSentence = clozeSentence;
@@ -288,8 +296,7 @@ Example for a fail: {"result": "fail", "explanation": "Incorrect. The expected r
             }
 
             // --- Create the Facet (Batch) ---
-            // Now we just create the facet pointing to whichever ID we resolved (Vocab or Kanji)
-            const newFacetRef = this.db.collection(REVIEW_FACETS_COLLECTION).doc();
+            const newFacetRef = this.facetsColRef(uid).doc();
             batch.set(newFacetRef, {
                 kuId: targetKuId,
                 facetType: key,
@@ -297,7 +304,7 @@ Example for a fail: {"result": "fail", "explanation": "Incorrect. The expected r
                 nextReviewAt: now,
                 createdAt: now,
                 history: [],
-                userId: uid,
+                ...(uid === ADMIN_USER_ID ? { userId: uid } : {}),
                 ...(modifiedData ? { data: modifiedData } : {}),
             });
 
@@ -306,7 +313,7 @@ Example for a fail: {"result": "fail", "explanation": "Incorrect. The expected r
 
         if (count > 0) {
             try {
-                await this.knowledgeUnitsService.update(uid, kuId, {
+                await this.knowledgeUnitsService.update(kuId, {
                     status: 'reviewing',
                     // Atomically increment existing value by count
                     facet_count: FieldValue.increment(count)
@@ -324,8 +331,7 @@ Example for a fail: {"result": "fail", "explanation": "Incorrect. The expected r
     async getDueReviews(uid: string) {
         const now = Timestamp.now();
 
-        const snapshot = await this.db.collection(REVIEW_FACETS_COLLECTION)
-            .where('userId', '==', uid)
+        const snapshot = await this.facetsBaseQuery(uid)
             .where('nextReviewAt', '<=', now)
             .orderBy('nextReviewAt', 'asc')
             .get();
@@ -350,7 +356,7 @@ Example for a fail: {"result": "fail", "explanation": "Incorrect. The expected r
             // you might want to try/catch here if data integrity is loose)
             let ku: KnowledgeUnit | null = null;
             try {
-                ku = await this.knowledgeUnitsService.findOne(uid, facet.kuId);
+                ku = await this.knowledgeUnitsService.findOne(facet.kuId);
             } catch (e) {
                 this.logger.warn(`Orphaned facet ${facet.id}: KU ${facet.kuId} not found`);
             }
@@ -374,9 +380,7 @@ Example for a fail: {"result": "fail", "explanation": "Incorrect. The expected r
     } // END getDueReviews
 
     async getAllFacets(uid: string) {
-        const snapshot = await this.db.collection(REVIEW_FACETS_COLLECTION)
-            .where('userId', '==', uid)
-            .get();
+        const snapshot = await this.facetsBaseQuery(uid).get();
 
         if (snapshot.empty) {
             return [];
