@@ -25,3 +25,7 @@
 
 ## Project Run State
 - Ensure the backend (`yarn start:dev` on port 3500) and frontend (`yarn dev` on port 3000) are running simultaneously when verifying tasks.
+
+## Project maintenance
+
+- Once you've completed a task, update the `ARCHITECTURE.md` and `AGENT_INSTRUCTIONS.md` files to reflect the changes you've made. In Architecture.md, update the "Migration History" section to include the changes you've made.
