@@ -189,7 +189,7 @@ export class ReviewsService {
         question: string,
         topic: string,
         questionId: string,
-        kuId?: string,
+        kuId: string,
     ) {
         // 1. Local Check
         const isLocalMatch = expectedAnswers.some(
@@ -199,7 +199,7 @@ export class ReviewsService {
         if (isLocalMatch) {
             this.logger.log(`Local match passed for topic: ${topic}`);
             if (questionId) {
-                await this.questionsService.recordAnswer(uid, questionId, kuId || '', 'pass');
+                await this.questionsService.recordAnswer(uid, questionId, kuId, 'pass');
             }
             return { result: 'pass', explanation: 'Correct!' };
         }
@@ -236,7 +236,7 @@ Example for a fail: {"result": "fail", "explanation": "Incorrect. The expected r
         ) as { result: 'pass' | 'fail'; explanation: string };
 
         if (questionId) {
-            await this.questionsService.recordAnswer(uid, questionId, kuId || '', evalResult.result);
+            await this.questionsService.recordAnswer(uid, questionId, kuId, evalResult.result);
         }
 
         return evalResult;
