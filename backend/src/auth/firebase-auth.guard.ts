@@ -12,8 +12,11 @@ export class FirebaseAuthGuard implements CanActivate {
     // Local dev bypass logic
     if (process.env.NODE_ENV !== 'production') {
       if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        this.logger.warn('Local dev mode: No Bearer token found. Bypassing auth and injecting user_default.');
-        request.user = { uid: 'user_default' };
+        // Allow frontend dev bypass to specify an explicit UID via header.
+        // Falls back to user_default when the header is absent.
+        const devUid = request.headers['x-dev-user-id'] || 'user_default';
+        this.logger.warn(`Local dev mode: No Bearer token found. Injecting uid: ${devUid}`);
+        request.user = { uid: devUid };
         return true;
       }
 

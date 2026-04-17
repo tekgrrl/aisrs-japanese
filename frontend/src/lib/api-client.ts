@@ -11,20 +11,27 @@ export async function apiFetch(
 ): Promise<Response> {
   const headers = new Headers(init?.headers);
 
-  // Ensure Firebase has checked IndexedDB/LocalStorage for a session
-  await auth.authStateReady();
-
-  // If we have a user, attempt to get their active token
-  if (auth.currentUser) {
-    try {
-      const token = await auth.currentUser.getIdToken();
-      headers.set("Authorization", `Bearer ${token}`);
-      console.log(`[apiFetch] Injected token for ${input}`);
-    } catch (error) {
-      console.error(`[apiFetch] Failed to get Firebase token for ${input}:`, error);
-    }
+  // Dev bypass: send no token so the backend guard uses X-Dev-User-Id or
+  // falls back to user_default.
+  if (process.env.NEXT_PUBLIC_DEV_SKIP_AUTH === "true") {
+    const devUid = process.env.NEXT_PUBLIC_DEV_USER_ID;
+    if (devUid) headers.set("X-Dev-User-Id", devUid);
   } else {
-    console.warn(`[apiFetch] No currentUser available for ${input}`);
+    // Ensure Firebase has checked IndexedDB/LocalStorage for a session
+    await auth.authStateReady();
+
+    // If we have a user, attempt to get their active token
+    if (auth.currentUser) {
+      try {
+        const token = await auth.currentUser.getIdToken();
+        headers.set("Authorization", `Bearer ${token}`);
+        console.log(`[apiFetch] Injected token for ${input}`);
+      } catch (error) {
+        console.error(`[apiFetch] Failed to get Firebase token for ${input}:`, error);
+      }
+    } else {
+      console.warn(`[apiFetch] No currentUser available for ${input}`);
+    }
   }
 
   return fetch(input, {

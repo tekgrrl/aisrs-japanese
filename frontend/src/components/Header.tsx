@@ -3,17 +3,16 @@
 import Link from "next/link";
 import { useState, useEffect, useCallback } from "react";
 import { apiFetch } from "@/lib/api-client";
+import { useAuth } from "@/providers/AuthProvider";
 
 /**
- * A simple navigation header that displays stats.
- * Now with a listener to refresh stats dynamically.
+ * Global navigation header.
+ * Hidden entirely when there is no authenticated user (e.g. on the login page).
  */
 export default function Header() {
+  const { user, signOut } = useAuth();
   const [stats, setStats] = useState({ learnCount: 0, reviewsDue: 0 });
 
-  // Wrap fetchStats in useCallback so it's a stable function
-  // and can be safely used in useEffect dependency arrays.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   const fetchStats = useCallback(async () => {
     try {
       const response = await apiFetch("/api/stats");
@@ -24,52 +23,34 @@ export default function Header() {
     } catch (error) {
       console.error("Failed to fetch stats:", error);
     }
-  }, []); // Empty dependency array, this function never needs to change.
+  }, []);
 
-  // Effect to fetch stats on initial mount
   useEffect(() => {
-    fetchStats();
-  }, [fetchStats]);
+    if (user) fetchStats();
+  }, [user, fetchStats]);
 
-  // Effect to listen for our custom 'refreshStats' event
   useEffect(() => {
-    // We define a handler function to be clear
-    const handleRefreshStats = () => {
-      fetchStats();
-    };
-
+    const handleRefreshStats = () => fetchStats();
     window.addEventListener("refreshStats", handleRefreshStats);
-
-    // Clean up the listener when the component unmounts
-    return () => {
-      window.removeEventListener("refreshStats", handleRefreshStats);
-    };
-  }, [fetchStats]); // Depend on fetchStats
+    return () => window.removeEventListener("refreshStats", handleRefreshStats);
+  }, [fetchStats]);
 
   useEffect(() => {
     const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
-        fetchStats();
-      }
+      if (document.visibilityState === "visible") fetchStats();
     };
-
     document.addEventListener("visibilitychange", handleVisibilityChange);
-
-    return () => {
+    return () =>
       document.removeEventListener("visibilitychange", handleVisibilityChange);
-    };
   }, [fetchStats]);
 
-  // Effect to manage Furigana visibility and persistence
+  // Furigana toggle
   const [showFurigana, setShowFurigana] = useState(false);
 
   useEffect(() => {
-    // Load preference from localStorage
     const saved = localStorage.getItem("furiganaVisible");
     const isVisible = saved === "true";
     setShowFurigana(isVisible);
-
-    // Apply initial class
     if (isVisible) {
       document.documentElement.setAttribute("data-furigana", "true");
     } else {
@@ -81,7 +62,6 @@ export default function Header() {
     const newState = !showFurigana;
     setShowFurigana(newState);
     localStorage.setItem("furiganaVisible", String(newState));
-
     if (newState) {
       document.documentElement.setAttribute("data-furigana", "true");
     } else {
@@ -89,10 +69,8 @@ export default function Header() {
     }
   }, [showFurigana]);
 
-  // Effect for Keyboard Shortcut (Alt+F)
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      // Check for Alt+F (Option+F on Mac)
       if (
         event.altKey &&
         (event.key === "f" || event.key === "F" || event.code === "KeyF")
@@ -101,10 +79,12 @@ export default function Header() {
         toggleFurigana();
       }
     };
-
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [toggleFurigana]);
+
+  // Don't render the nav chrome on the login page or before the user is known.
+  if (!user) return null;
 
   return (
     <header className="bg-shodo-paper border-b border-shodo-ink/10 shadow-sm sticky top-0 z-10">
@@ -153,7 +133,7 @@ export default function Header() {
         {/* Separator */}
         <div className="h-6 w-px bg-shodo-ink/30 mx-4 hidden sm:block" />
 
-        {/* Settings / Toggles */}
+        {/* Furigana toggle */}
         <button
           onClick={toggleFurigana}
           className={`text-sm font-medium transition-colors duration-200 flex items-center gap-2 ${
@@ -177,6 +157,23 @@ export default function Header() {
             />
           </div>
         </button>
+
+        {/* User / Sign out */}
+        <div className="flex items-center gap-3 ml-4">
+          <span
+            className="text-xs text-shodo-ink/40 hidden sm:block truncate max-w-[140px]"
+            title={user.email ?? undefined}
+          >
+            {user.email}
+          </span>
+          <button
+            onClick={signOut}
+            className="text-xs text-shodo-ink/40 hover:text-shodo-ink/70 transition-colors duration-200 whitespace-nowrap"
+            title="Sign out"
+          >
+            Sign out
+          </button>
+        </div>
       </nav>
     </header>
   );

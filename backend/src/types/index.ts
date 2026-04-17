@@ -235,7 +235,7 @@ export interface KnowledgeUnit {
 export interface UserKnowledgeUnit {
   id: string;
   userId: string;
-  kuId: string; // Bridges to GlobalKnowledgeUnit.id
+  kuId: string; // Bridges to KnowledgeUnit.id
   personalNotes: string;
   userNotes?: string;
   createdAt: Timestamp;
