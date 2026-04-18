@@ -186,6 +186,77 @@ export type KnowledgeUnitType =
   | "Concept"
   | "ExampleSentence";
 
+// ─── KnowledgeUnit discriminated union ───────────────────────────────────────
+
+/**
+ * Fields shared by every KU sub-type.
+ * Deprecated fields remain here until the User state migration is complete.
+ */
+export interface KnowledgeUnitBase {
+  id: string;
+  content: string; // The main "thing" (e.g., "食べる", "家族")
+  relatedUnits: string[]; // Array of other KnowledgeUnit IDs
+  /** @deprecated migrating to User state models */
+  userId: string;
+  /** @deprecated migrating to User state models */
+  personalNotes: string;
+  /** @deprecated migrating to User state models */
+  userNotes?: string;
+  /** @deprecated migrating to User state models */
+  createdAt: Timestamp;
+  /** @deprecated migrating to User state models */
+  status: "learning" | "reviewing";
+  /** @deprecated migrating to User state models */
+  facet_count: number;
+  /** @deprecated migrating to User state models */
+  history?: any[];
+}
+
+export interface VocabKnowledgeUnit extends KnowledgeUnitBase {
+  type: "Vocab";
+  data: {
+    reading?: string;
+    definition?: string;
+    jlptLevel?: string | null;
+    wanikaniLevel?: number | null;
+    [key: string]: any;
+  };
+}
+
+export interface KanjiKnowledgeUnit extends KnowledgeUnitBase {
+  type: "Kanji";
+  data: {
+    meaning?: string;
+    jlptLevel?: string | null;
+    wanikaniLevel?: number | null;
+    [key: string]: any;
+  };
+}
+
+export interface GrammarKnowledgeUnit extends KnowledgeUnitBase {
+  type: "Grammar";
+  data: { [key: string]: any };
+}
+
+export interface ConceptKnowledgeUnit extends KnowledgeUnitBase {
+  type: "Concept";
+  data: { [key: string]: any };
+}
+
+export interface ExampleSentenceKnowledgeUnit extends KnowledgeUnitBase {
+  type: "ExampleSentence";
+  data: { [key: string]: any };
+}
+
+export type KnowledgeUnit =
+  | VocabKnowledgeUnit
+  | KanjiKnowledgeUnit
+  | GrammarKnowledgeUnit
+  | ConceptKnowledgeUnit
+  | ExampleSentenceKnowledgeUnit;
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 export type PartOfSpeech =
   | "transitive-verb"
   | "intransitive-verb"
@@ -202,36 +273,6 @@ export type PartOfSpeech =
   | "suffix"
   | "conjunction";
 
-export interface KnowledgeUnit {
-  id: string;
-  /** @deprecated - migrating to User state models */
-  userId: string;
-  type: KnowledgeUnitType;
-  content: string; // The main "thing" (e.g., "食べる", "家族", "Giving/Receiving")
-  data: {
-    reading?: string;
-    definition?: string;
-    meaning?: string; // For Kanji
-    jlptLevel?: string | null;
-    wanikaniLevel?: number | null;
-    // We can add more specific fields here later
-    [key: string]: any;
-  };
-  /** @deprecated - migrating to User state models */
-  personalNotes: string;
-  /** @deprecated - migrating to User state models */
-  userNotes?: string; // Context for Gemini lesson generation
-  relatedUnits: string[]; // Array of other KnowledgeUnit IDs
-  /** @deprecated - migrating to User state models */
-  createdAt: Timestamp; // Added for sorting
-  /** @deprecated - migrating to User state models */
-  status: "learning" | "reviewing";
-  /** @deprecated - migrating to User state models */
-  facet_count: number;
-  /** @deprecated - migrating to User state models */
-  history?: any[]; // Or define a proper history type
-}
-
 export interface UserKnowledgeUnit {
   id: string;
   userId: string;
@@ -244,7 +285,10 @@ export interface UserKnowledgeUnit {
   history?: any[];
 }
 
-export type KnowledgeUnitClient = Omit<KnowledgeUnit, "createdAt"> & {
+/** Distributes Omit across union members, preserving the discriminated union. */
+type DistributiveOmit<T, K extends keyof any> = T extends any ? Omit<T, K> : never;
+
+export type KnowledgeUnitClient = DistributiveOmit<KnowledgeUnit, "createdAt"> & {
   createdAt: string;
 };
 
