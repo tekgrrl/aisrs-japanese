@@ -103,6 +103,11 @@ export interface UserRoot {
       dailyMaxNew?: number;
     };
   };
+
+  /** Top-level user-facing preferences stored directly on the UserRoot document. */
+  preferences?: {
+    showFurigana?: boolean;
+  };
 }
 
 export interface VocabLesson {

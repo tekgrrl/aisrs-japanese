@@ -1,4 +1,4 @@
-import { Controller, Get, UseGuards, Logger } from '@nestjs/common';
+import { Body, Controller, Get, Patch, UseGuards, Logger } from '@nestjs/common';
 import { UserService } from './user.service';
 import { FirebaseAuthGuard } from '../auth/firebase-auth.guard';
 import { UserId } from '../auth/user-id.decorator';
@@ -24,5 +24,20 @@ export class UserController {
     this.logger.log(`GET /users/me called for uid: ${uid}`);
     const user = await this.userService.findOrCreate(uid);
     return user;
+  }
+
+  /**
+   * PATCH /api/users/me/preferences
+   *
+   * Persists user-facing preferences (e.g. furigana toggle) to the UserRoot document.
+   * Uses Firestore merge so unknown fields are preserved.
+   */
+  @Patch('me/preferences')
+  async updatePreferences(
+    @UserId() uid: string,
+    @Body() body: { showFurigana?: boolean },
+  ) {
+    await this.userService.updatePreferences(uid, body);
+    return { ok: true };
   }
 }
