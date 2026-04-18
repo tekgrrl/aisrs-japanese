@@ -25,11 +25,7 @@ export class UserKnowledgeUnitsService {
     return { id: doc.id, ...doc.data() } as UserKnowledgeUnit;
   }
 
-  async findLearningQueueAsKUs(uid: string): Promise<KnowledgeUnit[]> {
-    const snapshot = await this.userKusRef(uid)
-      .where('status', '==', 'learning')
-      .get();
-
+  private async _joinKUs(uid: string, snapshot: FirebaseFirestore.QuerySnapshot): Promise<KnowledgeUnit[]> {
     if (snapshot.empty) return [];
 
     const ukus = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as UserKnowledgeUnit));
@@ -56,6 +52,18 @@ export class UserKnowledgeUnitsService {
     }
 
     return result;
+  }
+
+  async findAllAsKUs(uid: string): Promise<KnowledgeUnit[]> {
+    const snapshot = await this.userKusRef(uid).get();
+    return this._joinKUs(uid, snapshot);
+  }
+
+  async findLearningQueueAsKUs(uid: string): Promise<KnowledgeUnit[]> {
+    const snapshot = await this.userKusRef(uid)
+      .where('status', '==', 'learning')
+      .get();
+    return this._joinKUs(uid, snapshot);
   }
 
   async create(uid: string, kuId: string): Promise<UserKnowledgeUnit> {

@@ -57,7 +57,7 @@ export default function KnowledgeManagementPage() {
       setIsLoading(true);
 
       const [kuResponse, facetResponse] = await Promise.all([
-        apiFetch("/api/knowledge-units/get-all"),
+        apiFetch("/api/knowledge-units/get-all?status=user"),
         apiFetch("/api/reviews/facets"),
       ]);
 

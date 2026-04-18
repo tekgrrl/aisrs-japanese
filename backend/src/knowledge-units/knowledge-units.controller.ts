@@ -24,6 +24,9 @@ export class KnowledgeUnitsController {
         if (status === 'learning') {
             return this.userKnowledgeUnitsService.findLearningQueueAsKUs(uid);
         }
+        if (status === 'user') {
+            return this.userKnowledgeUnitsService.findAllAsKUs(uid);
+        }
         return this.knowledgeUnitsService.findAll({ status, type, content });
     }
 
