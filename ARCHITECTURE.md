@@ -271,7 +271,6 @@ Previously, the Next.js `frontend` app hosted Next API Routes (`/src/app/api/...
 - **`ADMIN_USER_ID` constant**: `CURRENT_USER_ID` renamed to `ADMIN_USER_ID` in `backend/src/lib/constants.ts`. The string `'user_default'` remains hardcoded in `firebase-auth.guard.ts` pending a follow-up cleanup.
 - **Frontend**: `refreshStats` event dispatched after successful encounter→drill advance so the Learn tab badge updates immediately.
 
-<<<<<<< Updated upstream
 **Question corpus overhaul (2026-04)**
 
 - Replaced the broken per-facet `questionAttempts` reuse logic with a global question corpus and per-user state model.
@@ -285,13 +284,11 @@ Previously, the Next.js `frontend` app hosted Next API Routes (`/src/app/api/...
 - Frontend `review/page.tsx`: `dynamicQuestionStatus` state replaced by `dynamicQuestionIsNew`; `isNewAiQuestion` simplified; feedback handlers call `recordFeedback`.
 
 ---
-=======
 **Manage page scoped to user KUs (2026-04)**
 
 - **`UserKnowledgeUnitsService.findAllAsKUs(uid)`** added: returns all KUs for a user regardless of status (learning or reviewing), by fetching the full `users/{uid}/user-kus` sub-collection and batch-joining against global `knowledge-units`. The shared join logic was extracted into a private `_joinKUs` helper, which `findLearningQueueAsKUs` also now uses.
 - **`KnowledgeUnitsController` (`GET /api/knowledge-units/get-all`)**: added `status=user` branch that routes to `findAllAsKUs(uid)`.
 - **`frontend/src/app/manage/page.tsx`**: changed the KU fetch from `/api/knowledge-units/get-all` to `/api/knowledge-units/get-all?status=user` so the Manage tab displays only the authenticated user's KUs instead of the entire global corpus.
->>>>>>> Stashed changes
 
 - **Firebase Console prerequisites** for project `gen-lang-client-0878434798`:
   1. Authentication → Sign-in method → **Email/Password** enabled.
