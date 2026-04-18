@@ -283,6 +283,7 @@ Previously, the Next.js `frontend` app hosted Next API Routes (`/src/app/api/...
 - `ReviewFacet.questionAttempts` deprecated; `updateFacetQuestion` no longer resets it.
 - Frontend `review/page.tsx`: `dynamicQuestionStatus` state replaced by `dynamicQuestionIsNew`; `isNewAiQuestion` simplified; feedback handlers call `recordFeedback`.
 
+---
 **Manage page scoped to user KUs (2026-04)**
 
 - **`UserKnowledgeUnitsService.findAllAsKUs(uid)`** added: returns all KUs for a user regardless of status (learning or reviewing), by fetching the full `users/{uid}/user-kus` sub-collection and batch-joining against global `knowledge-units`. The shared join logic was extracted into a private `_joinKUs` helper, which `findLearningQueueAsKUs` also now uses.
