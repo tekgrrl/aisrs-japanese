@@ -4,13 +4,15 @@ import Link from "next/link";
 import { useState, useEffect, useCallback } from "react";
 import { apiFetch } from "@/lib/api-client";
 import { useAuth } from "@/providers/AuthProvider";
+import { AvatarMenu } from "./AvatarMenu";
+import { applyFurigana, loadFurigana } from "@/lib/furigana";
 
 /**
  * Global navigation header.
  * Hidden entirely when there is no authenticated user (e.g. on the login page).
  */
 export default function Header() {
-  const { user, signOut } = useAuth();
+  const { user } = useAuth();
   const [stats, setStats] = useState({ learnCount: 0, reviewsDue: 0 });
 
   const fetchStats = useCallback(async () => {
@@ -44,46 +46,32 @@ export default function Header() {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
   }, [fetchStats]);
 
-  // Furigana toggle
-  const [showFurigana, setShowFurigana] = useState(false);
-
+  // Apply saved furigana preference on load
   useEffect(() => {
-    const saved = localStorage.getItem("furiganaVisible");
-    const isVisible = saved === "true";
-    setShowFurigana(isVisible);
-    if (isVisible) {
-      document.documentElement.setAttribute("data-furigana", "true");
-    } else {
-      document.documentElement.removeAttribute("data-furigana");
-    }
+    applyFurigana(loadFurigana());
   }, []);
 
-  const toggleFurigana = useCallback(() => {
-    const newState = !showFurigana;
-    setShowFurigana(newState);
-    localStorage.setItem("furiganaVisible", String(newState));
-    if (newState) {
-      document.documentElement.setAttribute("data-furigana", "true");
-    } else {
-      document.documentElement.removeAttribute("data-furigana");
-    }
-  }, [showFurigana]);
-
+  // Alt+F global keyboard shortcut — toggles furigana and persists to backend
   useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
+    const handleKeyDown = (e: KeyboardEvent) => {
       if (
-        event.altKey &&
-        (event.key === "f" || event.key === "F" || event.code === "KeyF")
+        e.altKey &&
+        (e.key === "f" || e.key === "F" || e.code === "KeyF")
       ) {
-        event.preventDefault();
-        toggleFurigana();
+        e.preventDefault();
+        const next = !loadFurigana();
+        applyFurigana(next);
+        apiFetch("/api/users/me/preferences", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ showFurigana: next }),
+        }).catch(() => {});
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [toggleFurigana]);
+  }, []);
 
-  // Don't render the nav chrome on the login page or before the user is known.
   if (!user) return null;
 
   return (
@@ -96,7 +84,7 @@ export default function Header() {
           AIGENKI
         </Link>
 
-        {/* Navigation Links */}
+        {/* Primary navigation */}
         <div className="flex items-center space-x-2 sm:space-x-4">
           <Link
             href="/learn"
@@ -111,68 +99,22 @@ export default function Header() {
             Review ({stats.reviewsDue})
           </Link>
           <Link
-            href="/manage"
-            className="px-4 py-2 rounded-md text-shodo-ink font-medium hover:bg-shodo-ink/5 transition-colors duration-200"
-          >
-            Manage
-          </Link>
-          <Link
             href="/scenarios"
             className="px-4 py-2 rounded-md text-shodo-ink font-medium hover:bg-shodo-ink/5 transition-colors duration-200"
           >
             Scenarios
           </Link>
           <Link
-            href="/library"
+            href="/concepts"
             className="px-4 py-2 rounded-md text-shodo-ink font-medium hover:bg-shodo-ink/5 transition-colors duration-200"
           >
-            Library
+            Concepts
           </Link>
         </div>
 
-        {/* Separator */}
-        <div className="h-6 w-px bg-shodo-ink/30 mx-4 hidden sm:block" />
-
-        {/* Furigana toggle */}
-        <button
-          onClick={toggleFurigana}
-          className={`text-sm font-medium transition-colors duration-200 flex items-center gap-2 ${
-            showFurigana
-              ? "text-shodo-ink"
-              : "text-shodo-ink/40 hover:text-shodo-ink/70"
-          }`}
-          title="Toggle Furigana (Alt+F)"
-          aria-pressed={showFurigana}
-        >
-          <span className="text-xs uppercase tracking-wider">Furigana</span>
-          <div
-            className={`w-8 h-4 rounded-full relative transition-colors duration-200 ${
-              showFurigana ? "bg-shodo-ink" : "bg-shodo-ink/20"
-            }`}
-          >
-            <div
-              className={`absolute top-0.5 bottom-0.5 w-3 h-3 rounded-full bg-shodo-paper shadow-sm transition-all duration-200 ${
-                showFurigana ? "left-4.5" : "left-0.5"
-              }`}
-            />
-          </div>
-        </button>
-
-        {/* User / Sign out */}
-        <div className="flex items-center gap-3 ml-4">
-          <span
-            className="text-xs text-shodo-ink/40 hidden sm:block truncate max-w-[140px]"
-            title={user.email ?? undefined}
-          >
-            {user.email}
-          </span>
-          <button
-            onClick={signOut}
-            className="text-xs text-shodo-ink/40 hover:text-shodo-ink/70 transition-colors duration-200 whitespace-nowrap"
-            title="Sign out"
-          >
-            Sign out
-          </button>
+        {/* Avatar menu — profile, library, manage, sign out */}
+        <div className="ml-4">
+          <AvatarMenu />
         </div>
       </nav>
     </header>

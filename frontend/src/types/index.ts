@@ -90,6 +90,10 @@ export interface UserRoot {
     /** Topics or themes the user brings up frequently or has shown interest in. */
     suggestedThemes: string[];
   };
+
+  preferences?: {
+    showFurigana?: boolean;
+  };
 }
 
 export interface VocabLesson {
