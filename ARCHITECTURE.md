@@ -290,6 +290,20 @@ Previously, the Next.js `frontend` app hosted Next API Routes (`/src/app/api/...
 - **`KnowledgeUnitsController` (`GET /api/knowledge-units/get-all`)**: added `status=user` branch that routes to `findAllAsKUs(uid)`.
 - **`frontend/src/app/manage/page.tsx`**: changed the KU fetch from `/api/knowledge-units/get-all` to `/api/knowledge-units/get-all?status=user` so the Manage tab displays only the authenticated user's KUs instead of the entire global corpus.
 
+**`KnowledgeUnit` refactored to discriminated union (2026-04)**
+
+- Replaced the monolithic `KnowledgeUnit` interface in both `backend/src/types/index.ts` and `frontend/src/types/index.ts` with a tagged union of five sub-types, each with a literal `type` discriminant and a narrowed `data` shape:
+  - `VocabKnowledgeUnit` — `data: { reading?, definition?, jlptLevel?, wanikaniLevel? }`
+  - `KanjiKnowledgeUnit` — `data: { meaning?, jlptLevel?, wanikaniLevel? }`
+  - `GrammarKnowledgeUnit`, `ConceptKnowledgeUnit`, `ExampleSentenceKnowledgeUnit` — `data: { [key: string]: any }`
+- Shared fields extracted into `KnowledgeUnitBase` (common to all sub-types, including deprecated user-state fields held in place until the migration is complete).
+- All `data` shapes retain `[key: string]: any` so existing unnarrowed access patterns (`ku.data.reading` etc.) continue to compile without changes to call sites.
+- `KnowledgeUnitClient` fixed to use a `DistributiveOmit` helper so the discriminated union is preserved through the `Omit<KnowledgeUnit, "createdAt">` operation.
+- No runtime changes — Firestore document shapes are unchanged; all backend service construction already used `as unknown as KnowledgeUnit`.
+- Switching on `ku.type` now gives correct TypeScript narrowing into the appropriate sub-type.
+
+---
+
 - **Firebase Console prerequisites** for project `gen-lang-client-0878434798`:
   1. Authentication → Sign-in method → **Email/Password** enabled.
   2. Authentication → Sign-in method → **Email link (passwordless sign-in)** enabled (sub-toggle under Email/Password).
