@@ -81,7 +81,7 @@ export class KanjiService {
             relatedVocab: relatedVocab.map(ku => ({
                 id: ku.id,
                 content: ku.content,
-                reading: ku.data?.reading || '',
+                reading: ku.type === 'Vocab' ? (ku.data.reading ?? '') : '',
             }))
         };
     }

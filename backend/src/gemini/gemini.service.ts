@@ -17,6 +17,7 @@ export class GeminiService implements OnModuleInit {
 
   private client: GoogleGenAI;
   private modelName: string;
+  private conceptModelName: string;
 
   constructor(
     private configService: ConfigService,
@@ -26,7 +27,9 @@ export class GeminiService implements OnModuleInit {
   onModuleInit() {
     const apiKey = this.configService.get<string>('GEMINI_API_KEY');
     this.modelName = this.configService.get<string>('MODEL_GEMINI_FLASH') || 'gemini-3-flash-preview';
+    this.conceptModelName = this.configService.get<string>('GEMINI_MODEL') || this.modelName;
     this.logger.log(`Using Gemini model: ${this.modelName}`);
+    this.logger.log(`Using Gemini concept model: ${this.conceptModelName}`);
 
     if (!apiKey) {
       throw new Error('GEMINI_API_KEY is not defined in environment variables');
@@ -1035,6 +1038,74 @@ Output: { "clozeSentence": "その犬はとても[_____]。" }`;
         }
         await this.apilogService.completeLog(logRef, updateData).catch(e => this.logger.error(e));
       }
+    }
+  }
+
+  async generateConcept(
+    userMessage: string,
+    logContext?: Record<string, any>,
+  ): Promise<string> {
+    const initialLogData: ApiLog = {
+      timestamp: Timestamp.now(),
+      route: "/concepts/generate",
+      status: "pending",
+      modelUsed: this.conceptModelName,
+      requestData: {
+        userMessage,
+        topic: logContext?.topic,
+      },
+    };
+
+    const logRef = await this.apilogService.startLog(initialLogData);
+    const startTime = performance.now();
+    let errorOccurred = false;
+    let capturedError: any;
+    let conceptString: string | undefined;
+
+    this.logger.log(`Generating concept for topic: "${logContext?.topic ?? 'unknown'}"`);
+
+    try {
+      const apiResponse = await this.client.models.generateContent({
+        model: this.conceptModelName,
+        contents: [{ parts: [{ text: userMessage }] }],
+        config: {
+          responseMimeType: "application/json",
+          temperature: 0.5,
+        },
+      });
+
+      if (!apiResponse?.text) throw new Error("AI response was empty.");
+
+      conceptString = apiResponse.text;
+
+      const jsonStart = conceptString.indexOf("{");
+      const jsonEnd = conceptString.lastIndexOf("}");
+      if (jsonStart === -1 || jsonEnd === -1) {
+        throw new Error("AI response did not contain a valid JSON object.");
+      }
+      conceptString = conceptString.substring(jsonStart, jsonEnd + 1);
+
+      this.logger.log(`Successfully generated concept for "${logContext?.topic ?? 'unknown'}"`);
+      return conceptString;
+
+    } catch (error) {
+      errorOccurred = true;
+      capturedError = error;
+      this.logger.error("Gemini generateConcept error:", error);
+      throw new InternalServerErrorException("Failed to generate concept from AI.");
+
+    } finally {
+      const endTime = performance.now();
+      const updateData: Partial<ApiLog> = {
+        durationMs: (endTime - startTime) / 1000,
+        status: errorOccurred ? "error" : "success",
+      };
+      if (errorOccurred) {
+        updateData.errorData = { message: String(capturedError) };
+      } else {
+        updateData.responseData = { rawText: conceptString?.slice(0, 200) };
+      }
+      await this.apilogService.completeLog(logRef, updateData).catch(e => this.logger.error(e));
     }
   }
 }
