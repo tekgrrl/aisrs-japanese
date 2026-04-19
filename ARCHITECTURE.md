@@ -41,6 +41,7 @@ Basic Vocab data was extracted from Wanikani and then boiled down to non-proprie
   - **`review-facets`**: Logic handling the Spaced Repetition System (SRS). Converts learning queue items to review queues using `nextReviewAt` timestamp filtering.
   - **`lessons`**: Assembles Prompts, queries Gemini, and translates the structured JSON or text back to the client.
   - **`scenarios`**: Complex logic handling multi-turn roleplay conversations, evaluations, and state machines mapping encountering new phrases to learning loops.
+  - **`concepts`**: Generates and stores `ConceptKnowledgeUnit` documents (grammar concept pages) via `GeminiService.generateConcept`. Uses a dedicated `GEMINI_MODEL` env var so a higher-capability model can be used independently of the flash model used elsewhere.
   - **`stats`**: Central endpoint for aggregating dashboard/queue numbers.
 - **Database Access**: Uses `firebase-admin` natively (not via Web SDK). Note: Next.js API Routes must not use `firebase-admin`; thus, all such operations are fully isolated in this NestJS layer.
 - **Gemini**: Relies heavily on high-context, single prompt instructions using the current model (`gemini-3-flash-preview`) rather than generic `systemInstruction` prompts.
@@ -58,6 +59,46 @@ Basic Vocab data was extracted from Wanikani and then boiled down to non-proprie
 - Add JLPT badges and Wanikani level badges to the listings for each Vocab
 - Add a way to filter by JLPT level and Wanikani level
 - **Meta requirement**: The manage page should eventually be just and admin function and not a list of the Vocab the User has in their learning or review queues or in their overall user context (if we go down that route). This requires a lot of other work to be done first.
+
+### Interactive Parsing & Scoping Units
+
+**Context**: The standard `ConceptKnowledgeUnit` is optimised for atomic rule introduction (e.g., adjectival clauses). It is insufficient for teaching the dynamic skill of untangling complex, ambiguous scoping in longer sentences — e.g., identifying exactly which verb or noun an adverb like あそこで modifies.
+
+**Proposed Architecture**: Introduce a dedicated `ParsingKnowledgeUnit` designed purely for interactive reading comprehension and relationship mapping, used within scenarios.
+
+#### 1. Data Schema
+
+```typescript
+export interface ParsingKnowledgeUnit extends KnowledgeUnitBase {
+  type: "Parsing";
+  data: {
+    context: string;          // Brief situational setup
+    sentence: {
+      japanese: string;       // The complex/ambiguous sentence
+      english: string;        // Full translation
+    };
+    targetPhrase: string;     // The ambiguous modifier (e.g., "あそこで")
+    correctTarget: string;    // What it actually modifies (e.g., "読んでいる")
+    distractorTarget: string; // The plausible but wrong target (e.g., "人")
+    explanation: string;      // Diagnostic feedback explaining the boundary logic
+  };
+}
+```
+
+#### 2. UI/UX Interaction
+
+- **Presentation**: Render the Japanese sentence and visually highlight the `targetPhrase`.
+- **Interaction**: Prompt the user to identify the scoping boundary (e.g., "Tap the exact word or phrase that [targetPhrase] modifies").
+- **Feedback**: Correct selection confirms the mental model. Selecting the `distractorTarget` (or elsewhere) reveals the `explanation` diagnostic to correct the user's understanding of the sentence structure.
+
+#### 3. Generation Pipeline (Gemini)
+
+Create a new pipeline in `ConceptsService` to generate these units. Instruct the LLM to:
+- Generate Japanese sentences with intentional modifier ambiguity.
+- Explicitly isolate the `targetPhrase`, `correctTarget`, and a highly plausible `distractorTarget`.
+- Provide pedagogical explanations focused on why the syntax dictates one relationship over the other.
+
+---
 
 ### Users
 - (Done) Global KU data is stored in the `knowledge-units` collection in Firestore, accessed via the `knowledge-units` service. The service is now user-agnostic — no `userId` filtering on reads, no `userId` written to new documents.
@@ -108,7 +149,7 @@ The system is now **multi-tenant**. Real users sign in via passwordless email-li
 ### Guard Coverage
 
 Every controller applies `@UseGuards(FirebaseAuthGuard)` at the class level:
-- `auth.controller.ts`, `user.controller.ts`, `knowledge-units.controller.ts`, `reviews.controller.ts`, `lessons.controller.ts`, `questions.controller.ts`, `stats.controller.ts`, `scenarios.controller.ts`, `kanji.controller.ts`
+- `auth.controller.ts`, `user.controller.ts`, `knowledge-units.controller.ts`, `reviews.controller.ts`, `lessons.controller.ts`, `questions.controller.ts`, `stats.controller.ts`, `scenarios.controller.ts`, `kanji.controller.ts`, `concepts.controller.ts`
 
 All service methods accept `uid: string` as their first parameter and use it for Firestore scoping (see below).
 
@@ -150,13 +191,14 @@ The database uses **flat top-level collections** (not Firestore sub-collections 
 | `scenarios` | Yes (field) | Roleplay scenario state |
 | `user-stats` | Yes — doc ID is uid | Legacy stats; `USER_STATS_COLLECTION.doc(uid)` |
 | `users` | Yes — doc path `users/{uid}` | `UserRoot` document (stats, tutorContext, preferences) |
+| `concepts` | **No** | Global grammar concept corpus — no `userId` on docs; `createdBy` field for audit only |
 | `api-logs` | **No** | Centralised logging; no user field |
 
 ---
 
 ### Key Types
 
-- **`UserRoot`** (`backend/src/types/index.ts` ~line 34) — stored at `users/{uid}`. Contains `stats`, `tutorContext`, and `preferences` (e.g. `dailyMaxNew`).
+- **`UserRoot`** (`backend/src/types/index.ts` ~line 34) — stored at `users/{uid}`. Contains `stats`, `tutorContext`, and two `preferences` fields: `tutorContext.preferences` (feed tuning — `dailyMaxNew`, `dailyMaxTotal`) and a top-level `preferences` object (`showFurigana: boolean`). Top-level preferences are written via `PATCH /api/users/me/preferences` and read on the `/profile` page.
 - **`KnowledgeUnit`** (~line 205) — has `userId` field (marked `@deprecated` as part of future migration to a separate `user-kus` sub-collection). `data` bag holds `jlptLevel`, `wanikaniLevel`, `reading`, `meaning`.
 - **`UserKnowledgeUnit`** (~line 235) — intended future shape: user metadata (`status`, `personalNotes`, `facet_count`) pointing at a global KU via `kuId`. **Not yet used in queries.**
 - **`ReviewFacet`** (~line 261) — bridges to `KnowledgeUnit` via `kuId`; carries `srsStage` (0–8) and `nextReviewAt`.
@@ -172,6 +214,8 @@ The database uses **flat top-level collections** (not Firestore sub-collections 
 GOOGLE_CLOUD_PROJECT=gen-lang-client-0878434798   # Firebase project
 FIRESTORE_DB=aisrs-japanese-dev                    # Named Firestore database
 NODE_ENV                                           # 'production' enables strict auth
+MODEL_GEMINI_FLASH=gemini-3-flash-preview          # Default model used by all Gemini methods
+GEMINI_MODEL=gemini-3.1-pro-preview                # Higher-capability model used only by generateConcept
 ```
 
 **Frontend (`frontend/.env.local`)**
@@ -295,12 +339,38 @@ Previously, the Next.js `frontend` app hosted Next API Routes (`/src/app/api/...
 - Replaced the monolithic `KnowledgeUnit` interface in both `backend/src/types/index.ts` and `frontend/src/types/index.ts` with a tagged union of five sub-types, each with a literal `type` discriminant and a narrowed `data` shape:
   - `VocabKnowledgeUnit` — `data: { reading?, definition?, jlptLevel?, wanikaniLevel? }`
   - `KanjiKnowledgeUnit` — `data: { meaning?, jlptLevel?, wanikaniLevel? }`
-  - `GrammarKnowledgeUnit`, `ConceptKnowledgeUnit`, `ExampleSentenceKnowledgeUnit` — `data: { [key: string]: any }`
+  - `ConceptKnowledgeUnit` — fully typed `data: { title, overview, mechanics[], examples[] }` (see Concepts section)
+  - `GrammarKnowledgeUnit`, `ExampleSentenceKnowledgeUnit` — `data: { [key: string]: any }` (still open)
 - Shared fields extracted into `KnowledgeUnitBase` (common to all sub-types, including deprecated user-state fields held in place until the migration is complete).
 - All `data` shapes retain `[key: string]: any` so existing unnarrowed access patterns (`ku.data.reading` etc.) continue to compile without changes to call sites.
 - `KnowledgeUnitClient` fixed to use a `DistributiveOmit` helper so the discriminated union is preserved through the `Omit<KnowledgeUnit, "createdAt">` operation.
 - No runtime changes — Firestore document shapes are unchanged; all backend service construction already used `as unknown as KnowledgeUnit`.
 - Switching on `ku.type` now gives correct TypeScript narrowing into the appropriate sub-type.
+
+---
+
+**UI overhaul — profile, avatar, nav restructure (2026-04)**
+
+- Added `frontend/src/components/UserAvatar.tsx` — initials-based avatar circle with deterministic colour derived from email hash.
+- Added `frontend/src/components/AvatarMenu.tsx` — avatar button on the far right of the header that opens a dropdown containing Profile & Settings, Library, Manage, and Sign Out. Manage and Library links removed from the main nav row.
+- Added `frontend/src/app/profile/page.tsx` — user profile page showing avatar, email, and a Furigana toggle that persists to the backend.
+- Added `frontend/src/lib/furigana.ts` — shared `applyFurigana` / `loadFurigana` utilities (previously duplicated inline in `Header.tsx`).
+- `Header.tsx` restructured: furigana toggle removed from header bar (Alt+F shortcut retained, now also PATCHes the backend); Concepts link added between Scenarios and the avatar.
+- `UserRoot` gained a top-level `preferences?: { showFurigana?: boolean }` field in both type files. `PATCH /api/users/me/preferences` endpoint added to `UserController` / `UserService`.
+
+**Concepts system (2026-04)**
+
+- New `ConceptKnowledgeUnit` type — fully typed `data` shape replacing the previous `[key: string]: any` open bag:
+  - `title`, `overview` (≤ 2 sentences, no English grammar meta-language)
+  - `mechanics[]` — intent-driven entries with `goalTitle`, `englishIntent`, `rule`, `simpleExample` (fragment + literal translation + `highlight`), `naturalExample` (full sentence embedding the fragment + `highlight`)
+  - `examples[]` — exactly 3 practical sentences with `japanese`, `reading`, `english`, `targetGrammar`
+  - `highlight` fields use the same verbatim-substring contract as `targetGrammar` and drive bold + dotted-underline rendering in the mechanics cards.
+- `backend/src/concepts/` module added: `ConceptsService` (generate / findById / findAll), `ConceptsController` (`POST /api/concepts/generate`, `GET /api/concepts`, `GET /api/concepts/:id`), `ConceptsModule` (imports `GeminiModule`).
+- `CONCEPTS_COLLECTION = 'concepts'` added to `firebase.module.ts`.
+- `GeminiService.generateConcept` added — mirrors `generateLesson` pattern (api-log start/complete, defensive JSON extraction) but uses `this.conceptModelName` sourced from `GEMINI_MODEL` env var, falling back to `this.modelName`. Logs startup line `Using Gemini concept model: …`.
+- `frontend/src/app/concepts/[id]/page.tsx` — client component that fetches real concept data from `GET /api/concepts/:id` and renders it with two highlight helpers: `highlightGrammar` (red tint, used in Examples section) and `highlightClause` (bold + dotted underline, used in mechanics Simple/Natural examples).
+- `frontend/src/app/admin/concepts/page.tsx` — hidden admin page at `/admin/concepts` for triggering concept generation; accepts Topic and optional Detailed Notes fields that are appended to the prompt as `**Additional notes from the teacher:**`.
+- `frontend/src/app/concepts/page.tsx` — empty placeholder page for the Concepts nav link.
 
 ---
 

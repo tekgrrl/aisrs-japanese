@@ -185,8 +185,12 @@ Rules:
     let meaning: string | undefined;
     if (kuId) {
       const kuData = await this.knowledgeUnitsService.findOne(kuId);
-      reading = kuData.data?.reading;
-      meaning = kuData.data?.meaning || kuData.data?.definition;
+      if (kuData.type === 'Vocab') {
+        reading = kuData.data.reading;
+        meaning = kuData.data.definition;
+      } else if (kuData.type === 'Kanji') {
+        meaning = kuData.data.meaning;
+      }
     }
 
     let userMessage = `Topic: ${topic}`;

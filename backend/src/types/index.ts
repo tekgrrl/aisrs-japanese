@@ -245,7 +245,31 @@ export interface GrammarKnowledgeUnit extends KnowledgeUnitBase {
 
 export interface ConceptKnowledgeUnit extends KnowledgeUnitBase {
   type: "Concept";
-  data: { [key: string]: any };
+  data: {
+    title: string;
+    overview: string;
+    mechanics: Array<{
+      goalTitle: string;
+      englishIntent: string;
+      rule: string;
+      simpleExample: {
+        japanese: string;
+        english: string;
+        highlight: string;
+      };
+      naturalExample: {
+        japanese: string;
+        english: string;
+        highlight: string;
+      };
+    }>;
+    examples: Array<{
+      japanese: string;
+      reading: string;
+      english: string;
+      targetGrammar: string;
+    }>;
+  };
 }
 
 export interface ExampleSentenceKnowledgeUnit extends KnowledgeUnitBase {
