@@ -328,6 +328,16 @@ Previously, the Next.js `frontend` app hosted Next API Routes (`/src/app/api/...
 - Frontend `review/page.tsx`: `dynamicQuestionStatus` state replaced by `dynamicQuestionIsNew`; `isNewAiQuestion` simplified; feedback handlers call `recordFeedback`.
 
 ---
+
+**`sentence-cloze` facet type (2026-04)**
+
+- Added `"sentence-cloze"` to `FacetType` in both `backend/src/types/index.ts` and `frontend/src/types/index.ts`.
+- New `frontend/src/components/review/SentenceClozeCard.tsx` — typed fill-in-the-blank card. Renders the sentence with `[____]` replaced by a styled inline blank; wanakana IME input; strict match evaluation against `back.answer` and `back.accepted_alternatives`; reveals `back.fullSentence` on submit.
+- Facet `data` shape: `front: { sentenceWithBlank: string, hint: string }`, `back: { answer: string, fullSentence: string, accepted_alternatives?: string[] }`, `goalTitle?: string`.
+- `review/page.tsx` updated: renders `SentenceClozeCard` for `sentence-cloze` facets; excluded from the standard review-card form and answer-feedback section.
+- Generation (how/when `sentence-cloze` facets are created) is deferred — not yet wired into `UserConceptsService.createFacets`.
+
+---
 **Manage page scoped to user KUs (2026-04)**
 
 - **`UserKnowledgeUnitsService.findAllAsKUs(uid)`** added: returns all KUs for a user regardless of status (learning or reviewing), by fetching the full `users/{uid}/user-kus` sub-collection and batch-joining against global `knowledge-units`. The shared join logic was extracted into a private `_joinKUs` helper, which `findLearningQueueAsKUs` also now uses.

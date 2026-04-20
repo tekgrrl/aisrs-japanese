@@ -249,8 +249,8 @@ Rules:
 
   private async generateConceptQuestion(uid: string, mechanic: ConceptMechanic, kuId: string, facetId?: string): Promise<QuestionResponse> {
     const questionOptions = {
-      "applied-cloze": "Create a fill-in-the-blank question using a full sentence. The blank '[____]' MUST represent the entire grammatical structure taught in the mechanic. Provide the English translation of the sentence as context.",
-      "fragment-translation": "Ask the user to translate a short English fragment into Japanese using the specific grammatical rule. The fragment should not be a full sentence.",
+      "error-correction": "Present a complete Japanese sentence that attempts to use the grammatical rule but contains a specific syntax, particle, or conjugation error related to that rule. Ask the user to correct the error and provide the fully corrected Japanese sentence. Provide the intended English meaning as context.",
+      "novel-translation": "Create a completely new English sentence that naturally forces the use of the grammatical rule. Ask the user to translate it into Japanese. Ensure the vocabulary used is very simple (JLPT N5 level) so the user is only challenged by the grammar structure, not the vocabulary.",
     };
 
     const questionOptionTypes = Object.keys(questionOptions);

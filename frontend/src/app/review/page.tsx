@@ -12,6 +12,7 @@ import { KnowledgeUnit } from "@/types";
 import { getSrsLevelName, getSrsLevelIndex } from "@/utils/srs";
 import { apiFetch } from "@/lib/api-client";
 import SentenceAssemblyCard from "@/components/review/SentenceAssemblyCard";
+import SentenceClozeCard from "@/components/review/SentenceClozeCard";
 
 type AnswerState = "unanswered" | "evaluating" | "correct" | "incorrect";
 
@@ -761,8 +762,18 @@ export default function ReviewPage() {
         />
       )}
 
+      {/* --- Sentence Cloze --- */}
+      {currentItem.facet.facetType === "sentence-cloze" && (
+        <SentenceClozeCard
+          facet={currentItem.facet}
+          onResult={handleUpdateSrs}
+          onAdvance={advanceToNext}
+          onSkip={advanceToNext}
+        />
+      )}
+
       {/* --- Review Card --- */}
-      {currentItem.facet.facetType !== "sentence-assembly" && (
+      {currentItem.facet.facetType !== "sentence-assembly" && currentItem.facet.facetType !== "sentence-cloze" && (
       <div className="bg-gray-800 shadow-2xl rounded-lg p-8">
         {/* Question Area */}
         <div className="text-center mb-8 min-h-[160px] flex flex-col justify-center">
@@ -904,7 +915,7 @@ export default function ReviewPage() {
       )}
 
       {/* --- Answer Feedback Section --- */}
-      {currentItem.facet.facetType !== "sentence-assembly" && answerState !== "unanswered" && answerState !== "evaluating" && (
+      {currentItem.facet.facetType !== "sentence-assembly" && currentItem.facet.facetType !== "sentence-cloze" && answerState !== "unanswered" && answerState !== "evaluating" && (
         <div
           className={`mt-8 p-6 rounded-lg ${
             answerState === "correct"
