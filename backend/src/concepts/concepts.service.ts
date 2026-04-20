@@ -17,7 +17,11 @@ Write for an English-speaking learner at any level. Use Japanese text for all ex
    - 'englishIntent': A short English example of what the learner wants to say that triggers this rule.
    - 'rule': The exact structural rule to achieve this in Japanese.
    - 'simpleExample': A sentence fragment showing ONLY the noun and its modifier (e.g., "待っている友達"). DO NOT make it a full sentence by adding です or だ. The 'english' translation MUST be a highly literal, structural translation (e.g., "waiting friend"). Include 'japanese', 'english', and 'highlight' (the verbatim adjectival clause substring from 'japanese' — must appear exactly as written).
-   - 'naturalExample': A complete, natural Japanese sentence that MUST directly incorporate the exact fragment generated in 'simpleExample'. Include 'japanese', 'english', and 'highlight' (the verbatim adjectival clause substring — same rule as above).
+   - 'naturalExample': A complete, natural Japanese sentence that MUST directly incorporate the exact fragment generated in the 'simpleExample'. Provide the 'japanese' text, an 'english' translation, a 'fragments' array, and an 'accepted_alternatives' array.
+       * The 'fragments' array MUST split the 'japanese' sentence into 4 to 7 logical syntactic blocks (e.g., ["あそこで", "本を", "読んでいる", "人は", "私の兄です"]).
+       * ALWAYS group particles with their preceding nouns.
+       * When concatenated in order, the strings in the 'fragments' array MUST perfectly reconstruct the 'japanese' string.
+       * The 'accepted_alternatives' array MUST list every other ordering of those exact same fragments that also produces a grammatically correct Japanese sentence. Do NOT include rephrased translations or sentences using different words. If no other ordering is valid, provide an empty array.
 
 3. 'examples': Provide exactly 3 practical, everyday example sentences covering the concept. No more, no less.
 
@@ -50,7 +54,9 @@ You MUST return a valid JSON object matching this schema exactly:
         "naturalExample": {
           "japanese": "<Natural everyday Japanese sentence>",
           "english": "<English translation>",
-          "highlight": "<Verbatim adjectival clause substring from japanese>"
+          "highlight": "<Verbatim adjectival clause substring from japanese>",
+          "fragments": ["<chunk 1>", "<chunk 2>", "..."],
+          "accepted_alternatives": ["<alternative ordering 1 joined>", "..."]
         }
       }
     ],

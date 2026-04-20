@@ -1,13 +1,12 @@
 "use client";
 
 import { Fragment, useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api-client";
 import { ConceptKnowledgeUnit } from "@/types";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-// Bold + dotted underline — distinct from the red targetGrammar highlight
 function highlightClause(text: string, target: string) {
   if (!target) return <span>{text}</span>;
   const parts = text.split(target);
@@ -51,38 +50,68 @@ function highlightGrammar(text: string, target: string) {
 
 export default function ConceptPage() {
   const { id } = useParams<{ id: string }>();
+  const router = useRouter();
+
   const [concept, setConcept] = useState<(ConceptKnowledgeUnit & { id: string }) | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Facet checklist state
+  const [isEnrolled, setIsEnrolled] = useState(false);
+  const [hasFacets, setHasFacets] = useState(false);
+  const [selectedMechanics, setSelectedMechanics] = useState<Record<number, boolean>>({});
+  const [includeAiQuestion, setIncludeAiQuestion] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
   useEffect(() => {
     if (!id) return;
 
-    console.log("[ConceptPage] Fetching concept id:", id);
-
-    apiFetch(`/api/concepts/${id}`)
-      .then((res) => {
-        console.log("[ConceptPage] Response status:", res.status, res.statusText);
-        if (!res.ok) throw new Error(`HTTP ${res.status} — ${res.statusText}`);
-        return res.json();
+    Promise.all([
+      apiFetch(`/api/concepts/${id}`).then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); }),
+      apiFetch(`/api/user-concepts`).then(r => r.json()),
+      apiFetch(`/api/user-concepts/${id}/facets`).then(r => r.json()),
+    ])
+      .then(([conceptData, userConcepts, facets]) => {
+        setConcept(conceptData as ConceptKnowledgeUnit & { id: string });
+        const enrolled = Array.isArray(userConcepts) && userConcepts.some((uc: any) => uc.conceptId === id);
+        setIsEnrolled(enrolled);
+        setHasFacets(Array.isArray(facets) && facets.length > 0);
       })
-      .then((data) => {
-        console.log("[ConceptPage] Raw response data:", data);
-        console.log("[ConceptPage] data.type:", data?.type);
-        console.log("[ConceptPage] data.data:", data?.data);
-        console.log("[ConceptPage] data.data.mechanics:", data?.data?.mechanics);
-        console.log("[ConceptPage] data.data.examples:", data?.data?.examples);
-        setConcept(data as ConceptKnowledgeUnit & { id: string });
-      })
-      .catch((err) => {
-        console.error("[ConceptPage] Fetch error:", err);
-        setError(err instanceof Error ? err.message : String(err));
-      })
-      .finally(() => {
-        setLoading(false);
-        console.log("[ConceptPage] Fetch complete");
-      });
+      .catch((err) => setError(err instanceof Error ? err.message : String(err)))
+      .finally(() => setLoading(false));
   }, [id]);
+
+  const toggleMechanic = (index: number) => {
+    setSelectedMechanics(prev => ({ ...prev, [index]: !prev[index] }));
+  };
+
+  const handleStartLearning = async () => {
+    const indices = Object.entries(selectedMechanics)
+      .filter(([, checked]) => checked)
+      .map(([i]) => Number(i));
+
+    if (indices.length === 0 && !includeAiQuestion) {
+      setSubmitError("Select at least one item.");
+      return;
+    }
+
+    setIsSubmitting(true);
+    setSubmitError(null);
+
+    try {
+      const res = await apiFetch(`/api/user-concepts/${id}/facets`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mechanicIndices: indices, includeAiQuestion }),
+      });
+      if (!res.ok) throw new Error("Failed to create learning items");
+      router.push("/review");
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : "An unknown error occurred.");
+      setIsSubmitting(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -95,14 +124,13 @@ export default function ConceptPage() {
   if (error || !concept) {
     return (
       <main className="container mx-auto max-w-3xl px-6 py-12">
-        <p className="text-shodo-accent">
-          {error ?? "Concept not found."}
-        </p>
+        <p className="text-shodo-accent">{error ?? "Concept not found."}</p>
       </main>
     );
   }
 
   const { data } = concept;
+  const showChecklist = isEnrolled && !hasFacets;
 
   return (
     <main className="container mx-auto max-w-3xl px-6 py-12 space-y-14">
@@ -123,10 +151,7 @@ export default function ConceptPage() {
         </h2>
         <div className="space-y-4">
           {data.mechanics.map((m, i) => (
-            <div
-              key={i}
-              className="border border-shodo-ink/10 rounded-xl p-5 space-y-4"
-            >
+            <div key={i} className="border border-shodo-ink/10 rounded-xl p-5 space-y-4">
               <div className="flex items-start gap-4">
                 <span className="text-xs font-bold text-shodo-accent mt-0.5 shrink-0 w-5 text-right">
                   {i + 1}
@@ -163,23 +188,76 @@ export default function ConceptPage() {
         </h2>
         <div className="space-y-4">
           {data.examples.map((ex, i) => (
-            <div
-              key={i}
-              className="border border-shodo-ink/10 rounded-xl px-6 py-5 space-y-2"
-            >
+            <div key={i} className="border border-shodo-ink/10 rounded-xl px-6 py-5 space-y-2">
               <p className="text-2xl text-shodo-ink leading-snug">
                 {highlightGrammar(ex.japanese, ex.targetGrammar)}
               </p>
-              <p className="text-sm text-shodo-ink/45 leading-snug">
-                {ex.reading}
-              </p>
-              <p className="text-sm text-shodo-ink/65 border-t border-shodo-ink/8 pt-2 mt-2">
-                {ex.english}
-              </p>
+              <p className="text-sm text-shodo-ink/45 leading-snug">{ex.reading}</p>
+              <p className="text-sm text-shodo-ink/65 border-t border-shodo-ink/8 pt-2 mt-2">{ex.english}</p>
             </div>
           ))}
         </div>
       </section>
+
+      {/* Choose What to Learn */}
+      {showChecklist && (
+        <section className="border border-shodo-ink/10 rounded-xl p-6 space-y-6">
+          <h2 className="text-base font-semibold text-shodo-ink">Choose What to Learn</h2>
+
+          <div className="space-y-3">
+            <h3 className="text-xs font-semibold uppercase tracking-widest text-shodo-ink/40">
+              Sentence Structure
+            </h3>
+            {data.mechanics.map((m, i) => (
+              <label
+                key={i}
+                className="flex items-start gap-3 p-4 border border-shodo-ink/10 rounded-lg hover:bg-shodo-ink/[0.02] cursor-pointer transition-colors"
+              >
+                <input
+                  type="checkbox"
+                  className="mt-0.5 h-4 w-4 rounded border-shodo-ink/30 text-shodo-accent focus:ring-shodo-accent/50"
+                  checked={!!selectedMechanics[i]}
+                  onChange={() => toggleMechanic(i)}
+                />
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-shodo-ink">{m.goalTitle}</p>
+                  <p className="text-sm text-shodo-ink/50 mt-0.5">{m.naturalExample.japanese}</p>
+                </div>
+              </label>
+            ))}
+          </div>
+
+          <div className="space-y-3">
+            <h3 className="text-xs font-semibold uppercase tracking-widest text-shodo-ink/40">
+              AI-Generated Questions
+            </h3>
+            <label className="flex items-start gap-3 p-4 border border-shodo-ink/10 rounded-lg hover:bg-shodo-ink/[0.02] cursor-pointer transition-colors">
+              <input
+                type="checkbox"
+                className="mt-0.5 h-4 w-4 rounded border-shodo-ink/30 text-shodo-accent focus:ring-shodo-accent/50"
+                checked={includeAiQuestion}
+                onChange={() => setIncludeAiQuestion(prev => !prev)}
+              />
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-shodo-ink">AI-Generated Questions</p>
+                <p className="text-sm text-shodo-ink/50 mt-0.5">Practice applying this concept through AI-generated quiz questions</p>
+              </div>
+            </label>
+          </div>
+
+          {submitError && <p className="text-sm text-shodo-accent">{submitError}</p>}
+
+          <button
+            onClick={handleStartLearning}
+            disabled={isSubmitting}
+            className={`w-full py-2.5 rounded-lg text-sm font-medium text-white transition-colors ${
+              isSubmitting ? "bg-blue-400 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700"
+            }`}
+          >
+            {isSubmitting ? "Saving…" : "Start Learning Selected Items"}
+          </button>
+        </section>
+      )}
 
     </main>
   );

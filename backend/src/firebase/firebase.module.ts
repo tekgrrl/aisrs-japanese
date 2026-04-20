@@ -13,6 +13,7 @@ export const USER_STATS_COLLECTION = 'user-stats';
 export const SCENARIOS_COLLECTION = 'scenarios';
 export const CONCEPTS_COLLECTION = 'concepts';
 export const USER_KUS_SUBCOLLECTION = 'user-kus';
+export const USER_CONCEPTS_SUBCOLLECTION = 'user-concepts';
 export const QUESTION_STATES_SUBCOLLECTION = 'question-states';
 export const Timestamp = admin.firestore.Timestamp;
 export const FieldValue = admin.firestore.FieldValue;

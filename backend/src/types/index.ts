@@ -261,6 +261,8 @@ export interface ConceptKnowledgeUnit extends KnowledgeUnitBase {
         japanese: string;
         english: string;
         highlight: string;
+        fragments: string[];
+        accepted_alternatives: string[];
       };
     }>;
     examples: Array<{
@@ -314,6 +316,14 @@ export interface UserKnowledgeUnit {
   history?: any[];
 }
 
+export interface UserConcept {
+  id: string;
+  userId: string;
+  conceptId: string;
+  startedAt: Timestamp;
+  lastSeenAt?: Timestamp;
+}
+
 /** Distributes Omit across union members, preserving the discriminated union. */
 type DistributiveOmit<T, K extends keyof any> = T extends any ? Omit<T, K> : never;
 
@@ -329,7 +339,8 @@ export type FacetType =
   | "Reading-to-Content"
   | "Kanji-Component-Meaning" // e.g., "食" -> "eat"
   | "Kanji-Component-Reading" // e.g., "食" -> "ショク"
-  | "audio";
+  | "audio"
+  | "sentence-assembly";
 
 export interface ReviewFacet {
   id: string;

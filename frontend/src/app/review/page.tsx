@@ -11,6 +11,7 @@ import EditKnowledgeUnitModal from "@/components/EditKnowledgeUnitModal";
 import { KnowledgeUnit } from "@/types";
 import { getSrsLevelName, getSrsLevelIndex } from "@/utils/srs";
 import { apiFetch } from "@/lib/api-client";
+import SentenceAssemblyCard from "@/components/review/SentenceAssemblyCard";
 
 type AnswerState = "unanswered" | "evaluating" | "correct" | "incorrect";
 
@@ -207,8 +208,11 @@ export default function ReviewPage() {
       setDynamicQuestionId(null);
       setDynamicQuestionIsNew(false);
 
+      const topic = currentItem.ku.type === 'Concept'
+        ? (currentItem.ku as import('@/types').ConceptKnowledgeUnit).data.title
+        : currentItem.ku.content;
       fetchDynamicQuestion(
-        currentItem.ku.content,
+        topic,
         currentItem.facet.id,
         currentItem.ku.id,
       );
@@ -746,7 +750,19 @@ export default function ReviewPage() {
         </div>
       )}
 
+      {/* --- Sentence Assembly --- */}
+      {currentItem.facet.facetType === "sentence-assembly" && (
+        <SentenceAssemblyCard
+          facet={currentItem.facet}
+          concept={currentItem.ku as any}
+          onResult={handleUpdateSrs}
+          onAdvance={advanceToNext}
+          onSkip={advanceToNext}
+        />
+      )}
+
       {/* --- Review Card --- */}
+      {currentItem.facet.facetType !== "sentence-assembly" && (
       <div className="bg-gray-800 shadow-2xl rounded-lg p-8">
         {/* Question Area */}
         <div className="text-center mb-8 min-h-[160px] flex flex-col justify-center">
@@ -885,8 +901,10 @@ export default function ReviewPage() {
         </form>
       </div>
 
+      )}
+
       {/* --- Answer Feedback Section --- */}
-      {answerState !== "unanswered" && answerState !== "evaluating" && (
+      {currentItem.facet.facetType !== "sentence-assembly" && answerState !== "unanswered" && answerState !== "evaluating" && (
         <div
           className={`mt-8 p-6 rounded-lg ${
             answerState === "correct"
