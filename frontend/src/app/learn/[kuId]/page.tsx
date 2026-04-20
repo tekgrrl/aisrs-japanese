@@ -481,7 +481,7 @@ export default function LearnItemPage() {
             onChange={() => handleCheckboxChange("AI-Generated-Question")}
           />
           <span className="ml-3 text-lg text-gray-900 dark:text-white">
-            AI-Generated Quiz Questions
+            AI-Generated Questions
           </span>
         </label>
       </div>
@@ -491,7 +491,7 @@ export default function LearnItemPage() {
         disabled={isSubmitting || !lesson}
         className="mt-6 w-full px-4 py-3 bg-blue-600 text-white font-semibold rounded-md shadow-md hover:bg-blue-700 disabled:bg-gray-500 disabled:cursor-wait"
       >
-        {isSubmitting ? "Saving..." : "Start Learning Selected Facets"}
+        {isSubmitting ? "Saving..." : "Start Learning Selected Items"}
       </button>
     </div>
   );

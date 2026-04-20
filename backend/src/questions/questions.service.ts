@@ -7,7 +7,9 @@ import {
   Timestamp,
   FieldValue,
 } from '../firebase/firebase.module';
-import { ReviewFacet, QuestionItem, UserQuestionState } from '@/types';
+import { ReviewFacet, QuestionItem, UserQuestionState, ConceptKnowledgeUnit } from '@/types';
+
+type ConceptMechanic = ConceptKnowledgeUnit['data']['mechanics'][number];
 import { GeminiService } from '../gemini/gemini.service';
 import { ReviewsService } from '../reviews/reviews.service';
 import { KnowledgeUnitsService } from '../knowledge-units/knowledge-units.service';
@@ -142,7 +144,14 @@ export class QuestionsService {
     return null;
   }
 
-  private async generateAndSave(uid: string, topic: string, kuId: string, facetId?: string): Promise<QuestionResponse> {
+  private async generateAndSave(uid: string, topic: string, kuId: string, facetId?: string, mechanicData?: ConceptMechanic): Promise<QuestionResponse> {
+    if (mechanicData) {
+      return this.generateConceptQuestion(uid, mechanicData, kuId, facetId);
+    }
+    return this.generateVocabQuestion(uid, topic, kuId, facetId);
+  }
+
+  private async generateVocabQuestion(uid: string, topic: string, kuId: string, facetId?: string): Promise<QuestionResponse> {
     const questionOptions = {
       "conjugation": "if the word is a verb, conjugate the verb to a specific form e.g.: Give the past potential form of the verb in question",
       "particle": "Match up the Vocab in question with a particle to give a particular meaning in a sentence that you specify, you can represent the particle with a blank '[____]'",
@@ -184,12 +193,16 @@ Rules:
     let reading: string | undefined;
     let meaning: string | undefined;
     if (kuId) {
-      const kuData = await this.knowledgeUnitsService.findOne(kuId);
-      if (kuData.type === 'Vocab') {
-        reading = kuData.data.reading;
-        meaning = kuData.data.definition;
-      } else if (kuData.type === 'Kanji') {
-        meaning = kuData.data.meaning;
+      try {
+        const kuData = await this.knowledgeUnitsService.findOne(kuId);
+        if (kuData.type === 'Vocab') {
+          reading = kuData.data.reading;
+          meaning = kuData.data.definition;
+        } else if (kuData.type === 'Kanji') {
+          meaning = kuData.data.meaning;
+        }
+      } catch {
+        // concept IDs won't be in knowledge-units; proceed without enrichment
       }
     }
 
@@ -226,6 +239,76 @@ Rules:
 
     await ref.set(newQuestion);
     this.logger.log(`Saved new question ${ref.id} for KU ${kuId}`);
+
+    if (facetId) {
+      await this.reviewsService.updateFacetQuestion(uid, facetId, ref.id);
+    }
+
+    return this.toResponse(newQuestion, true);
+  }
+
+  private async generateConceptQuestion(uid: string, mechanic: ConceptMechanic, kuId: string, facetId?: string): Promise<QuestionResponse> {
+    const questionOptions = {
+      "applied-cloze": "Create a fill-in-the-blank question using a full sentence. The blank '[____]' MUST represent the entire grammatical structure taught in the mechanic. Provide the English translation of the sentence as context.",
+      "fragment-translation": "Ask the user to translate a short English fragment into Japanese using the specific grammatical rule. The fragment should not be a full sentence.",
+    };
+
+    const questionOptionTypes = Object.keys(questionOptions);
+    const selectedType = questionOptionTypes[Math.floor(Math.random() * questionOptionTypes.length)];
+
+    const systemPrompt = `You are an expert Japanese tutor.
+You are testing the user on a specific grammatical mechanic.
+Rule Name: ${mechanic.goalTitle}
+Structural Rule: ${mechanic.rule}
+Example Application: ${mechanic.simpleExample.japanese} (${mechanic.simpleExample.english})
+
+Your task is to generate a novel question to test this exact mechanic using this format:
+${questionOptions[selectedType as keyof typeof questionOptions]}
+
+You MUST return ONLY a valid JSON object with the following schema:
+{
+  "question": "The actual question. If fill-in-the-blank, use '[____]' exactly once.",
+  "context": "The English translation of the target sentence/fragment to guide the user.",
+  "answer": "The Japanese text that answers the question or fills the blank.",
+  "accepted_alternatives": ["Array of other valid Japanese answers"]
+}
+
+Rules:
+1. The answer MUST require the user to apply the provided Structural Rule.
+2. Do not use Romaji at all.
+3. For 'applied-cloze', the blank must encapsulate the conjugated rule (e.g., if the rule is modifying a noun, the blank should ideally be the modifier clause).
+4. Use standard, N4/N5 level vocabulary for the surrounding sentence so the user focuses strictly on the grammar mechanic.
+5. Do not add any text before or after the JSON object.`;
+
+    const questionString = await this.geminiService.generateQuestionAI('', systemPrompt, {});
+
+    if (!questionString) throw new Error('AI response was empty.');
+
+    let parsed: { question: string; answer: string; context?: string; accepted_alternatives?: string[] };
+    try {
+      parsed = JSON.parse(questionString);
+    } catch {
+      throw new Error('Failed to parse AI JSON response for concept question');
+    }
+
+    const ref = this.db.collection(QUESTIONS_COLLECTION).doc();
+    const newQuestion: QuestionItem = {
+      id: ref.id,
+      kuId,
+      data: {
+        question: parsed.question,
+        context: parsed.context,
+        answer: parsed.answer,
+        acceptedAlternatives: parsed.accepted_alternatives,
+        difficulty: 'JLPT-N4',
+      },
+      rank: 50,
+      rejectionCount: 0,
+      createdAt: Timestamp.now(),
+    };
+
+    await ref.set(newQuestion);
+    this.logger.log(`Saved new concept question ${ref.id} for KU ${kuId} (mechanic: ${mechanic.goalTitle})`);
 
     if (facetId) {
       await this.reviewsService.updateFacetQuestion(uid, facetId, ref.id);

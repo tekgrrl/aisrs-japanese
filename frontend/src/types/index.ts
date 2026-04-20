@@ -298,6 +298,8 @@ export interface ConceptKnowledgeUnit extends KnowledgeUnitBase {
         japanese: string;
         english: string;
         highlight: string;
+        fragments: string[];
+        accepted_alternatives: string[];
       };
     }>;
     examples: Array<{
@@ -383,7 +385,8 @@ export type FacetType =
   | "Reading-to-Content"
   | "Kanji-Component-Meaning" // e.g., "食" -> "eat"
   | "Kanji-Component-Reading" // e.g., "食" -> "ショク"
-  | "audio";
+  | "audio"
+  | "sentence-assembly";
 
 export interface ReviewFacet {
   id: string;

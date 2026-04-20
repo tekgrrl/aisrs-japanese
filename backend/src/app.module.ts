@@ -18,9 +18,10 @@ import { AuthModule } from './auth/auth.module';
 import { UserModule } from './users/user.module';
 import { UserKnowledgeUnitsModule } from './user-knowledge-units/user-knowledge-units.module';
 import { ConceptsModule } from './concepts/concepts.module';
+import { UserConceptsModule } from './user-concepts/user-concepts.module';
 
 @Module({
-  imports: [ReviewsModule, FirebaseModule, GeminiModule, ConfigModule.forRoot(), QuestionsModule, ApilogModule, LessonsModule, KnowledgeUnitsModule, StatsModule, KanjiModule, ScenariosModule, AudioModule, AuthModule, UserModule, UserKnowledgeUnitsModule, ConceptsModule],
+  imports: [ReviewsModule, FirebaseModule, GeminiModule, ConfigModule.forRoot(), QuestionsModule, ApilogModule, LessonsModule, KnowledgeUnitsModule, StatsModule, KanjiModule, ScenariosModule, AudioModule, AuthModule, UserModule, UserKnowledgeUnitsModule, ConceptsModule, UserConceptsModule],
   controllers: [AppController],
   providers: [AppService, QuestionsService],
 })

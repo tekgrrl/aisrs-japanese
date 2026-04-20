@@ -10,6 +10,7 @@ import {
     FIRESTORE_CONNECTION,
     REVIEW_FACETS_COLLECTION,
     KNOWLEDGE_UNITS_COLLECTION,
+    CONCEPTS_COLLECTION,
     USER_STATS_COLLECTION,
 } from '../firebase/firebase.module';
 import { ADMIN_USER_ID } from '../lib/constants';
@@ -341,9 +342,22 @@ Example for a fail: {"result": "fail", "explanation": "Incorrect. The expected r
                 return null; // Return null so we can filter it out in the next step
             }
 
+            // concept facets reference a concept, not a knowledge unit
+            if (facet.facetType === 'sentence-assembly' || facet.facetType === 'AI-Generated-Question') {
+                try {
+                    const conceptDoc = await this.db.collection(CONCEPTS_COLLECTION).doc(facet.kuId).get();
+                    if (!conceptDoc.exists) {
+                        this.logger.warn(`Concept ${facet.kuId} not found for facet ${facet.id}`);
+                        return null;
+                    }
+                    return { facet, ku: { id: conceptDoc.id, ...conceptDoc.data() } as KnowledgeUnit, lesson: null };
+                } catch (e) {
+                    this.logger.warn(`Failed to fetch concept for facet ${facet.id}`, e);
+                    return null;
+                }
+            }
+
             // Fetch related KU
-            // (Assuming findOne handles the 404 gracefully or returns null, 
-            // you might want to try/catch here if data integrity is loose)
             let ku: KnowledgeUnit | null = null;
             try {
                 ku = await this.knowledgeUnitsService.findOne(facet.kuId);
