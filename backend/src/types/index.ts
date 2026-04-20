@@ -340,7 +340,8 @@ export type FacetType =
   | "Kanji-Component-Meaning" // e.g., "食" -> "eat"
   | "Kanji-Component-Reading" // e.g., "食" -> "ショク"
   | "audio"
-  | "sentence-assembly";
+  | "sentence-assembly"
+  | "sentence-cloze";
 
 export interface ReviewFacet {
   id: string;
