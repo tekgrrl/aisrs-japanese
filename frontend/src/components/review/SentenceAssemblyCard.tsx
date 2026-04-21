@@ -2,11 +2,10 @@
 
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
-import { ReviewFacet, ConceptKnowledgeUnit } from "@/types";
+import { ReviewFacet } from "@/types";
 
 interface Props {
   facet: ReviewFacet;
-  concept?: ConceptKnowledgeUnit & { id: string };
   onResult: (result: "pass" | "fail") => Promise<void>;
   onAdvance: () => void;
   onSkip: () => void;
@@ -21,13 +20,15 @@ function shuffleArray<T>(arr: T[]): T[] {
   return a;
 }
 
-export default function SentenceAssemblyCard({ facet, concept, onResult, onAdvance, onSkip }: Props) {
-  const { goalTitle, fragments, answer, english, accepted_alternatives } = facet.data as {
+export default function SentenceAssemblyCard({ facet, onResult, onAdvance, onSkip }: Props) {
+  const { goalTitle, fragments, answer, english, accepted_alternatives, sourceId, sourceTitle } = facet.data as {
     goalTitle: string;
     fragments: string[];
     answer: string;
     english: string;
     accepted_alternatives: string[];
+    sourceId?: string;
+    sourceTitle?: string;
   };
 
   const [available, setAvailable] = useState<string[]>(() => shuffleArray(fragments));
@@ -163,12 +164,12 @@ export default function SentenceAssemblyCard({ facet, concept, onResult, onAdvan
                 <span className="font-semibold">Correct answer: </span>
                 <span className="text-white font-medium">{answer}</span>
               </p>
-              {concept && (
+              {sourceId && (
                 <Link
-                  href={`/concepts/${concept.id}`}
+                  href={`/concepts/${sourceId}`}
                   className="inline-block px-4 py-2 bg-[#0A5C36] text-white font-semibold rounded-md hover:bg-[#084a2b]"
                 >
-                  Review concept: {concept.data.title}
+                  Review concept: {sourceTitle}
                 </Link>
               )}
             </>

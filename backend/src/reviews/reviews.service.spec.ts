@@ -4,7 +4,6 @@ import { FIRESTORE_CONNECTION } from '../firebase/firebase.module';
 import { GeminiService } from '../gemini/gemini.service';
 import { QuestionsService } from '../questions/questions.service';
 import { KnowledgeUnitsService } from '../knowledge-units/knowledge-units.service';
-import { LessonsService } from '@/lessons/lessons.service';
 import { StatsService } from '../stats/stats.service';
 
 describe('ReviewsService', () => {
@@ -20,7 +19,6 @@ describe('ReviewsService', () => {
   const mockGeminiService = {};
   const mockQuestionsService = {};
   const mockKnowledgeUnitsService = {};
-  const mockLessonsService = {};
   const mockStatsService = {};
 
   beforeEach(async () => {
@@ -31,7 +29,6 @@ describe('ReviewsService', () => {
         { provide: GeminiService, useValue: mockGeminiService },
         { provide: QuestionsService, useValue: mockQuestionsService },
         { provide: KnowledgeUnitsService, useValue: mockKnowledgeUnitsService },
-        { provide: LessonsService, useValue: mockLessonsService },
         { provide: StatsService, useValue: mockStatsService },
       ],
     }).compile();

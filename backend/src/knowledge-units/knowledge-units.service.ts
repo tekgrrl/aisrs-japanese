@@ -7,6 +7,7 @@ import { KnowledgeUnit } from '@/types';
 import { KnowledgeUnitType } from '@/types';
 import { NotFoundException } from '@nestjs/common';
 import { Query } from '@google-cloud/firestore';
+import { GrammarNote } from '@/types/scenario';
 
 @Injectable()
 export class KnowledgeUnitsService {
@@ -120,7 +121,7 @@ export class KnowledgeUnitsService {
         return newRef.id;
     }
 
-    async ensureVocab(content: string): Promise<string> {
+    async ensureVocab(content: string, hint?: { reading?: string; definition?: string; jlptLevel?: string }): Promise<string> {
         const existing = await this.findByContent(content, 'Vocab');
 
         if (existing) {
@@ -131,7 +132,11 @@ export class KnowledgeUnitsService {
         await newRef.set({
             content,
             type: 'Vocab',
-            data: { reading: '', definition: '' },
+            data: {
+                reading: hint?.reading ?? '',
+                definition: hint?.definition ?? '',
+                ...(hint?.jlptLevel ? { jlptLevel: hint.jlptLevel } : {}),
+            },
             status: 'learning',
             facet_count: 0,
             createdAt: Timestamp.now(),
@@ -308,6 +313,34 @@ export class KnowledgeUnitsService {
                 ? data.createdAt.toDate().toISOString()
                 : data.createdAt,
         } as unknown as KnowledgeUnit;
+    }
+
+    async ensureGrammarKU(note: GrammarNote): Promise<string> {
+        const content = note.pattern ?? note.title;
+        const existing = await this.findByContent(content, 'Grammar');
+
+        if (existing) {
+            return existing.id;
+        }
+
+        const newRef = this.db.collection(KNOWLEDGE_UNITS_COLLECTION).doc();
+        await newRef.set({
+            content,
+            type: 'Grammar',
+            data: {
+                title: note.title,
+                explanation: note.explanation,
+                exampleInContext: note.exampleInContext,
+            },
+            status: 'learning',
+            facet_count: 0,
+            createdAt: Timestamp.now(),
+            relatedUnits: [],
+            personalNotes: '',
+        });
+
+        this.logger.log(`Created Grammar KU for pattern "${content}"`);
+        return newRef.id;
     }
 
     async findOne(id: string): Promise<KnowledgeUnit> {

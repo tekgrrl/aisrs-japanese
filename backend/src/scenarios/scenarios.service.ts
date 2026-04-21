@@ -9,6 +9,7 @@ import { Firestore, CollectionReference, Timestamp, FieldValue } from 'firebase-
 import { Scenario, GenerateScenarioDto, ScenarioState, ExtractedKU, ChatMessage, ScenarioEvaluation, ScenarioAttempt } from '../types/scenario';
 import { KnowledgeUnitsService } from '../knowledge-units/knowledge-units.service';
 import { UserKnowledgeUnitsService } from '../user-knowledge-units/user-knowledge-units.service';
+import { LessonsService } from '../lessons/lessons.service';
 import { FIRESTORE_CONNECTION, SCENARIOS_COLLECTION, REVIEW_FACETS_COLLECTION } from '../firebase/firebase.module';
 import { GeminiService } from '../gemini/gemini.service';
 
@@ -35,6 +36,7 @@ export class ScenariosService {
     private readonly geminiService: GeminiService,
     private readonly knowledgeUnitsService: KnowledgeUnitsService,
     private readonly userKnowledgeUnitsService: UserKnowledgeUnitsService,
+    private readonly lessonsService: LessonsService,
   ) {
     this.collectionRef = this.db.collection(SCENARIOS_COLLECTION);
   }
@@ -102,6 +104,7 @@ export class ScenariosService {
           meaning: cleanMeaning(ku.meaning),
           type: 'vocab',
           status: 'new',
+          jlptLevel: ku.jlptLevel ?? null,
         })),
         grammarNotes: data.grammarNotes,
         state: 'encounter',
@@ -156,12 +159,18 @@ export class ScenariosService {
               const globalKu = await this.knowledgeUnitsService.findByContent(ku.content, 'Vocab');
 
               if (globalKu) {
-                this.logger.log(`Linking "${ku.content}" to global KU ${globalKu.id}`);
+                this.logger.log(`Linking "${ku.content}" to existing global KU ${globalKu.id}`);
                 await this.userKnowledgeUnitsService.create(uid, globalKu.id);
                 updatedKUs.push({ ...ku, kuId: globalKu.id, status: 'learning' });
               } else {
-                this.logger.warn(`No global KU found for "${ku.content}" — skipping UKU creation`);
-                updatedKUs.push(ku);
+                this.logger.log(`No global KU found for "${ku.content}" — creating new KU with level hint ${ku.jlptLevel ?? 'none'}`);
+                const newKuId = await this.knowledgeUnitsService.ensureVocab(ku.content, {
+                  reading: ku.reading,
+                  definition: ku.meaning,
+                  jlptLevel: ku.jlptLevel,
+                });
+                await this.userKnowledgeUnitsService.create(uid, newKuId);
+                updatedKUs.push({ ...ku, kuId: newKuId, status: 'learning' });
               }
             } catch (error) {
               this.logger.error(`Failed to process KU "${ku.content}" during advanceState`, error);
@@ -172,33 +181,23 @@ export class ScenariosService {
           updateData.extractedKUs = updatedKUs;
         }
 
-        // Create sentence-assembly facets for each grammar note
+        // Emit Grammar KUs + UKUs + UserGrammarLessons for each grammar note
         if (scenario.grammarNotes && scenario.grammarNotes.length > 0) {
-          const facetsRef = this.db.collection('users').doc(uid).collection(REVIEW_FACETS_COLLECTION);
-          const facetBatch = this.db.batch();
-          const now = Timestamp.now();
-
           for (const note of scenario.grammarNotes) {
-            const ref = facetsRef.doc();
-            facetBatch.set(ref, {
-              kuId: scenario.id,
-              facetType: 'sentence-assembly',
-              srsStage: 0,
-              nextReviewAt: now,
-              createdAt: now,
-              history: [],
-              data: {
-                goalTitle: note.title,
-                fragments: note.exampleInContext.fragments,
-                answer: note.exampleInContext.japanese,
-                english: note.exampleInContext.english,
-                accepted_alternatives: note.exampleInContext.accepted_alternatives ?? [],
-              },
-            });
+            try {
+              const kuId = await this.knowledgeUnitsService.ensureGrammarKU(note);
+              await this.userKnowledgeUnitsService.create(uid, kuId);
+              await this.lessonsService.createUserGrammarLesson(
+                uid,
+                kuId,
+                { sourceType: 'scenario', sourceId: scenario.id, sourceTitle: scenario.title },
+                note.exampleInContext,
+              );
+            } catch (err) {
+              this.logger.error(`Failed to process grammar note "${note.title}"`, err);
+            }
           }
-
-          await facetBatch.commit();
-          this.logger.log(`Created ${scenario.grammarNotes.length} sentence-assembly facets for uid=${uid} scenarioId=${scenario.id}`);
+          this.logger.log(`Processed ${scenario.grammarNotes.length} grammar notes for uid=${uid} scenarioId=${scenario.id}`);
         }
 
         newState = 'drill';
@@ -410,6 +409,9 @@ Create a "Genki-style" learning scenario for an ADULT traveler/expat (not a stud
      - \`content\`: Japanese text ONLY (e.g., "本屋"). No readings or definitions in this field.
      - \`reading\`: Kana reading ONLY (e.g., "ほんや"). No Romaji.
      - \`meaning\`: English definition ONLY.
+     - \`jlptLevel\`: JLPT level hint for this word (e.g., "N4"). MUST be one of: N5, N4, N3, N2, N1. Use your best judgement for the level of each individual word.
+   - For \`grammarNotes\`:
+     - \`pattern\`: The extractable grammar pattern in isolation (e.g., "～をお願いします", "～ている"). This should be concise and reusable across contexts.
 
 **Output Schema (Return ONLY raw JSON):**
 {
@@ -438,11 +440,13 @@ Create a "Genki-style" learning scenario for an ADULT traveler/expat (not a stud
       "content": "本屋",
       "reading": "ほんや",
       "meaning": "Bookstore",
-      "type": "vocab"
+      "type": "vocab",
+      "jlptLevel": "N4"
     }
   ],
   "grammarNotes": [
     {
+      "pattern": "The extractable grammar pattern, e.g. ～をお願いします",
       "title": "Grammar Point Name",
       "explanation": "Clear explanation",
       "exampleInContext": {

@@ -182,7 +182,42 @@ export interface UserLessonData {
   personalMnemonic?: string;
 }
 
-export type Lesson = VocabLesson | KanjiLesson;
+export interface GrammarLesson {
+  kuId?: string;
+  type: 'Grammar';
+  pattern: string;       // e.g. "～をお願いします"
+  title: string;         // e.g. "Making Requests with ～をお願いします"
+  jlptLevel: string;
+  meaning: string;       // one-line summary
+  formation: string;     // "noun + をお願いします"
+  notes: string;         // nuance, pitfalls
+  examples: {
+    japanese: string;
+    english: string;
+    context?: string;    // e.g. "convenience store" — for future facet targeting
+    fragments: string[];
+    accepted_alternatives: string[];
+  }[];
+}
+
+export interface UserGrammarLesson {
+  id: string;
+  userId: string;
+  kuId: string;
+  lessonId: string;      // = kuId (Grammar lessons stored at lessons/{kuId})
+  sourceType: 'scenario' | 'concept';
+  sourceId: string;
+  sourceTitle: string;
+  contextExample: {
+    japanese: string;
+    english: string;
+    fragments: string[];
+    accepted_alternatives: string[];
+  };
+  createdAt: Timestamp;
+}
+
+export type Lesson = VocabLesson | KanjiLesson | GrammarLesson;
 
 export type KnowledgeUnitType =
   | "Vocab"
@@ -371,14 +406,8 @@ export interface ReviewFacet {
   data?: any;
 }
 
-/**
- * Represents a "joined" review item, combining the
- * facet with its parent KU.
- */
 export interface ReviewItem {
   facet: ReviewFacet;
-  ku: KnowledgeUnit | (KnowledgeUnit & UserKnowledgeUnit);
-  lesson?: Lesson | (VocabLesson & UserLessonData) | (KanjiLesson & UserLessonData);
 }
 
 // This represents the structure of our old db.json

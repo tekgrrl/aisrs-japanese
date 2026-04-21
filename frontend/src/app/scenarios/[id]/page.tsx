@@ -119,6 +119,7 @@ export default function ScenarioPage({
   }, [scenario]);
 
   const [advancing, setAdvancing] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -227,7 +228,8 @@ export default function ScenarioPage({
       await fetchScenario();
       if (scenario.state === "encounter") {
         window.dispatchEvent(new CustomEvent("refreshStats"));
-        alert("Vocabulary added to your queue!");
+        setToast(`${scenario.extractedKUs.length} items added to your learning queue`);
+        setTimeout(() => setToast(null), 4000);
       } else if (scenario.state === "drill") {
         // Moved to simulate
       } else if (scenario.state === "simulate") {
@@ -353,6 +355,12 @@ export default function ScenarioPage({
 
   return (
     <div className="max-w-4xl mx-auto p-6 space-y-8 pb-24">
+      {toast && (
+        <div className="fixed top-4 right-4 z-50 bg-green-600 text-white px-6 py-3 rounded-lg shadow-lg font-semibold animate-in fade-in slide-in-from-top-2">
+          {toast}
+        </div>
+      )}
+
       {fromLibrary && (
         <button
           onClick={handleBackToLibrary}
@@ -786,40 +794,48 @@ export default function ScenarioPage({
       {/* Only show if NOT completed, because Report Card has its own button */}
       {scenario.state !== "completed" && (
         <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 p-4 shadow-lg">
-          <div className="max-w-4xl mx-auto flex justify-between items-center">
-            <div className="text-sm text-slate-500">
-              {scenario.extractedKUs.length} items extracted
-            </div>
-            <button
-              onClick={handleAdvance}
-              disabled={
-                advancing ||
-                (scenario.state === "simulate" && chatHistory.length === 0)
-              }
-              className={`px-8 py-3 rounded-lg font-bold transition-colors shadow-sm ${
-                scenario.state === "encounter"
-                  ? "bg-indigo-600 hover:bg-indigo-700 text-white"
-                  : scenario.state === "drill"
-                    ? "bg-purple-600 hover:bg-purple-700 text-white"
-                    : scenario.state === "simulate"
-                      ? scenario.isObjectiveMet
-                        ? "bg-green-600 hover:bg-green-700 text-white" // Objective Met
-                        : "bg-amber-500 hover:bg-amber-600 text-white" // Warning / Early Exit
-                      : "bg-green-600 hover:bg-green-700 text-white"
-              } ${advancing || (scenario.state === "simulate" && chatHistory.length === 0) ? "opacity-50 cursor-not-allowed" : ""}`}
-            >
-              {advancing
-                ? "Processing..."
-                : scenario.state === "encounter"
-                  ? "Start Drilling →"
-                  : scenario.state === "drill"
-                    ? "Start Roleplay →"
-                    : scenario.state === "simulate"
-                      ? scenario.isObjectiveMet
-                        ? "Complete Mission"
-                        : "End Session Early"
-                      : "Completed"}
-            </button>
+          <div className="max-w-4xl mx-auto">
+            {scenario.state === "encounter" ? (
+              <button
+                onClick={handleAdvance}
+                disabled={advancing}
+                className={`w-full py-4 text-lg rounded-xl font-bold transition-colors shadow-sm bg-indigo-600 hover:bg-indigo-700 text-white ${advancing ? "opacity-50 cursor-not-allowed" : ""}`}
+              >
+                {advancing ? "Processing..." : "Start Learning Vocab and Grammar"}
+              </button>
+            ) : (
+              <div className="flex justify-between items-center">
+                <div className="text-sm text-slate-500">
+                  {scenario.extractedKUs.length} items extracted
+                </div>
+                <button
+                  onClick={handleAdvance}
+                  disabled={
+                    advancing ||
+                    (scenario.state === "simulate" && chatHistory.length === 0)
+                  }
+                  className={`px-8 py-3 rounded-lg font-bold transition-colors shadow-sm ${
+                    scenario.state === "drill"
+                      ? "bg-purple-600 hover:bg-purple-700 text-white"
+                      : scenario.state === "simulate"
+                        ? scenario.isObjectiveMet
+                          ? "bg-green-600 hover:bg-green-700 text-white"
+                          : "bg-amber-500 hover:bg-amber-600 text-white"
+                        : "bg-green-600 hover:bg-green-700 text-white"
+                  } ${advancing || (scenario.state === "simulate" && chatHistory.length === 0) ? "opacity-50 cursor-not-allowed" : ""}`}
+                >
+                  {advancing
+                    ? "Processing..."
+                    : scenario.state === "drill"
+                      ? "Start Roleplay →"
+                      : scenario.state === "simulate"
+                        ? scenario.isObjectiveMet
+                          ? "Complete Mission"
+                          : "End Session Early"
+                        : "Completed"}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

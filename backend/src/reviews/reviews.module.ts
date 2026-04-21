@@ -5,7 +5,6 @@ import { GeminiModule } from 'src/gemini/gemini.module';
 import { forwardRef } from '@nestjs/common';
 import { QuestionsModule } from 'src/questions/questions.module';
 import { KnowledgeUnitsModule } from 'src/knowledge-units/knowledge-units.module';
-import { LessonsModule } from '@/lessons/lessons.module';
 import { StatsModule } from '../stats/stats.module';
 
 @Module({
@@ -13,7 +12,6 @@ import { StatsModule } from '../stats/stats.module';
     GeminiModule,
     forwardRef(() => QuestionsModule),
     KnowledgeUnitsModule,
-    LessonsModule,
     StatsModule,
   ],
   controllers: [ReviewsController],

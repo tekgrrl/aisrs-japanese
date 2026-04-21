@@ -1,9 +1,9 @@
 import { Injectable, Inject, Logger, NotFoundException } from '@nestjs/common';
-import { FIRESTORE_CONNECTION, LESSONS_COLLECTION, KNOWLEDGE_UNITS_COLLECTION } from '../firebase/firebase.module';
-import { Firestore, BulkWriter } from 'firebase-admin/firestore';
+import { FIRESTORE_CONNECTION, LESSONS_COLLECTION, KNOWLEDGE_UNITS_COLLECTION, USER_GRAMMAR_LESSONS_SUBCOLLECTION } from '../firebase/firebase.module';
+import { Firestore, BulkWriter, Timestamp } from 'firebase-admin/firestore';
 import { GeminiService } from '../gemini/gemini.service';
 import { QuestionsService } from '../questions/questions.service';
-import { KnowledgeUnit, Lesson, VocabLesson, KanjiLesson } from '../types';
+import { KnowledgeUnit, Lesson, VocabLesson, KanjiLesson, GrammarLesson, GrammarKnowledgeUnit, UserGrammarLesson } from '../types';
 import { performance } from 'perf_hooks';
 // Removed CURRENT_USER_ID import
 
@@ -47,9 +47,34 @@ export class LessonsService {
     }
 
     this.logger.log(`No existing lesson for KU ${kuId}. Generating new lesson`);
-    // let jsonSchema: any;
 
     let userMessage: string;
+
+    if (ku.type === "Grammar") {
+      const grammarKu = ku as GrammarKnowledgeUnit;
+      userMessage = `You are an expert Japanese grammar tutor. Generate a lesson for the grammar pattern: ${grammarKu.content}
+
+Pattern title: ${grammarKu.data.title}
+Existing explanation: ${grammarKu.data.explanation}
+Example from context: ${grammarKu.data.exampleInContext?.japanese ?? ''}
+
+${GRAMMAR_INSTRUCTIONS}`;
+
+      const lessonString = await this.geminiService.generateLesson(userMessage, { content: grammarKu.content, kuId }, undefined);
+      if (!lessonString) throw new Error('AI response was empty.');
+
+      let lessonJson: GrammarLesson;
+      try {
+        lessonJson = JSON.parse(lessonString) as GrammarLesson;
+        lessonJson.kuId = kuId;
+      } catch {
+        this.logger.error('Failed to parse Grammar lesson JSON', lessonString);
+        throw new Error('Failed to parse AI JSON response for grammar lesson');
+      }
+
+      await lessonDbRef.set(lessonJson);
+      return lessonJson;
+    }
 
     if (ku.type === "Kanji") {
       const KANJI_USER_PROMPT = `You are an expert Japanese tutor. You will be asked to generate a lesson for the Japanese Kanji: ${ku.content}.
@@ -227,6 +252,12 @@ ${VOCAB_INSTRUCTIONS}`;
   }
 
   async findByKuId(uid: string, kuId: string): Promise<Lesson | null> {
+    // Grammar lessons are global (no userId); read the doc directly
+    const directDoc = await this.db.collection(LESSONS_COLLECTION).doc(kuId).get();
+    if (directDoc.exists && directDoc.data()?.type === 'Grammar') {
+      return { ...directDoc.data() } as GrammarLesson;
+    }
+
     const snapshot = await this.db.collection(LESSONS_COLLECTION)
       .where('kuId', '==', kuId)
       .where('userId', '==', uid)
@@ -240,6 +271,42 @@ ${VOCAB_INSTRUCTIONS}`;
     const doc = snapshot.docs[0];
     return { id: doc.id, ...doc.data() } as unknown as Lesson;
   } // END findByKuId
+
+  async createUserGrammarLesson(
+    uid: string,
+    kuId: string,
+    source: { sourceType: 'scenario' | 'concept'; sourceId: string; sourceTitle: string },
+    contextExample: { japanese: string; english: string; fragments: string[]; accepted_alternatives: string[] },
+  ): Promise<UserGrammarLesson> {
+    const docId = `${kuId}_${source.sourceType}_${source.sourceId}`;
+    const ref = this.db.collection('users').doc(uid).collection(USER_GRAMMAR_LESSONS_SUBCOLLECTION).doc(docId);
+
+    const data: Omit<UserGrammarLesson, 'id'> = {
+      userId: uid,
+      kuId,
+      lessonId: kuId,
+      sourceType: source.sourceType,
+      sourceId: source.sourceId,
+      sourceTitle: source.sourceTitle,
+      contextExample,
+      createdAt: Timestamp.now(),
+    };
+
+    await ref.set(data, { merge: false });
+    this.logger.log(`Created UserGrammarLesson ${docId} for uid=${uid} kuId=${kuId}`);
+    return { id: docId, ...data };
+  }
+
+  async getUserGrammarLessons(uid: string, kuId: string): Promise<UserGrammarLesson[]> {
+    const snapshot = await this.db
+      .collection('users').doc(uid)
+      .collection(USER_GRAMMAR_LESSONS_SUBCOLLECTION)
+      .where('kuId', '==', kuId)
+      .get();
+
+    if (snapshot.empty) return [];
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }) as unknown as UserGrammarLesson);
+  }
 
 
   async processBatch(uid: string, vocabValues: { id: string; content: string }[]) {
@@ -379,6 +446,37 @@ You MUST return a valid JSON object matching this schema:
     }
   ]
 }`;
+
+const GRAMMAR_INSTRUCTIONS = `
+The lesson should be in English. Japanese examples must not include Romaji.
+
+Generate a complete grammar lesson matching this JSON schema exactly:
+{
+  "type": "Grammar",
+  "pattern": "The grammar pattern (e.g. ～をお願いします)",
+  "title": "Human-readable name (e.g. Making Requests with ～をお願いします)",
+  "jlptLevel": "One of: N5, N4, N3, N2, N1",
+  "meaning": "One-line summary of what this pattern expresses",
+  "formation": "How to form it (e.g. noun + をお願いします)",
+  "notes": "Nuance, register, common mistakes, contrast with similar patterns",
+  "examples": [
+    {
+      "japanese": "Full example sentence",
+      "english": "English translation",
+      "context": "Short real-world setting label (e.g. convenience store)",
+      "fragments": ["word1", "word2"],
+      "accepted_alternatives": []
+    }
+  ]
+}
+
+Rules:
+- Provide exactly 3 examples
+- ALWAYS use the provided 'Example from context' sentence as examples[0], adapted with fragments and accepted_alternatives filled in
+- examples[1] and examples[2] should be in real-world settings similar to examples[0]'s context
+- fragments must be the Japanese sentence split into meaningful chunks for sentence-assembly drills
+- Keep example sentences at or below JLPT N4 complexity even if the pattern itself is higher level
+`;
 
 const VOCAB_EXAMPLES = `
 **Examples:**
