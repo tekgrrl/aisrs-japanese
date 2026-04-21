@@ -277,7 +277,16 @@ export interface KanjiKnowledgeUnit extends KnowledgeUnitBase {
 
 export interface GrammarKnowledgeUnit extends KnowledgeUnitBase {
   type: "Grammar";
-  data: { [key: string]: any };
+  data: {
+    title: string;
+    explanation: string;
+    exampleInContext: {
+      japanese: string;
+      english: string;
+      fragments: string[];
+      accepted_alternatives: string[];
+    };
+  };
 }
 
 export interface ConceptKnowledgeUnit extends KnowledgeUnitBase {

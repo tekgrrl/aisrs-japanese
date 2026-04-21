@@ -6,7 +6,7 @@ import { ReviewFacet, ConceptKnowledgeUnit } from "@/types";
 
 interface Props {
   facet: ReviewFacet;
-  concept: ConceptKnowledgeUnit & { id: string };
+  concept?: ConceptKnowledgeUnit & { id: string };
   onResult: (result: "pass" | "fail") => Promise<void>;
   onAdvance: () => void;
   onSkip: () => void;
@@ -163,12 +163,14 @@ export default function SentenceAssemblyCard({ facet, concept, onResult, onAdvan
                 <span className="font-semibold">Correct answer: </span>
                 <span className="text-white font-medium">{answer}</span>
               </p>
-              <Link
-                href={`/concepts/${concept.id}`}
-                className="inline-block px-4 py-2 bg-[#0A5C36] text-white font-semibold rounded-md hover:bg-[#084a2b]"
-              >
-                Review concept: {concept.data.title}
-              </Link>
+              {concept && (
+                <Link
+                  href={`/concepts/${concept.id}`}
+                  className="inline-block px-4 py-2 bg-[#0A5C36] text-white font-semibold rounded-md hover:bg-[#084a2b]"
+                >
+                  Review concept: {concept.data.title}
+                </Link>
+              )}
             </>
           )}
           <button
