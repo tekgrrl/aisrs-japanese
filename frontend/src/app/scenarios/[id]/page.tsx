@@ -735,7 +735,8 @@ export default function ScenarioPage({
                       {note.explanation}
                     </p>
                     <div className="bg-white/60 p-2 rounded text-amber-900 text-sm font-mono">
-                      {note.exampleInContext}
+                      <span className="font-medium">{note.exampleInContext.japanese}</span>
+                      <span className="ml-2 text-amber-700 font-sans font-normal">({note.exampleInContext.english})</span>
                     </div>
                   </div>
                 ))}

@@ -9,7 +9,7 @@ import { Firestore, CollectionReference, Timestamp, FieldValue } from 'firebase-
 import { Scenario, GenerateScenarioDto, ScenarioState, ExtractedKU, ChatMessage, ScenarioEvaluation, ScenarioAttempt } from '../types/scenario';
 import { KnowledgeUnitsService } from '../knowledge-units/knowledge-units.service';
 import { UserKnowledgeUnitsService } from '../user-knowledge-units/user-knowledge-units.service';
-import { FIRESTORE_CONNECTION, SCENARIOS_COLLECTION } from '../firebase/firebase.module';
+import { FIRESTORE_CONNECTION, SCENARIOS_COLLECTION, REVIEW_FACETS_COLLECTION } from '../firebase/firebase.module';
 import { GeminiService } from '../gemini/gemini.service';
 
 // Centralized Role Definitions to ensure Prompt and Heuristic are always in sync
@@ -170,6 +170,35 @@ export class ScenariosService {
           }
 
           updateData.extractedKUs = updatedKUs;
+        }
+
+        // Create sentence-assembly facets for each grammar note
+        if (scenario.grammarNotes && scenario.grammarNotes.length > 0) {
+          const facetsRef = this.db.collection('users').doc(uid).collection(REVIEW_FACETS_COLLECTION);
+          const facetBatch = this.db.batch();
+          const now = Timestamp.now();
+
+          for (const note of scenario.grammarNotes) {
+            const ref = facetsRef.doc();
+            facetBatch.set(ref, {
+              kuId: scenario.id,
+              facetType: 'sentence-assembly',
+              srsStage: 0,
+              nextReviewAt: now,
+              createdAt: now,
+              history: [],
+              data: {
+                goalTitle: note.title,
+                fragments: note.exampleInContext.fragments,
+                answer: note.exampleInContext.japanese,
+                english: note.exampleInContext.english,
+                accepted_alternatives: note.exampleInContext.accepted_alternatives ?? [],
+              },
+            });
+          }
+
+          await facetBatch.commit();
+          this.logger.log(`Created ${scenario.grammarNotes.length} sentence-assembly facets for uid=${uid} scenarioId=${scenario.id}`);
         }
 
         newState = 'drill';
@@ -413,9 +442,25 @@ Create a "Genki-style" learning scenario for an ADULT traveler/expat (not a stud
     }
   ],
   "grammarNotes": [
-    { "title": "Grammar Point Name", "explanation": "Clear explanation", "exampleInContext": "Example from dialogue" }
+    {
+      "title": "Grammar Point Name",
+      "explanation": "Clear explanation",
+      "exampleInContext": {
+        "japanese": "The example sentence in Japanese only, no furigana or Romaji",
+        "english": "The English translation of the example",
+        "fragments": ["minimal", "meaningful", "chunks", "of", "the", "sentence"],
+        "accepted_alternatives": ["array of valid re-orderings or omittable-particle variants, or empty array"]
+      }
+    }
   ]
 }
+
+**Grammar Note Fragments Rules:**
+- \`fragments\` MUST be an array of minimal grammatical chunks that together reconstruct the full \`japanese\` sentence when joined with no spaces.
+- Each fragment should be the smallest meaningful unit — split at particle boundaries, verb endings, and conjunctions (e.g., ["あれ", "は", "いくら", "です", "か"] for "あれはいくらですか").
+- NEVER include Romaji or furigana in fragments.
+- \`accepted_alternatives\` should list any valid alternative orderings of the same sentence, or be an empty array if none exist.
+- Joining all fragments in order MUST exactly reproduce the \`japanese\` field.
 `;
   }
 

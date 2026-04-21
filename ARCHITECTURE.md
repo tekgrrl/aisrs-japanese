@@ -338,6 +338,19 @@ Previously, the Next.js `frontend` app hosted Next API Routes (`/src/app/api/...
 - Generation (how/when `sentence-cloze` facets are created) is deferred — not yet wired into `UserConceptsService.createFacets`.
 
 ---
+
+**Grammar types + scenario sentence-assembly facets (2026-04-21)**
+
+- **`GrammarKnowledgeUnit.data`** fully typed in both type files: `{ title: string, explanation: string, exampleInContext: { japanese: string, english: string, fragments: string[], accepted_alternatives: string[] } }`.
+- **`GrammarNote`** (both `backend/src/types/scenario.ts` and `frontend/src/types/scenario.ts`) updated to match: `exampleInContext` changed from a flat string to the same structured object.
+- **Gemini scenario prompt** (`buildArchitectPrompt`): `grammarNotes` output schema updated to return the structured `exampleInContext` object. Fragment rules added: minimal grammatical chunks, joined in order must reproduce the `japanese` field exactly, no romaji.
+- **`ScenariosService.advanceState`** encounter→drill: after linking vocab KUs, now batch-creates one `sentence-assembly` facet per grammar note into `users/{uid}/review-facets`. Facet `kuId = scenario.id`; `data` shape matches the existing `SentenceAssemblyCard` contract (`goalTitle`, `fragments`, `answer`, `english`, `accepted_alternatives`).
+- **`SentenceAssemblyCard`**: `concept` prop made optional; "Review concept" link is conditionally rendered. `review/page.tsx` passes `concept` only when `ku.type === 'Concept'`.
+- **`scenarios/[id]/page.tsx`**: grammar notes section updated to render `note.exampleInContext.japanese` and `note.exampleInContext.english`.
+- Deleted orphaned `scenario-templates` Firestore collection (written by `migrate-v2-architecture.ts` but never read by the app).
+- Issue #133 filed: migrate `scenarios` top-level collection to `users/{uid}/scenarios` sub-collection.
+
+---
 **Manage page scoped to user KUs (2026-04)**
 
 - **`UserKnowledgeUnitsService.findAllAsKUs(uid)`** added: returns all KUs for a user regardless of status (learning or reviewing), by fetching the full `users/{uid}/user-kus` sub-collection and batch-joining against global `knowledge-units`. The shared join logic was extracted into a private `_joinKUs` helper, which `findLearningQueueAsKUs` also now uses.

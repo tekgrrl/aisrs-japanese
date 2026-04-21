@@ -755,7 +755,7 @@ export default function ReviewPage() {
       {currentItem.facet.facetType === "sentence-assembly" && (
         <SentenceAssemblyCard
           facet={currentItem.facet}
-          concept={currentItem.ku as any}
+          concept={currentItem.ku.type === 'Concept' ? currentItem.ku as import('@/types').ConceptKnowledgeUnit & { id: string } : undefined}
           onResult={handleUpdateSrs}
           onAdvance={advanceToNext}
           onSkip={advanceToNext}

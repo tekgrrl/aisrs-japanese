@@ -31,7 +31,12 @@ export interface ExtractedKU {
 export interface GrammarNote {
     title: string;
     explanation: string;
-    exampleInContext: string;
+    exampleInContext: {
+        japanese: string;
+        english: string;
+        fragments: string[];
+        accepted_alternatives: string[];
+    };
 }
 
 export interface ScenarioEvaluation {
