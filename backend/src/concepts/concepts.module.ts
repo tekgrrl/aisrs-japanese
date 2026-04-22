@@ -1,13 +1,14 @@
 import { Module } from '@nestjs/common';
 import { ConceptsService } from './concepts.service';
 import { ConceptsController } from './concepts.controller';
+import { UserConceptsController } from './user-concepts.controller';
 import { GeminiModule } from '../gemini/gemini.module';
-import { UserConceptsModule } from '../user-concepts/user-concepts.module';
+import { ReviewsModule } from '../reviews/reviews.module';
 
 @Module({
-  imports: [GeminiModule, UserConceptsModule],
+  imports: [GeminiModule, ReviewsModule],
   providers: [ConceptsService],
-  controllers: [ConceptsController],
+  controllers: [ConceptsController, UserConceptsController],
   exports: [ConceptsService],
 })
 export class ConceptsModule {}

@@ -1,6 +1,5 @@
 import { Body, Controller, Get, Logger, NotFoundException, Param, Post, UseGuards } from '@nestjs/common';
 import { ConceptsService } from './concepts.service';
-import { UserConceptsService } from '../user-concepts/user-concepts.service';
 import { FirebaseAuthGuard } from '../auth/firebase-auth.guard';
 import { UserId } from '../auth/user-id.decorator';
 
@@ -9,18 +8,8 @@ import { UserId } from '../auth/user-id.decorator';
 export class ConceptsController {
   private readonly logger = new Logger(ConceptsController.name);
 
-  constructor(
-    private readonly conceptsService: ConceptsService,
-    private readonly userConceptsService: UserConceptsService,
-  ) {}
+  constructor(private readonly conceptsService: ConceptsService) {}
 
-  /**
-   * POST /api/concepts/generate
-   * Body: { topic: string }
-   *
-   * Generates a new ConceptKnowledgeUnit via Gemini and persists it to the
-   * `concepts` Firestore collection.
-   */
   @Post('generate')
   async generate(
     @UserId() uid: string,
@@ -29,7 +18,7 @@ export class ConceptsController {
   ) {
     this.logger.log(`POST /concepts/generate — uid=${uid} topic="${topic}" notes=${notes ? `"${notes.slice(0, 80)}…"` : 'none'}`);
     const result = await this.conceptsService.generate(uid, topic, notes);
-    await this.userConceptsService.enroll(uid, result.id);
+    await this.conceptsService.enroll(uid, result.id);
     this.logger.log(`POST /concepts/generate — done, id=${result.id}`);
     return result;
   }

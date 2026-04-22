@@ -359,4 +359,36 @@ Example for a fail: {"result": "fail", "explanation": "Incorrect. The expected r
         });
     }
 
+    async getFacetsByKuId(uid: string, kuId: string): Promise<ReviewFacet[]> {
+        const snapshot = await this.facetsBaseQuery(uid)
+            .where('kuId', '==', kuId)
+            .get();
+        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ReviewFacet));
+    }
+
+    async createFacetBatch(
+        uid: string,
+        facets: Array<{ kuId: string; facetType: ReviewFacet['facetType']; data?: any }>,
+    ): Promise<number> {
+        const batch = this.db.batch();
+        const now = Timestamp.now();
+
+        for (const facet of facets) {
+            const ref = this.facetsColRef(uid).doc();
+            batch.set(ref, {
+                kuId: facet.kuId,
+                facetType: facet.facetType,
+                srsStage: 0,
+                nextReviewAt: now,
+                createdAt: now,
+                history: [],
+                ...(uid === ADMIN_USER_ID ? { userId: uid } : {}),
+                ...(facet.data ? { data: facet.data } : {}),
+            });
+        }
+
+        await batch.commit();
+        return facets.length;
+    }
+
 }
