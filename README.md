@@ -1,6 +1,6 @@
-# AISRS-Japanese
+# AIGENKI-Japanese
 
-AISRS-Japanese is a bilingual, AI-enhanced Space Repetition System (SRS) for Japanese language learning. The current version of the app uses Google Gemini 3.0 Flash Preview to generate custom lessons and context for vocabulary and kanji, dynamically creating review facets based on user selections.
+AIGENKI-Japanese is a bilingual, AI-enhanced Genki Like learning system for Japanese language learning. The current version of the app uses Google Gemini 3.0 Flash Preview to generate custom lessons and context for vocabulary and kanji, dynamically creating review facets based on user selections.
 
 The application leverages a split architecture:
 - **Frontend**: Next.js 15 (App Router), React 19, Tailwind CSS v4.
