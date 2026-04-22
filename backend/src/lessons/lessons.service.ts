@@ -52,11 +52,16 @@ export class LessonsService {
 
     if (ku.type === "Grammar") {
       const grammarKu = ku as GrammarKnowledgeUnit;
+      const ctxExample = grammarKu.data.exampleInContext;
       userMessage = `You are an expert Japanese grammar tutor. Generate a lesson for the grammar pattern: ${grammarKu.content}
 
 Pattern title: ${grammarKu.data.title}
 Existing explanation: ${grammarKu.data.explanation}
-Example from context: ${grammarKu.data.exampleInContext?.japanese ?? ''}
+Example from context (USE AS examples[0] VERBATIM):
+  japanese: ${ctxExample?.japanese ?? ''}
+  english: ${ctxExample?.english ?? ''}
+  fragments: ${JSON.stringify(ctxExample?.fragments ?? [])}
+  accepted_alternatives: ${JSON.stringify(ctxExample?.accepted_alternatives ?? [])}
 
 ${GRAMMAR_INSTRUCTIONS}`;
 
@@ -472,9 +477,10 @@ Generate a complete grammar lesson matching this JSON schema exactly:
 
 Rules:
 - Provide exactly 3 examples
-- ALWAYS use the provided 'Example from context' sentence as examples[0], adapted with fragments and accepted_alternatives filled in
-- examples[1] and examples[2] should be in real-world settings similar to examples[0]'s context
-- fragments must be the Japanese sentence split into meaningful chunks for sentence-assembly drills
+- ALWAYS copy the provided 'Example from context' data VERBATIM into examples[0], including its exact fragments and accepted_alternatives
+- examples[1] and examples[2] MUST use completely different Japanese sentences with their own unique fragments
+- fragments must be the Japanese sentence split into meaningful chunks for sentence-assembly drills — each example must have different fragments matching its own sentence
+- NEVER copy fragments from one example to another
 - Keep example sentences at or below JLPT N4 complexity even if the pattern itself is higher level
 `;
 

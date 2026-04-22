@@ -31,7 +31,9 @@ export default function SentenceAssemblyCard({ facet, onResult, onAdvance, onSki
     sourceTitle?: string;
   };
 
-  const [available, setAvailable] = useState<string[]>(() => shuffleArray(fragments));
+  const normalize = (s: string) => s.replace(/[。、！？!?\.]+$/u, "").trim();
+  const missingData = !Array.isArray(fragments) || fragments.length === 0 || !answer;
+  const [available, setAvailable] = useState<string[]>(() => shuffleArray(Array.isArray(fragments) ? fragments : []));
   const [assembled, setAssembled] = useState<string[]>([]);
   const [submitted, setSubmitted] = useState(false);
   const [isCorrect, setIsCorrect] = useState<boolean | null>(null);
@@ -63,13 +65,52 @@ export default function SentenceAssemblyCard({ facet, onResult, onAdvance, onSki
     if (assembled.length === 0 || submitted) return;
     setIsSubmitting(true);
     const assembledStr = assembled.join("");
-    const correct = assembledStr === answer || (accepted_alternatives ?? []).includes(assembledStr);
+    const exactMatch = assembledStr === answer || normalize(assembledStr) === normalize(answer);
+    const altMatch = (accepted_alternatives ?? []).some(a => assembledStr === a || normalize(assembledStr) === normalize(a));
+    const correct = exactMatch || altMatch;
+
+    if (!correct) {
+      console.group("[SentenceAssembly] Incorrect answer diagnosis");
+      console.log("Submitted:  ", JSON.stringify(assembledStr));
+      console.log("Expected:   ", JSON.stringify(answer));
+      console.log("Alternatives:", JSON.stringify(accepted_alternatives ?? []));
+      console.log("Fragments used:", assembled);
+      if (assembledStr.length === answer.length) {
+        const diffs = [...assembledStr].map((ch, i) =>
+          ch !== answer[i]
+            ? `[${i}] submitted U+${ch.codePointAt(0)?.toString(16)} vs expected U+${answer[i].codePointAt(0)?.toString(16)}`
+            : null
+        ).filter(Boolean);
+        console.log("Char diffs (same length):", diffs.length ? diffs : "none — possible whitespace/normalization issue");
+        console.log("Submitted codepoints: ", [...assembledStr].map(c => c.codePointAt(0)?.toString(16)).join(" "));
+        console.log("Expected  codepoints: ", [...answer].map(c => c.codePointAt(0)?.toString(16)).join(" "));
+      } else {
+        console.log(`Length mismatch: submitted=${assembledStr.length}, expected=${answer.length}`);
+      }
+      console.groupEnd();
+    } else {
+      console.log(`[SentenceAssembly] Correct (${exactMatch ? "exact" : "alternative match"}):`, JSON.stringify(assembledStr));
+    }
+
     setSubmittedAnswer(assembledStr);
     setIsCorrect(correct);
     await onResult(correct ? "pass" : "fail");
     setSubmitted(true);
     setIsSubmitting(false);
   };
+
+  if (missingData) {
+    console.warn("[SentenceAssembly] Facet missing required data", { facetId: facet.id, fragments, answer });
+    return (
+      <div className="bg-gray-800 shadow-2xl rounded-lg p-8 space-y-4 text-center">
+        <p className="text-amber-400 font-semibold">This review card has incomplete data and cannot be shown.</p>
+        <p className="text-gray-400 text-sm">Facet ID: {facet.id}</p>
+        <button onClick={onSkip} className="px-6 py-3 bg-gray-600 text-white rounded-md hover:bg-gray-500">
+          Skip
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-gray-800 shadow-2xl rounded-lg p-8 space-y-6">
@@ -134,7 +175,7 @@ export default function SentenceAssemblyCard({ facet, onResult, onAdvance, onSki
           <button
             onClick={handleSubmit}
             disabled={assembled.length === 0 || isSubmitting}
-            className="flex-1 px-6 py-3 bg-blue-600 text-white text-lg font-semibold rounded-md shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-800 disabled:bg-gray-800 disabled:text-gray-500"
+            className="flex-1 px-6 py-3 bg-blue-600 text-white text-lg font-semibold rounded-md shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-800 disabled:bg-gray-500 disabled:cursor-wait"
           >
             {isSubmitting ? "Checking…" : "Submit"}
           </button>
@@ -152,7 +193,7 @@ export default function SentenceAssemblyCard({ facet, onResult, onAdvance, onSki
               <p className="text-gray-200">
                 Your answer of <span className="text-white font-medium">{submittedAnswer}</span> is a correct translation of <span className="text-white font-medium">{english}</span>.
               </p>
-              {submittedAnswer !== answer && (
+              {normalize(submittedAnswer) !== normalize(answer) && (
                 <p className="text-green-200 text-sm">
                   While that's acceptable, it's better to say: <span className="text-white font-medium">{answer}</span>
                 </p>

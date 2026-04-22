@@ -276,8 +276,9 @@ export default function LearnItemPage() {
           key: "Content-to-Definition",
           data: {
             content: grammarLesson.pattern,
-            definitions: [grammarLesson.meaning],
+            definitions: [grammarLesson.meaning].filter(Boolean),
             topic: grammarLesson.title,
+            kuType: "Grammar",
           },
         });
       }

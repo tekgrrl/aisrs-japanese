@@ -522,7 +522,9 @@ export default function ReviewPage() {
       case "AI-Generated-Question":
         return `AI Quiz`;
       case "Content-to-Definition":
-        return "Vocab Definition";
+        return (item.facet.data?.kuType === "Grammar" || !item.facet.data?.reading)
+          ? "Grammar Pattern → Meaning"
+          : "Vocab Definition";
       case "Content-to-Reading":
         return "Vocab Reading";
       case "Kanji-Component-Meaning":
@@ -563,11 +565,15 @@ export default function ReviewPage() {
 
     if (facet.facetType === "Content-to-Definition" || facet.facetType === "audio") {
       const defs: string[] = facet.data?.definitions ?? [];
-      return Array.from(new Set(
+      const parsed = Array.from(new Set(
         defs.flatMap((def: string) => def.split(/[,;]/))
             .map((def: string) => def.trim())
             .filter((def: string) => def.length > 0),
       ));
+      if (parsed.length === 0 && facet.data?.topic) {
+        return [facet.data.topic];
+      }
+      return parsed;
     }
 
     if (facet.facetType === "Content-to-Reading") {
@@ -642,6 +648,7 @@ export default function ReviewPage() {
       {/* --- Sentence Assembly --- */}
       {currentItem.facet.facetType === "sentence-assembly" && (
         <SentenceAssemblyCard
+          key={currentItem.facet.id}
           facet={currentItem.facet}
           onResult={handleUpdateSrs}
           onAdvance={advanceToNext}
@@ -652,6 +659,7 @@ export default function ReviewPage() {
       {/* --- Sentence Cloze --- */}
       {currentItem.facet.facetType === "sentence-cloze" && (
         <SentenceClozeCard
+          key={currentItem.facet.id}
           facet={currentItem.facet}
           onResult={handleUpdateSrs}
           onAdvance={advanceToNext}
@@ -742,7 +750,7 @@ export default function ReviewPage() {
           <div className="relative mt-4">
             <button
               type="submit"
-              disabled={answerState !== "unanswered" || isDynamicLoading}
+              disabled={answerState !== "unanswered" || isDynamicLoading || !userAnswer.trim()}
               className="w-full px-6 py-4 bg-blue-600 text-white text-xl font-semibold rounded-md shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-800 disabled:bg-gray-500 disabled:cursor-wait"
             >
               {answerState === "evaluating" ? "Evaluating..." : "Submit Answer"}

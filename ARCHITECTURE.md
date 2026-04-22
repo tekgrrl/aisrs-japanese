@@ -185,7 +185,8 @@ The database uses **flat top-level collections** (not Firestore sub-collections 
 | `users/{uid}/user-kus` | Yes — sub-collection path | Per-user KU metadata; `kuId` references global KU |
 | `users/{uid}/review-facets` | Yes — sub-collection path | Per-user SRS facets (non-admin users) |
 | `review-facets` | Yes (field) | Admin (`user_default`) SRS facets only; `userId` field still required |
-| `lessons` | Yes (field) | AI-generated lesson documents |
+| `lessons` | **No** (Grammar); Yes (field, Vocab/Kanji) | Global `GrammarLesson` docs stored at `lessons/{kuId}` — no `userId`. Vocab/Kanji lessons still scoped by `userId` field. |
+| `users/{uid}/user-grammar-lessons` | Yes — sub-collection path | Per-user per-encounter `UserGrammarLesson` docs. Doc ID: `{kuId}_{sourceType}_{sourceId}` (deterministic, prevents duplicates per source). |
 | `questions` | **No** | Global question corpus — no `userId` on new docs. `rank` and `rejectionCount` fields drive selection. |
 | `users/{uid}/question-states` | Yes — sub-collection path | Per-user `UserQuestionState`: `rejected`, `consecutiveFailures`, `kuId` |
 | `scenarios` | Yes (field) | Roleplay scenario state |
@@ -394,6 +395,20 @@ Previously, the Next.js `frontend` app hosted Next API Routes (`/src/app/api/...
 - `frontend/src/app/concepts/[id]/page.tsx` — client component that fetches real concept data from `GET /api/concepts/:id` and renders it with two highlight helpers: `highlightGrammar` (red tint, used in Examples section) and `highlightClause` (bold + dotted underline, used in mechanics Simple/Natural examples).
 - `frontend/src/app/admin/concepts/page.tsx` — hidden admin page at `/admin/concepts` for triggering concept generation; accepts Topic and optional Detailed Notes fields that are appended to the prompt as `**Additional notes from the teacher:**`.
 - `frontend/src/app/concepts/page.tsx` — empty placeholder page for the Concepts nav link.
+
+---
+
+**Grammar Lessons — two-tier Global/User model (2026-04-22)**
+
+- Added `GrammarLesson` (global, context-agnostic) and `UserGrammarLesson` (per-user per-encounter) interfaces to both `backend/src/types/index.ts` and `frontend/src/types/index.ts`. `Lesson` union updated to `VocabLesson | KanjiLesson | GrammarLesson`.
+- **Separation of concerns**: The global `GrammarLesson` (stored at `lessons/{kuId}`) holds all teaching content — formation rules, generic examples, JLPT level — and is generated lazily on first learn, then reused for all users. The `UserGrammarLesson` (stored at `users/{uid}/user-grammar-lessons/{kuId}_{sourceType}_{sourceId}`) holds only the user's source context: which scenario or concept introduced the pattern, plus a verbatim `contextExample`. Deterministic doc ID prevents duplicate records per source.
+- **`GrammarNote.pattern`**: new optional field (`～をお願いします` style) for extracting a canonical grammar key separate from the full title. Used as the dedup key in `ensureGrammarKU`.
+- **`KnowledgeUnitsService.ensureGrammarKU(note)`**: get-or-create helper — finds an existing `GrammarKnowledgeUnit` by `note.pattern ?? note.title`, creates one if not found. Prevents duplicate KUs for the same pattern encountered across different scenarios.
+- **`LessonsService` Grammar branch**: `generateLesson` for Grammar type passes the `UserGrammarLesson.contextExample` verbatim to the AI prompt as `examples[0]`, so the familiar sentence anchors the lesson. Stored at `lessons/{kuId}` without a `userId`. `createUserGrammarLesson` and `getUserGrammarLessons` added. `GET /lessons/user-grammar?kuId=` endpoint added.
+- **`ScenariosService.advanceState`** (encounter→drill): replaced direct sentence-assembly facet creation with per-grammar-note pipeline — `ensureGrammarKU` → `UserKnowledgeUnitsService.create` → `LessonsService.createUserGrammarLesson`. `LessonsModule` imported by `ScenariosModule`.
+- **Learn page Grammar branch**: fetches global lesson + user lessons in parallel. Emits one `sentence-assembly` facet per example, plus `AI-Generated-Question` and `Content-to-Definition`. `Content-to-Definition` tagged with `kuType: 'Grammar'` and `definitions: [lesson.meaning]`.
+- **Review page**: `getQuestionType` returns "Grammar Pattern → Meaning" when `data.kuType === 'Grammar'` or no `data.reading` field (legacy facet detection). `getExpectedAnswer` falls back to `facet.data.topic` if `definitions` is empty.
+- **`GrammarLessonView.tsx`** (new): renders pattern header, formation block, amber notes callout, examples with source-context banner, and facet selection checkboxes.
 
 ---
 
