@@ -90,4 +90,12 @@ export class LessonsController {
 
     return lesson;
   }
+
+  @Get('user-grammar')
+  async getUserGrammarLessons(@UserId() uid: string, @Query('kuId') kuId: string) {
+    if (!kuId) {
+      throw new BadRequestException('kuId is required');
+    }
+    return this.lessonsService.getUserGrammarLessons(uid, kuId);
+  }
 }

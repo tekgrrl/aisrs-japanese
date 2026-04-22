@@ -123,6 +123,8 @@ export class UserConceptsService {
           answer: mechanic.naturalExample.japanese,
           english: mechanic.naturalExample.english,
           accepted_alternatives: mechanic.naturalExample.accepted_alternatives ?? [],
+          sourceId: conceptId,
+          sourceTitle: concept.data.title,
         },
       });
       created++;
@@ -137,7 +139,11 @@ export class UserConceptsService {
         nextReviewAt: now,
         createdAt: now,
         history: [],
-        data: {},
+        data: {
+          topic: concept.data.title,
+          sourceId: conceptId,
+          sourceTitle: concept.data.title,
+        },
       });
       created++;
     }

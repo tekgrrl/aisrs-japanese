@@ -215,9 +215,45 @@ export interface UserLessonData {
   personalMnemonic?: string;
 }
 
+export interface GrammarLesson {
+  kuId?: string;
+  type: "Grammar";
+  pattern: string;
+  title: string;
+  jlptLevel: string;
+  meaning: string;
+  formation: string;
+  notes: string;
+  examples: {
+    japanese: string;
+    english: string;
+    context?: string;
+    fragments: string[];
+    accepted_alternatives: string[];
+  }[];
+}
+
+export interface UserGrammarLesson {
+  id: string;
+  userId: string;
+  kuId: string;
+  lessonId: string;
+  sourceType: "scenario" | "concept";
+  sourceId: string;
+  sourceTitle: string;
+  contextExample: {
+    japanese: string;
+    english: string;
+    fragments: string[];
+    accepted_alternatives: string[];
+  };
+  createdAt: Timestamp;
+}
+
 export type Lesson =
   | VocabLesson
   | KanjiLesson
+  | GrammarLesson
   | GlobalVocabLesson
   | GlobalKanjiLesson;
 
@@ -417,17 +453,8 @@ export interface ReviewFacet {
   data?: any;
 }
 
-/**
- * Represents a "joined" review item, combining the
- * facet with its parent KU.
- */
 export interface ReviewItem {
   facet: ReviewFacet;
-  ku: KnowledgeUnit | (GlobalKnowledgeUnit & UserKnowledgeUnit);
-  lesson?:
-    | Lesson
-    | (GlobalVocabLesson & UserLessonData)
-    | (GlobalKanjiLesson & UserLessonData);
 }
 
 // This represents the structure of our old db.json

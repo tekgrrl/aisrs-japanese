@@ -30,9 +30,11 @@ export interface ExtractedKU {
   type: "vocab" | "kanji";
   kuId?: string;
   status: "new" | "learning" | "mastered";
+  jlptLevel?: string;
 }
 
 export interface GrammarNote {
+  pattern?: string;
   title: string;
   explanation: string;
   exampleInContext: {

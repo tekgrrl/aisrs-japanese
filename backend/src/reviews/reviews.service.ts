@@ -5,21 +5,18 @@ import {
     NotFoundException,
     forwardRef,
 } from '@nestjs/common';
-import { CollectionReference, FieldPath, FieldValue, Firestore, Query, Timestamp } from 'firebase-admin/firestore';
+import { CollectionReference, FieldValue, Firestore, Query, Timestamp } from 'firebase-admin/firestore';
 import {
     FIRESTORE_CONNECTION,
     REVIEW_FACETS_COLLECTION,
     KNOWLEDGE_UNITS_COLLECTION,
-    CONCEPTS_COLLECTION,
     USER_STATS_COLLECTION,
 } from '../firebase/firebase.module';
 import { ADMIN_USER_ID } from '../lib/constants';
 import { GeminiService } from '../gemini/gemini.service';
 import { QuestionsService } from '../questions/questions.service';
-// Removed ADMIN_USER_ID import
-import { FacetType, KnowledgeUnit, Lesson, ReviewFacet } from '@/types';
+import { ReviewFacet } from '@/types';
 import { KnowledgeUnitsService } from '../knowledge-units/knowledge-units.service';
-import { LessonsService } from '@/lessons/lessons.service';
 import { StatsService } from '../stats/stats.service';
 
 @Injectable()
@@ -42,10 +39,9 @@ export class ReviewsService {
     constructor(
         @Inject(FIRESTORE_CONNECTION) private readonly db: Firestore,
         private readonly geminiService: GeminiService,
-        @Inject(forwardRef(() => QuestionsService)) // <-- WRAP THIS
+        @Inject(forwardRef(() => QuestionsService))
         private readonly questionsService: QuestionsService,
         private readonly knowledgeUnitsService: KnowledgeUnitsService,
-        private readonly lessonsService: LessonsService,
         private readonly statsService: StatsService,
     ) { }
 
@@ -274,13 +270,10 @@ Example for a fail: {"result": "fail", "explanation": "Incorrect. The expected r
                 modifiedData = { ...data };
             }
 
-            if (key === 'audio' && modifiedData?.contextExample) {
+            if (key === 'audio' && modifiedData?.contextExample && modifiedData?.content) {
                 try {
-                    const ku = await this.knowledgeUnitsService.findOne(targetKuId);
-                    if (ku && ku.content) {
-                        const clozeSentence = await this.geminiService.generateClozeSentence(ku.content, modifiedData.contextExample.sentence);
-                        modifiedData.clozeSentence = clozeSentence;
-                    }
+                    const clozeSentence = await this.geminiService.generateClozeSentence(modifiedData.content, modifiedData.contextExample.sentence);
+                    modifiedData.clozeSentence = clozeSentence;
                 } catch (err) {
                     this.logger.error(`Failed to generate cloze for audio facet ${kuId}`, err);
                 }
@@ -332,55 +325,19 @@ Example for a fail: {"result": "fail", "explanation": "Incorrect. The expected r
             return [];
         }
 
-        // Map in parallel to build the full ReviewItem objects
-        const reviewItems = await Promise.all(snapshot.docs.map(async (doc) => {
-            const facetData = doc.data();
-            const facet = { id: doc.id, ...facetData } as ReviewFacet;
-
-            if (!facet.kuId) {
-                this.logger.warn(`Skipping corrupted facet ${facet.id}: missing kuId`);
-                return null; // Return null so we can filter it out in the next step
-            }
-
-            // concept facets reference a concept, not a knowledge unit
-            if (facet.facetType === 'sentence-assembly' || facet.facetType === 'AI-Generated-Question') {
-                try {
-                    const conceptDoc = await this.db.collection(CONCEPTS_COLLECTION).doc(facet.kuId).get();
-                    if (!conceptDoc.exists) {
-                        this.logger.warn(`Concept ${facet.kuId} not found for facet ${facet.id}`);
-                        return null;
-                    }
-                    return { facet, ku: { id: conceptDoc.id, ...conceptDoc.data() } as KnowledgeUnit, lesson: null };
-                } catch (e) {
-                    this.logger.warn(`Failed to fetch concept for facet ${facet.id}`, e);
+        const reviewItems = snapshot.docs
+            .map(doc => {
+                const facet = { id: doc.id, ...doc.data() } as ReviewFacet;
+                if (!facet.kuId) {
+                    this.logger.warn(`Skipping corrupted facet ${facet.id}: missing kuId`);
                     return null;
                 }
-            }
+                return { facet };
+            })
+            .filter(item => item !== null);
 
-            // Fetch related KU
-            let ku: KnowledgeUnit | null = null;
-            try {
-                ku = await this.knowledgeUnitsService.findOne(facet.kuId);
-            } catch (e) {
-                this.logger.warn(`Orphaned facet ${facet.id}: KU ${facet.kuId} not found`);
-            }
-
-            // Fetch related Lesson
-            let lesson: Lesson | null = null;
-            if (ku) {
-                lesson = await this.lessonsService.findByKuId(uid, ku.id);
-            }
-
-            return {
-                facet,
-                ku,
-                lesson
-            };
-        }));
-
-        // Filter out items where KU was deleted/missing to prevent frontend crashes
-        this.logger.log(`Found ${reviewItems.length} due reviews`);
-        return reviewItems.filter(item => item !== null && item.ku !== null);
+        this.logger.log(`Found ${reviewItems.length} due reviews for user ${uid}`);
+        return reviewItems;
     } // END getDueReviews
 
     async getAllFacets(uid: string) {

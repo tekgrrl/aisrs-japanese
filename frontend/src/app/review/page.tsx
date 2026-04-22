@@ -3,12 +3,11 @@
 import React, { useState, useEffect, useRef, FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ReviewItem, ReviewFacet, VocabLesson, KanjiLesson } from "@/types";
+import { ReviewItem, ReviewFacet, KnowledgeUnit } from "@/types";
 import * as wanakana from "wanakana";
 import { logger } from "@/lib/logger";
 import { QuestionFeedbackModal } from "@/components/QuestionFeedbackModal";
 import EditKnowledgeUnitModal from "@/components/EditKnowledgeUnitModal";
-import { KnowledgeUnit } from "@/types";
 import { getSrsLevelName, getSrsLevelIndex } from "@/utils/srs";
 import { apiFetch } from "@/lib/api-client";
 import SentenceAssemblyCard from "@/components/review/SentenceAssemblyCard";
@@ -185,7 +184,7 @@ export default function ReviewPage() {
     if (currentItem && currentItem.facet.facetType === "audio") {
       // Small timeout to let UI mount
       setTimeout(() => {
-        fetchAndPlayAudio(currentItem.ku.data?.reading || currentItem.ku.content);
+        fetchAndPlayAudio(currentItem.facet.data?.reading || currentItem.facet.data?.content);
       }, 50);
     }
 
@@ -209,13 +208,11 @@ export default function ReviewPage() {
       setDynamicQuestionId(null);
       setDynamicQuestionIsNew(false);
 
-      const topic = currentItem.ku.type === 'Concept'
-        ? (currentItem.ku as import('@/types').ConceptKnowledgeUnit).data.title
-        : currentItem.ku.content;
+      const topic = currentItem.facet.data?.topic || currentItem.facet.data?.content || '';
       fetchDynamicQuestion(
         topic,
         currentItem.facet.id,
-        currentItem.ku.id,
+        currentItem.facet.kuId,
       );
     } else {
       setDynamicQuestion(null);
@@ -343,7 +340,7 @@ export default function ReviewPage() {
 
     const expectedAnswers = getExpectedAnswer(currentItem); // Now using array
     const question = getQuestion(currentItem);
-    const topic = currentItem.ku.content; // The "topic" is the KU content
+    const topic = currentItem.facet.data?.content || '';
     const questionType = getQuestionType(currentItem); // Get the question type
     // Use dynamicQuestionId if available (for AI questions), otherwise fallback to facet's currentQuestionId (though that might be stale)
     const questionId = dynamicQuestionId || currentItem.facet.currentQuestionId;
@@ -371,7 +368,7 @@ export default function ReviewPage() {
           topic,
           questionType,
           questionId,
-          kuId: currentItem.ku.id,
+          kuId: currentItem.facet.kuId,
         }),
       });
 
@@ -446,22 +443,25 @@ export default function ReviewPage() {
   };
 
   // --- Edit Handlers ---
-  const handleEditClick = () => {
-    if (currentItem) {
-      setEditingKu(currentItem.ku);
-      setIsEditModalOpen(true);
+  const handleEditClick = async () => {
+    if (!currentItem) return;
+    try {
+      const response = await apiFetch(`/api/knowledge-units/${currentItem.facet.kuId}`);
+      if (response.ok) {
+        const kuData = await response.json() as KnowledgeUnit;
+        setEditingKu(kuData);
+        setIsEditModalOpen(true);
+      }
+    } catch (err) {
+      console.error("Failed to fetch KU for editing", err);
     }
   };
 
   const handleSaveKu = async (id: string, updates: Partial<KnowledgeUnit>) => {
     try {
-      // 1. Update backend
-      // TODO needs nextjs rewrite
       const response = await apiFetch(`/api/knowledge-units/${id}`, {
         method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(updates),
       });
 
@@ -469,30 +469,10 @@ export default function ReviewPage() {
         throw new Error("Failed to update unit");
       }
 
-      const updatedKu = await response.json(); // Assuming backend returns the updated KU
-
-      // 2. Update local state (reviewQueue) to reflect changes immediately
-      setReviewQueue((prevQueue) =>
-        prevQueue.map((item) => {
-          if (item.ku.id === id) {
-            // Merge updates into the KU
-            return {
-              ...item,
-              ku: {
-                ...item.ku,
-                ...updates,
-                ...updatedKu,
-              },
-            };
-          }
-          return item;
-        }),
-      );
-
       window.dispatchEvent(new CustomEvent("refreshStats"));
     } catch (err) {
       console.error(err);
-      alert("Failed to save changes"); // Simple alert for now
+      alert("Failed to save changes");
     }
   };
 
@@ -517,22 +497,21 @@ export default function ReviewPage() {
   // --- Helper Functions ---
 
   const getQuestion = (item: ReviewItem): string | null => {
-    const { ku, facet } = item;
+    const { facet } = item;
     switch (facet.facetType) {
       case "audio":
         return facet.data?.clozeSentence || facet.data?.contextExample?.sentence || "Context not found";
       case "AI-Generated-Question":
-        return dynamicQuestion; // Returns null if loading
+        return dynamicQuestion;
       case "Content-to-Definition":
       case "Content-to-Reading":
-        return ku.content;
       case "Kanji-Component-Meaning":
       case "Kanji-Component-Reading":
-        return ku.content;
+        return facet.data?.content || "[No content]";
       case "Definition-to-Content":
-        return ku.data?.definition || "[No Definition]";
+        return facet.data?.definitions?.[0] || "[No Definition]";
       case "Reading-to-Content":
-        return ku.data?.reading || "[No Reading]";
+        return facet.data?.reading || "[No Reading]";
       default:
         return "Unknown Facet";
     }
@@ -543,7 +522,9 @@ export default function ReviewPage() {
       case "AI-Generated-Question":
         return `AI Quiz`;
       case "Content-to-Definition":
-        return "Vocab Definition";
+        return (item.facet.data?.kuType === "Grammar" || !item.facet.data?.reading)
+          ? "Grammar Pattern → Meaning"
+          : "Vocab Definition";
       case "Content-to-Reading":
         return "Vocab Reading";
       case "Kanji-Component-Meaning":
@@ -572,132 +553,45 @@ export default function ReviewPage() {
   };
 
   const getExpectedAnswer = (item: ReviewItem): string[] => {
-    const { ku, facet } = item;
+    const { facet } = item;
 
-    // 1. Handle AI-Generated questions first
     if (facet.facetType === "AI-Generated-Question") {
-      const allExpectedAnswers = [...dynamicAltAnswers]; // initialize
-
-      if (dynamicAnswer) {
-        allExpectedAnswers.push(dynamicAnswer);
-      }
-      console.log(
-        "Expected answers for AI-Generated Question:",
-        allExpectedAnswers,
-      );
-      return allExpectedAnswers;
+      return [...(dynamicAltAnswers ?? []), ...(dynamicAnswer ? [dynamicAnswer] : [])];
     }
 
-    // 2. Handle "reverse" quizzes
-    if (
-      facet.facetType === "Definition-to-Content" ||
-      facet.facetType === "Reading-to-Content"
-    ) {
-      console.log("Expected answers for reverse quiz:", [ku.content]);
-      return [ku.content];
+    if (facet.facetType === "Definition-to-Content" || facet.facetType === "Reading-to-Content") {
+      return facet.data?.content ? [facet.data.content] : [];
     }
 
-    // 3. Handle "forward" quizzes (Content-to-...)
-    if (ku.type === "Vocab") {
-      // --- VOCAB LOGIC ---
-      const lesson = item.lesson as VocabLesson | undefined;
-      if (facet.facetType === "Content-to-Definition" || facet.facetType === "audio") {
-        // Collect all potential definition strings
-        const rawDefinitions: string[] = [];
-
-        // 1. From Lesson (array)
-        if (lesson?.definitions && Array.isArray(lesson.definitions)) {
-          rawDefinitions.push(...lesson.definitions);
-        }
-
-        // 2. From KU (string)
-        if (ku.data?.definition) {
-          rawDefinitions.push(ku.data.definition);
-        }
-
-        // Process: split by delimiters (comma, semicolon), trim, filter empty
-        const uniqueDefinitions = Array.from(
-          new Set(
-            rawDefinitions
-              .flatMap((def) => def.split(/[,;]/)) // Split by , or ;
-              .map((def) => def.trim())
-              .filter((def) => def.length > 0),
-          ),
-        );
-
-        if (facet.facetType === "audio") {
-          return uniqueDefinitions;
-        }
-
-        console.log(
-          "Expected answers for Content-to-Definition:",
-          uniqueDefinitions,
-        );
-        return uniqueDefinitions;
+    if (facet.facetType === "Content-to-Definition" || facet.facetType === "audio") {
+      const defs: string[] = facet.data?.definitions ?? [];
+      const parsed = Array.from(new Set(
+        defs.flatMap((def: string) => def.split(/[,;]/))
+            .map((def: string) => def.trim())
+            .filter((def: string) => def.length > 0),
+      ));
+      if (parsed.length === 0 && facet.data?.topic) {
+        return [facet.data.topic];
       }
-      if (facet.facetType === "Content-to-Reading") {
-        // Use lesson.reading as primary, fallback to ku.data.reading (which might be empty now)
-        // If both are present, we might want to accept both?
-        // But getExpectedAnswer returns string[].
-        // Let's use ku.data.reading if present (legacy source of truth), AND lesson.reading.
-
-        const answers: string[] = [];
-        if (ku.data?.reading) answers.push(ku.data.reading);
-        if (lesson?.reading) answers.push(lesson.reading);
-
-        // Deduplicate
-        const unique = Array.from(new Set(answers));
-
-        if (unique.length > 0) {
-          console.log("Expected answers for Content-to-Reading:", unique);
-          return unique;
-        }
-
-        // Fallback to reading_explanation if absolutely nothing else (unlikely with Gemini)
-        return [lesson?.reading_explanation || ""];
-      }
-    } else if (ku.type === "Kanji") {
-      // --- KANJI LOGIC ---
-      if (facet.facetType === "Content-to-Definition") {
-        // Kanji "definition" is the 'meaning' field from the lesson
-        const kanjiDefinitionString = ku.data?.meaning || "";
-        return kanjiDefinitionString.split(",").map((answer) => answer.trim());
-      }
-      if (facet.facetType === "Content-to-Reading") {
-        // Kanji "reading" is a combination of all onyomi and kunyomi
-        const onyomi = ku.data?.onyomi || [];
-        const kunyomi = ku.data?.kunyomi || [];
-        const allReadings = [...onyomi, ...kunyomi];
-
-        if (allReadings.length > 0) {
-          return allReadings; // facilitate Gemini short circuit
-          //return allReadings.join(', '); // e.g., "ドク, トク, よむ"
-        }
-        // Fallback just in case lesson is old/missing
-        console.log("Expected answers for Content-to-Reading (fallback):", [
-          ku.data?.onyomi || ku.data?.kunyomi || "",
-        ]);
-        return ku.data?.onyomi || ku.data?.kunyomi || [];
-      }
+      return parsed;
     }
 
-    // --- KANJI COMPONENT LOGIC ---
+    if (facet.facetType === "Content-to-Reading") {
+      return facet.data?.reading ? [facet.data.reading] : [];
+    }
+
     if (facet.facetType === "Kanji-Component-Meaning") {
-      const meaningStr = ku.data?.meaning || "";
-
-      return meaningStr
+      return (facet.data?.meaning || "")
         .split(",")
-        .map((s) => s.trim())
-        .filter((s) => s);
-    }
-    if (facet.facetType === "Kanji-Component-Reading") {
-      return ku.data?.onyomi || [];
+        .map((s: string) => s.trim())
+        .filter((s: string) => s);
     }
 
-    // Fallback for any other combo
-    logger.warn(
-      `getExpectedAnswer: No answer path for ${ku.type} / ${facet.facetType}`,
-    );
+    if (facet.facetType === "Kanji-Component-Reading") {
+      return facet.data?.onyomi ?? [];
+    }
+
+    logger.warn(`getExpectedAnswer: No answer path for facetType=${facet.facetType}`);
     return [];
   };
 
@@ -754,8 +648,8 @@ export default function ReviewPage() {
       {/* --- Sentence Assembly --- */}
       {currentItem.facet.facetType === "sentence-assembly" && (
         <SentenceAssemblyCard
+          key={currentItem.facet.id}
           facet={currentItem.facet}
-          concept={currentItem.ku.type === 'Concept' ? currentItem.ku as import('@/types').ConceptKnowledgeUnit & { id: string } : undefined}
           onResult={handleUpdateSrs}
           onAdvance={advanceToNext}
           onSkip={advanceToNext}
@@ -765,6 +659,7 @@ export default function ReviewPage() {
       {/* --- Sentence Cloze --- */}
       {currentItem.facet.facetType === "sentence-cloze" && (
         <SentenceClozeCard
+          key={currentItem.facet.id}
           facet={currentItem.facet}
           onResult={handleUpdateSrs}
           onAdvance={advanceToNext}
@@ -806,7 +701,7 @@ export default function ReviewPage() {
                 <div className="mt-6 flex justify-center">
                   <button
                     type="button"
-                    onClick={() => fetchAndPlayAudio(currentItem.ku.data?.reading || currentItem.ku.content)}
+                    onClick={() => fetchAndPlayAudio(currentItem.facet.data?.reading || currentItem.facet.data?.content)}
                     className="flex items-center gap-2 px-6 py-3 bg-blue-500 hover:bg-blue-600 rounded-full text-white font-semibold transition-transform transform active:scale-95 shadow-md"
                   >
                     <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
@@ -855,7 +750,7 @@ export default function ReviewPage() {
           <div className="relative mt-4">
             <button
               type="submit"
-              disabled={answerState !== "unanswered" || isDynamicLoading}
+              disabled={answerState !== "unanswered" || isDynamicLoading || !userAnswer.trim()}
               className="w-full px-6 py-4 bg-blue-600 text-white text-xl font-semibold rounded-md shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-800 disabled:bg-gray-500 disabled:cursor-wait"
             >
               {answerState === "evaluating" ? "Evaluating..." : "Submit Answer"}
@@ -874,7 +769,7 @@ export default function ReviewPage() {
                 type="button"
                 onClick={() => {
                   if (currentItem) {
-                    router.push(`/learn/${currentItem.ku.id}?source=review`);
+                    router.push(`/learn/${currentItem.facet.kuId}?source=review`);
                   }
                 }}
                 disabled={answerState !== "unanswered" || isDynamicLoading}
@@ -939,9 +834,9 @@ export default function ReviewPage() {
             <div className="mb-4">
               <p className="text-lg text-gray-200">
                 <span className="font-semibold">Word:</span>{" "}
-                <span className="text-2xl font-bold text-white">{currentItem.ku.content}</span>
-                {currentItem.ku.data?.reading && currentItem.ku.data.reading !== currentItem.ku.content && (
-                  <span className="ml-2 text-gray-300">({currentItem.ku.data.reading})</span>
+                <span className="text-2xl font-bold text-white">{currentItem.facet.data?.content}</span>
+                {currentItem.facet.data?.reading && currentItem.facet.data.reading !== currentItem.facet.data.content && (
+                  <span className="ml-2 text-gray-300">({currentItem.facet.data.reading})</span>
                 )}
               </p>
               <p className="text-lg text-gray-200 mt-2">
@@ -961,10 +856,10 @@ export default function ReviewPage() {
           {answerState === "incorrect" && currentItem && (
             <div className="mt-4">
               <Link
-                href={`/learn/${currentItem.ku.id}?source=review`}
+                href={`/learn/${currentItem.facet.kuId}?source=review`}
                 className="inline-block px-4 py-2 bg-[#0A5C36] text-white font-semibold rounded-md hover:bg-[#084a2b]"
               >
-                Review lesson on {currentItem.ku.content}
+                Review lesson on {currentItem.facet.data?.content}
               </Link>
             </div>
           )}

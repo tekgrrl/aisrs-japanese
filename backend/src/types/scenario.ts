@@ -26,9 +26,11 @@ export interface ExtractedKU {
     type: 'vocab' | 'kanji';
     kuId?: string;
     status: 'new' | 'learning' | 'mastered';
+    jlptLevel?: string;
 }
 
 export interface GrammarNote {
+    pattern?: string;  // the extractable pattern, e.g. "～をお願いします"
     title: string;
     explanation: string;
     exampleInContext: {

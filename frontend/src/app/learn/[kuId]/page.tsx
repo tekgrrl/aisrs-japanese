@@ -2,9 +2,10 @@
 
 import React, { useState, useEffect, useRef } from "react"; // <-- Import useRef
 import { useRouter, useParams, useSearchParams } from "next/navigation";
-import { KnowledgeUnit, Lesson, VocabLesson, KanjiLesson } from "@/types";
+import { KnowledgeUnit, Lesson, VocabLesson, KanjiLesson, GrammarLesson, UserGrammarLesson } from "@/types";
 import VocabLessonView from "@/components/lessons/VocabLessonView";
 import KanjiLessonView from "@/components/lessons/KanjiLessonView";
+import GrammarLessonView from "@/components/lessons/GrammarLessonView";
 import { apiFetch } from "@/lib/api-client";
 
 export default function LearnItemPage() {
@@ -28,6 +29,7 @@ export default function LearnItemPage() {
   const [kanjiStatuses, setKanjiStatuses] = useState<Record<string, string>>(
     {},
   );
+  const [userGrammarLessons, setUserGrammarLessons] = useState<UserGrammarLesson[]>([]);
 
   const fetchVocabLesson = async (ku: KnowledgeUnit) => {
     setIsLoading(true);
@@ -113,6 +115,26 @@ export default function LearnItemPage() {
     setLesson(data as KanjiLesson);
   };
 
+  const fetchGrammarLesson = async (ku: KnowledgeUnit) => {
+    const [lessonRes, userLessonsRes] = await Promise.all([
+      apiFetch("/api/lessons/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kuId: ku.id }),
+      }),
+      apiFetch(`/api/lessons/user-grammar?kuId=${ku.id}`),
+    ]);
+
+    if (!lessonRes.ok) throw new Error("Failed to generate grammar lesson");
+    const lessonData = (await lessonRes.json()) as GrammarLesson;
+    setLesson(lessonData);
+
+    if (userLessonsRes.ok) {
+      const ugls = (await userLessonsRes.json()) as UserGrammarLesson[];
+      setUserGrammarLessons(ugls);
+    }
+  };
+
   useEffect(() => {
     if (process.env.NODE_ENV === "development" && fetchRef.current) {
       return; // Already fetched, do nothing on the second mount
@@ -136,6 +158,8 @@ export default function LearnItemPage() {
           await fetchVocabLesson(kuData);
         } else if (kuData.type === "Kanji") {
           await fetchKanjiLesson(kuData);
+        } else if (kuData.type === "Grammar") {
+          await fetchGrammarLesson(kuData);
         }
       } catch (err: any) {
         setError(err.message);
@@ -215,16 +239,80 @@ export default function LearnItemPage() {
       });
     }
 
+    // 2a. Grammar facets (handled separately — may emit multiple sentence-assembly facets)
+    if (ku?.type === "Grammar" && lesson?.type === "Grammar") {
+      const grammarLesson = lesson as GrammarLesson;
+      const grammarFacets: { key: string; data: Record<string, any> }[] = [];
+
+      if (selectedFacets["sentence-assembly"]) {
+        grammarLesson.examples.forEach((ex) => {
+          grammarFacets.push({
+            key: "sentence-assembly",
+            data: {
+              goalTitle: grammarLesson.pattern,
+              fragments: ex.fragments,
+              answer: ex.japanese,
+              english: ex.english,
+              accepted_alternatives: ex.accepted_alternatives ?? [],
+              sourceId: ku.id,
+              sourceTitle: grammarLesson.title,
+            },
+          });
+        });
+      }
+      if (selectedFacets["AI-Generated-Question"]) {
+        grammarFacets.push({
+          key: "AI-Generated-Question",
+          data: {
+            content: grammarLesson.pattern,
+            topic: grammarLesson.title,
+            sourceId: ku.id,
+            sourceTitle: grammarLesson.title,
+          },
+        });
+      }
+      if (selectedFacets["Content-to-Definition"]) {
+        grammarFacets.push({
+          key: "Content-to-Definition",
+          data: {
+            content: grammarLesson.pattern,
+            definitions: [grammarLesson.meaning].filter(Boolean),
+            topic: grammarLesson.title,
+            kuType: "Grammar",
+          },
+        });
+      }
+
+      if (grammarFacets.length > 0) {
+        promises.push(
+          apiFetch("/api/reviews/generate", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ kuId: ku.id, facetsToCreate: grammarFacets }),
+          }).then(async (res) => {
+            if (!res.ok) {
+              const err = await res.json();
+              throw new Error(err.error || "Failed to create grammar facets");
+            }
+          }),
+        );
+      }
+    }
+
     // 2. Process Standard Review Facets
     if (reviewFacetKeys.length > 0) {
       const facetsToCreatePayload = reviewFacetKeys.map((key) => {
-        if (key.startsWith("Kanji-Component-") && lesson.type === "Vocab") {
+        // Component kanji stub creation (Kanji-Component-食 etc.) — no facet created, just KU stub
+        if (key.startsWith("Kanji-Component-") &&
+            key !== "Kanji-Component-Meaning" &&
+            key !== "Kanji-Component-Reading" &&
+            lesson.type === "Vocab") {
           const kanjiChar = key.split("-")[2];
           const kanjiData = (lesson as VocabLesson).component_kanji?.find(
             (k) => k.kanji === kanjiChar,
           );
           return {
-            key: key,
+            key,
             data: {
               meaning: kanjiData?.meaning,
               onyomi: kanjiData?.onyomi,
@@ -232,17 +320,47 @@ export default function LearnItemPage() {
             },
           };
         }
+        // Standalone kanji facets (from Kanji lesson page)
+        if (key === "Kanji-Component-Meaning" || key === "Kanji-Component-Reading") {
+          const kanjiLesson = lesson as KanjiLesson;
+          return {
+            key,
+            data: {
+              content: ku.content,
+              meaning: kanjiLesson.meaning,
+              onyomi: kanjiLesson.onyomi,
+              kunyomi: kanjiLesson.kunyomi,
+            },
+          };
+        }
+        // Audio facet
         if (key === "audio" && lesson.type === "Vocab") {
           const vocabLesson = lesson as VocabLesson;
           const ex = vocabLesson.context_examples && vocabLesson.context_examples.length > 0
             ? vocabLesson.context_examples[Math.floor(Math.random() * vocabLesson.context_examples.length)]
             : null;
           return {
-            key: key,
-            data: ex ? { contextExample: ex } : undefined,
+            key,
+            data: {
+              content: ku.content,
+              reading: vocabLesson.reading || (ku.type === 'Vocab' ? ku.data.reading : undefined),
+              definitions: vocabLesson.definitions ?? [],
+              ...(ex ? { contextExample: ex } : {}),
+            },
           };
         }
-        return { key: key };
+        // All other facets: Content-to-Definition, Definition-to-Content,
+        // Content-to-Reading, Reading-to-Content, AI-Generated-Question
+        const vocabLesson = lesson.type === "Vocab" ? (lesson as VocabLesson) : null;
+        return {
+          key,
+          data: {
+            content: ku.content,
+            reading: vocabLesson?.reading || (ku.type === 'Vocab' ? ku.data.reading : undefined),
+            definitions: vocabLesson?.definitions ?? [],
+            topic: ku.content,
+          },
+        };
       });
 
       const reviewPromise = apiFetch("/api/reviews/generate", {
@@ -328,7 +446,7 @@ export default function LearnItemPage() {
                 Meaning
               </span>
             </label>
-            {ku?.data.reading !== ku?.content && (
+            {ku?.type === 'Vocab' && ku.data.reading !== ku?.content && (
               <label className="flex items-center p-4 bg-gray-200 dark:bg-gray-700 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 cursor-pointer">
                 <input
                   type="checkbox"
@@ -510,7 +628,9 @@ export default function LearnItemPage() {
               ? "..."
               : lesson?.type === "Kanji" && (lesson as KanjiLesson).kanji
                 ? (lesson as KanjiLesson).kanji
-                : ku?.content || "..."}
+                : lesson?.type === "Grammar"
+                  ? (lesson as GrammarLesson).pattern
+                  : ku?.content || "..."}
           </h1>
           {lesson && lesson?.type === "Vocab" && (
             <p className="text-2xl text-gray-500 dark:text-gray-400 capitalize">
@@ -519,6 +639,11 @@ export default function LearnItemPage() {
                 : ku
                   ? ku.type
                   : "..."}{" "}
+            </p>
+          )}
+          {lesson && lesson?.type === "Grammar" && (
+            <p className="text-2xl text-gray-500 dark:text-gray-400">
+              Grammar Pattern
             </p>
           )}
         </header>
@@ -545,10 +670,34 @@ export default function LearnItemPage() {
           <KanjiLessonView lesson={lesson as KanjiLesson} />
         )}
 
-        {!isLoading && !error && lesson && source !== "review" && (
+        {lesson && ku?.type === "Grammar" && (
+          <GrammarLessonView
+            lesson={lesson as GrammarLesson}
+            userLesson={userGrammarLessons[0]}
+            selectedFacets={selectedFacets}
+            onToggleFacet={handleCheckboxChange}
+          />
+        )}
+
+        {!isLoading && !error && lesson && source !== "review" && ku?.type !== "Grammar" && (
           <>
             {renderFacetChecklist()}
           </>
+        )}
+
+        {!isLoading && !error && lesson && source !== "review" && ku?.type === "Grammar" && (
+          <div className="mt-6">
+            {error && (
+              <div className="mb-4 text-red-600 text-sm">{error}</div>
+            )}
+            <button
+              onClick={handleSubmitFacets}
+              disabled={isSubmitting || !lesson}
+              className="w-full py-4 text-lg bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isSubmitting ? "Saving..." : "Start Learning Selected Items"}
+            </button>
+          </div>
         )}
       </main>
     </>
