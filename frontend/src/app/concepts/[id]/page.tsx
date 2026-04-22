@@ -106,6 +106,7 @@ export default function ConceptPage() {
         body: JSON.stringify({ mechanicIndices: indices, includeAiQuestion }),
       });
       if (!res.ok) throw new Error("Failed to create learning items");
+      window.dispatchEvent(new Event("refreshStats"));
       router.push("/review");
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : "An unknown error occurred.");

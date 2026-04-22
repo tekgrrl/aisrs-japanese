@@ -157,23 +157,16 @@ All service methods accept `uid: string` as their first parameter and use it for
 
 ### Firestore Multi-Tenancy Pattern
 
-The database uses **flat top-level collections** (not Firestore sub-collections per user). Tenancy isolation is enforced by a `userId` field on every document, not by collection path.
+Per-user data lives in **Firestore sub-collections** under `users/{uid}/<collection>`. The Firestore Collection Map above reflects the current state.
 
-**Query scoping** — every `findAll`-style query adds `.where('userId', '==', uid)`:
-- `knowledge-units.service.ts` line 23
-- `reviews.service.ts` line 64, 328, 378
-- `lessons.service.ts` line 196, 231
-- `stats.service.ts` line 21, 27, 33
-- `scenarios.service.ts` line 42
+**Sub-collection routing** — services that touch per-user data use a private `colRef(uid)` helper that routes `ADMIN_USER_ID` (`user_default`) to the legacy top-level collection and everyone else to `users/{uid}/<collection>`. `ReviewsService.facetsColRef` is the canonical reference implementation. See issue #138 for the ongoing work to consolidate duplicate copies of this logic.
 
-**Ownership verification** — every `findOne`/`update`/`delete` method re-checks `doc.data().userId !== uid` and throws `NotFoundException` on mismatch:
-- `knowledge-units.service.ts` line 353
-- `knowledge-units.service.ts` line 187 (update)
-- `scenarios.service.ts` line 64
+**Global collections** (`knowledge-units`, `concepts`, `questions`, `lessons/{kuId}`) have no `userId` on new documents. `createdBy` is used for audit only where present.
 
-**Write operations** always include `userId: uid` in the document payload.
-
-**Exception — `api-logs` collection** is written without a `userId` field and is not scoped per user.
+**Exceptions still using `userId` field scoping:**
+- `scenarios` top-level collection — per-user but not yet migrated to sub-collection (issue #133).
+- `lessons` for Vocab/Kanji types — legacy documents still carry a `userId` field.
+- `api-logs` — no user scoping.
 
 ---
 
@@ -336,7 +329,7 @@ Previously, the Next.js `frontend` app hosted Next API Routes (`/src/app/api/...
 - New `frontend/src/components/review/SentenceClozeCard.tsx` — typed fill-in-the-blank card. Renders the sentence with `[____]` replaced by a styled inline blank; wanakana IME input; strict match evaluation against `back.answer` and `back.accepted_alternatives`; reveals `back.fullSentence` on submit.
 - Facet `data` shape: `front: { sentenceWithBlank: string, hint: string }`, `back: { answer: string, fullSentence: string, accepted_alternatives?: string[] }`, `goalTitle?: string`.
 - `review/page.tsx` updated: renders `SentenceClozeCard` for `sentence-cloze` facets; excluded from the standard review-card form and answer-feedback section.
-- Generation (how/when `sentence-cloze` facets are created) is deferred — not yet wired into `UserConceptsService.createFacets`.
+- Generation (how/when `sentence-cloze` facets are created) is deferred — not yet wired into `ConceptsService.createFacets`.
 
 ---
 
@@ -409,6 +402,16 @@ Previously, the Next.js `frontend` app hosted Next API Routes (`/src/app/api/...
 - **Learn page Grammar branch**: fetches global lesson + user lessons in parallel. Emits one `sentence-assembly` facet per example, plus `AI-Generated-Question` and `Content-to-Definition`. `Content-to-Definition` tagged with `kuType: 'Grammar'` and `definitions: [lesson.meaning]`.
 - **Review page**: `getQuestionType` returns "Grammar Pattern → Meaning" when `data.kuType === 'Grammar'` or no `data.reading` field (legacy facet detection). `getExpectedAnswer` falls back to `facet.data.topic` if `definitions` is empty.
 - **`GrammarLessonView.tsx`** (new): renders pattern header, formation block, amber notes callout, examples with source-context banner, and facet selection checkboxes.
+
+---
+
+**`UserConceptsModule` consolidated into `ConceptsModule` (2026-04-22)**
+
+- `UserConceptsService` deleted; its methods (`enroll`, `findAllForUser`, `getFacets`, `createFacets`) merged into `ConceptsService`.
+- `UserConceptsController` moved to `backend/src/concepts/user-concepts.controller.ts`; now injects `ConceptsService` directly.
+- `ConceptsModule` updated to register both `ConceptsController` and `UserConceptsController`; imports `ReviewsModule`.
+- `UserConceptsModule` removed from `AppModule`.
+- Eliminates the duplicate `facetsColRef` copy in `UserConceptsService` that was missing the `ADMIN_USER_ID` routing check (partial fix for issue #138 — `StatsService` inline copy remains).
 
 ---
 
