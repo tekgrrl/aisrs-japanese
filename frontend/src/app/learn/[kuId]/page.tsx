@@ -299,8 +299,8 @@ export default function LearnItemPage() {
       }
     }
 
-    // 2. Process Standard Review Facets
-    if (reviewFacetKeys.length > 0) {
+    // 2. Process Standard Review Facets (skip Grammar — all grammar facets handled in 2a above)
+    if (reviewFacetKeys.length > 0 && ku?.type !== "Grammar") {
       const facetsToCreatePayload = reviewFacetKeys.map((key) => {
         // Component kanji stub creation (Kanji-Component-食 etc.) — no facet created, just KU stub
         if (key.startsWith("Kanji-Component-") &&
