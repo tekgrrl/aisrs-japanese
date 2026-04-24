@@ -395,7 +395,7 @@ Create a "Genki-style" learning scenario for an ADULT traveler/expat (not a stud
 - Theme/Setting: ${dto.theme || 'A common situation for an adult living in Japan'}${contextExampleDirective}
 
 **Requirements:**
-1. **Dialogue:** Create a natural, realistic dialogue (6-12 lines). Use a mix of polite (Desu/Masu) and casual forms appropriate for the setting.
+1. **Dialogue:** Create a natural, realistic dialogue (6-12 lines). Use a mix of polite and casual forms appropriate for the setting.
 2. **Vocabulary:** STRICTLY LIMIT vocabulary to ${dto.difficulty} level. Introduce exactly 3-5 "Target Words" required for the specific goal.
 3. **Grammar Notes:** Identify 1-2 key grammar points used in the dialogue and explain them like a textbook (Genki style).
 4. **Visual Context:** Provide a descriptive prompt that could be used to generate an image of the scene.
@@ -404,6 +404,7 @@ Create a "Genki-style" learning scenario for an ADULT traveler/expat (not a stud
    - **Partner Roles:** ${ALLOWED_AI_ROLES.join(', ')}
    - Use these exact terms (or their Japanese equivalents provided in the list) for the 'roles' object and 'participants' array.
 6. **Data Formatting (CRITICAL):**
+   - \`title\`, \`description\` and all \`setting\` object fields should be in English
    - **NO ROMAJI**. Never include Romaji in any field.
    - **Extracted KUs:**
      - \`content\`: Japanese text ONLY (e.g., "本屋"). No readings or definitions in this field.
