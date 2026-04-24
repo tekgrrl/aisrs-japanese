@@ -18,6 +18,7 @@ import { QuestionsService } from '../questions/questions.service';
 import { ReviewFacet } from '@/types';
 import { KnowledgeUnitsService } from '../knowledge-units/knowledge-units.service';
 import { StatsService } from '../stats/stats.service';
+import { buildAnswerEvaluatorPrompt } from '../prompts/evaluation.prompts';
 
 @Injectable()
 export class ReviewsService {
@@ -204,26 +205,7 @@ export class ReviewsService {
         // 2. AI Fallback
         this.logger.log(`Local match failed for topic: ${topic}. Calling Gemini.`);
 
-        const systemPrompt = `You are an AISRS evaluator. A user is being quizzed.
-- The question was: "${question || 'N/A'}"
-- The topic was: "${topic || 'N/A'}"
-- The expected answer(s) are: "${JSON.stringify(expectedAnswers)}"
-- The user's answer is: "${userAnswer}"
-
-Your task is to evaluate if the user's answer is correct.
-1.  Read the "expected answer(s)". This may be a single answer (e.g., "Family") or a comma-separated list of possible correct answers (e.g., "ドク, トク, よむ").
-2.  Compare the user's answer to the list. The user is correct if their answer is *any one* of the items in the list.
-3.  If you feel that the answer is correct but not in the list, return a pass with an explanation.
-4.  Be lenient with hiragana vs katakana (e.g., if expected is "ドク" and user typed "どく", it's a pass).
-5.  Be lenient with extra punctuation or whitespace.
-6.  Provide your evaluation ONLY as a valid JSON object with the following schema:
-{
-  "result": "pass" | "fail",
-  "explanation": "A brief, one-sentence explanation for *why* the user passed or failed, referencing their answer."
-}
-Example for a pass: {"result": "pass", "explanation": "Correct! よむ is one of the kun'yomi readings."}
-Example for a fail: {"result": "fail", "explanation": "Incorrect. The expected readings were ドク, トク, or よむ."}
-`;
+        const systemPrompt = buildAnswerEvaluatorPrompt(question, topic, expectedAnswers, userAnswer);
 
         const evalResult = await this.geminiService.evaluateAnswer(
             systemPrompt,
