@@ -5,9 +5,9 @@ import { GeminiService } from '../gemini/gemini.service';
 import { QuestionsService } from '../questions/questions.service';
 import { KnowledgeUnit, Lesson, VocabLesson, KanjiLesson, GrammarLesson, GrammarKnowledgeUnit, UserGrammarLesson } from '../types';
 import { performance } from 'perf_hooks';
-// Removed CURRENT_USER_ID import
-
 import { KnowledgeUnitsService } from '../knowledge-units/knowledge-units.service';
+import { buildVocabLessonMessage, buildVocabCacheContext, buildKanjiLessonPrompt } from '../prompts/vocab.prompts';
+import { GRAMMAR_INSTRUCTIONS, buildGrammarLessonMessage } from '../prompts/grammar.prompts';
 
 @Injectable()
 export class LessonsService {
@@ -52,18 +52,7 @@ export class LessonsService {
 
     if (ku.type === "Grammar") {
       const grammarKu = ku as GrammarKnowledgeUnit;
-      const ctxExample = grammarKu.data.exampleInContext;
-      userMessage = `You are an expert Japanese grammar tutor. Generate a lesson for the grammar pattern: ${grammarKu.content}
-
-Pattern title: ${grammarKu.data.title}
-Existing explanation: ${grammarKu.data.explanation}
-Example from context (USE AS examples[0] VERBATIM):
-  japanese: ${ctxExample?.japanese ?? ''}
-  english: ${ctxExample?.english ?? ''}
-  fragments: ${JSON.stringify(ctxExample?.fragments ?? [])}
-  accepted_alternatives: ${JSON.stringify(ctxExample?.accepted_alternatives ?? [])}
-
-${GRAMMAR_INSTRUCTIONS}`;
+      userMessage = buildGrammarLessonMessage(grammarKu);
 
       const lessonString = await this.geminiService.generateLesson(userMessage, { content: grammarKu.content, kuId }, undefined);
       if (!lessonString) throw new Error('AI response was empty.');
@@ -82,52 +71,9 @@ ${GRAMMAR_INSTRUCTIONS}`;
     }
 
     if (ku.type === "Kanji") {
-      const KANJI_USER_PROMPT = `You are an expert Japanese tutor. You will be asked to generate a lesson for the Japanese Kanji: ${ku.content}.
-
-The lesson should be in English. Where you want to use Japanese text for examples, explanations, meanings and readings do so but do not include Romaji.
-
-**Task 1: Detailed breakdown**
-* Provide the **Meanings**, **On'yomi**, **Kun'yomi** readings.
-* Identify the **Radical** (character, meaning).
-* **Stroke Count**.
-
-**Task 2: Mnemonics**
-* Generate a **Meaning Mnemonic**.
-* Generate a **Reading Mnemonic**.
-
-**Task 3: Related Vocabulary**
-* Provide 3-5 related vocabulary words (Content + Reading).
-
-**Response Schema:**
-You MUST return a valid JSON object matching this schema:
-{
-  "type": "Kanji",
-  "kanji": "The Kanji character",
-  "meaning": "Core meaning(s)",
-  "onyomi": ["reading (katakana)"],
-  "kunyomi": ["reading (hiragana)"],
-  "strokeCount": 0,
-  "strokeImages": [],
-  "radical": {
-    "character": "Radical char",
-    "meaning": "Radical meaning",
-    "image": "",
-    "animation": []
-  },
-  "mnemonic_meaning": "Story...",
-  "mnemonic_reading": "Story...",
-  "relatedVocab": [
-    { "id": "", "content": "Word", "reading": "Reading" }
-  ]
-}`;
-      userMessage = KANJI_USER_PROMPT;
+      userMessage = buildKanjiLessonPrompt(ku.content);
     } else {
-      if (cachedContentName) {
-        userMessage = `Generate a lesson for the Japanese word: ${ku.content}`;
-      } else {
-        userMessage = `You are an expert Japanese tutor. You will be asked to generate a lesson for the Japanese word: ${ku.content}.
-${VOCAB_INSTRUCTIONS}`;
-      }
+      userMessage = buildVocabLessonMessage(ku.content, !!cachedContentName);
     }
 
     const lessonString = await this.geminiService.generateLesson(
@@ -315,9 +261,8 @@ ${VOCAB_INSTRUCTIONS}`;
 
 
   async processBatch(uid: string, vocabValues: { id: string; content: string }[]) {
-    const instructions = `${VOCAB_INSTRUCTIONS}\n\n${VOCAB_EXAMPLES}`;
     const cacheName = await this.geminiService.createContextCache(
-      `You are an expert Japanese tutor. You will be asked to generate a lesson for a Japanese word.\n${instructions}`,
+      buildVocabCacheContext(),
       3600
     );
 
@@ -399,250 +344,3 @@ ${VOCAB_INSTRUCTIONS}`;
     }
   }
 }
-
-const VOCAB_INSTRUCTIONS = `
-The lesson should be in English. Where you want to use Japanese text for examples, explanations, meanings and readings do so but do not include Romaji.
-
-**Task 1: Metadata Extraction**
-* Provide the standard **Kana Reading**.
-* Provide a list of **Concise Definitions** (suitable for valid acceptable answers in a quiz).
-* Identify the **Part of Speech**.
-* Identify the **Conjugation Type** (if applicable).
-
-**Task 2: Lesson Generation**
-* Generate detailed explanations for meaning and reading.
-* If a word is a "suru noun", include explanations of the meaning of the suru form.
-* Generate context examples that are no more complex that JLPT N4 even if the vocabulary itself is more advanced.
-* Analyze component Kanji.
-* Do not explain what "rendaku" means.
-
-**Constraints:**
-For the \`partOfSpeech\` property, select one of:
-* noun, proper-noun, noun-suru, i-adjective, na-adjective, transitive-verb, intransitive-verb, adverb, counter, prefix, suffix, conjunction, particle
-
-For the \`conjugation_type\` property, select one of (or null):
-* godan, ichidan, irregular, suru, i-adjective, na-adjective, null
-
-Do not explain the terms "kun'yomi" or "on'yomi", never use the term "sino-japanese"
-
-**Response Schema:**
-You MUST return a valid JSON object matching this schema:
-{
-  "type": "Vocab",
-  "vocab": "The canonical Japanese word",
-  "reading": "The canonical kana reading (e.g. ぜったい)",
-  "definitions": ["definition 1", "definition 2"],
-  "partOfSpeech": "The selected part of speech string",
-  "conjugation_type": "The selected conjugation type or null",
-  
-  "meaning_explanation": "A detailed explanation of the word's meaning and nuance.",
-  "reading_explanation": "An explanation of the reading (e.g., nuance, rendaku).",
-  
-  "context_examples": [
-    { "sentence": "Japanese sentence with Furigana in brackets e.g. 明日[あした]", "translation": "English translation." }
-  ],
-  "component_kanji": [
-    { 
-      "kanji": "Single Kanji", 
-      "reading": "Reading in this word", 
-      "meaning": "Core meaning",
-      "onyomi": ["on1"],
-      "kunyomi": ["kun1"]
-    }
-  ]
-}`;
-
-const GRAMMAR_INSTRUCTIONS = `
-The lesson should be in English. Japanese examples must not include Romaji.
-
-Generate a complete grammar lesson matching this JSON schema exactly:
-{
-  "type": "Grammar",
-  "pattern": "The grammar pattern (e.g. ～をお願いします)",
-  "title": "Human-readable name (e.g. Making Requests with ～をお願いします)",
-  "jlptLevel": "One of: N5, N4, N3, N2, N1",
-  "meaning": "One-line summary of what this pattern expresses",
-  "formation": "How to form it (e.g. noun + をお願いします)",
-  "notes": "Nuance, register, common mistakes, contrast with similar patterns",
-  "examples": [
-    {
-      "japanese": "Full example sentence",
-      "english": "English translation",
-      "context": "Short real-world setting label (e.g. convenience store)",
-      "fragments": ["word1", "word2"],
-      "accepted_alternatives": []
-    }
-  ]
-}
-
-Rules:
-- Provide exactly 3 examples
-- ALWAYS copy the provided 'Example from context' data VERBATIM into examples[0], including its exact fragments and accepted_alternatives
-- examples[1] and examples[2] MUST use completely different Japanese sentences with their own unique fragments
-- fragments must be the Japanese sentence split into meaningful chunks for sentence-assembly drills — each example must have different fragments matching its own sentence
-- NEVER copy fragments from one example to another
-- Keep example sentences at or below JLPT N4 complexity even if the pattern itself is higher level
-`;
-
-const VOCAB_EXAMPLES = `
-**Examples:**
-
-Input: 先生
-
-Output:
-{
-  "type": "Vocab",
-  "vocab": "先生",
-  "reading": "せんせい",
-  "definitions": ["teacher", "instructor", "master", "doctor"],
-  "partOfSpeech": "noun",
-  "conjugation_type": null,
-  "meaning_explanation": "A term used to address or refer to teachers, doctors, lawyers, politicians, and other authority figures or experts. It literally means 'one born before'.",
-  "reading_explanation": "Note that 'sei' (せい) is prolonged, so it sounds like 'sensee'. This is a common pronunciation change in Japanese.",
-  "context_examples": [
-    { "sentence": "田中[たなか]先生[せんせい]は日本語[にほんご]を教[おし]えています。", "translation": "Professor Tanaka teaches Japanese." }
-  ],
-  "component_kanji": [
-    {
-      "kanji": "先",
-      "reading": "せん",
-      "meaning": "before, ahead, previous",
-      "onyomi": ["セン"],
-      "kunyomi": ["さき", "ま.ず"]
-    },
-    {
-      "kanji": "生",
-      "reading": "せい",
-      "meaning": "life, genuine, birth",
-      "onyomi": ["セイ", "ショウ"],
-      "kunyomi": ["い.きる", "う.む", "お.う", "は.える", "なま"]
-    }
-  ]
-}
-
-Input: 食べる
-
-Output:
-{
-  "type": "Vocab",
-  "vocab": "食べる",
-  "reading": "たべる",
-  "definitions": ["to eat"],
-  "partOfSpeech": "transitive-verb",
-  "conjugation_type": "ichidan",
-  "meaning_explanation": "The standard verb for 'to eat'. It is a transitive verb, so it takes an object marked by 'o' (を).",
-  "reading_explanation": "The reading 'ta' comes from the kanji 食 and 'beru' is okurigana.",
-  "context_examples": [
-    { "sentence": "朝[あさ]ごはんにパンを食[た]べました。", "translation": "I ate bread for breakfast." }
-  ],
-  "component_kanji": [
-    {
-      "kanji": "食",
-      "reading": "た",
-      "meaning": "eat, food",
-      "onyomi": ["ショク", "ジキ"],
-      "kunyomi": ["く.う", "た.べる", "は.む"]
-    }
-  ]
-}
-
-Input: 有名
-
-Output:
-{
-  "type": "Vocab",
-  "vocab": "有名",
-  "reading": "ゆうめい",
-  "definitions": ["famous", "fame"],
-  "partOfSpeech": "na-adjective",
-  "conjugation_type": "na-adjective",
-  "meaning_explanation": "Describes something or someone that has a name widely known. It is a Na-adjective, so you use 'na' to modify nouns (e.g. 有名のな人 - famous person).",
-  "reading_explanation": "Standard on'yomi readings. 'Yuu' (有) + 'Mei' (名).",
-  "context_examples": [
-    { "sentence": "彼[かれ]は有名[ゆうめい]な歌手[かしゅ]です。", "translation": "He is a famous singer." }
-  ],
-  "component_kanji": [
-    {
-      "kanji": "有",
-      "reading": "ゆう",
-      "meaning": "possess, have, exist",
-      "onyomi": ["ユウ", "ウ"],
-      "kunyomi": ["あ.る"]
-    },
-     {
-      "kanji": "名",
-      "reading": "めい",
-      "meaning": "name, noted, distinguished",
-      "onyomi": ["メイ", "ミョウ"],
-      "kunyomi": ["な"]
-    }
-  ]
-}
-
-Input: 勉強する
-
-Output:
-{
-  "type": "Vocab",
-  "vocab": "勉強する",
-  "reading": "べんきょうする",
-  "definitions": ["to study", "to work hard"],
-  "partOfSpeech": "noun-suru",
-  "conjugation_type": "suru",
-  "meaning_explanation": "The primary verb for 'to study'. It is composed of the noun 'Benkyou' (study) and the auxiliary verb 'suru' (to do).",
-  "reading_explanation": "Ben (勉) + Kyou (強) + Suru. Note that 'strong' (強) is usually read 'kyo' as a standalone on'yomi, but here it is 'kyou'.",
-  "context_examples": [
-    { "sentence": "毎日[まいにち]日本語[にほんご]を勉強[べんきょう]します。", "translation": "I study Japanese every day." }
-  ],
-  "component_kanji": [
-    {
-      "kanji": "勉",
-      "reading": "べん",
-      "meaning": "exertion, endeavour, encourage",
-      "onyomi": ["ベン"],
-      "kunyomi": ["つと.める"]
-    },
-     {
-      "kanji": "強",
-      "reading": "きょう",
-      "meaning": "strong",
-      "onyomi": ["キョウ", "ゴウ"],
-      "kunyomi": ["つよ.い", "つよ.まる", "つよ.める", "し.いる"]
-    }
-  ]
-}
-
-Input: 日本
-
-Output:
-{
-  "type": "Vocab",
-  "vocab": "日本",
-  "reading": "にほん",
-  "definitions": ["Japan"],
-  "partOfSpeech": "proper-noun",
-  "conjugation_type": null,
-  "meaning_explanation": "The country of Japan. Literally 'sun origin' (Land of the Rising Sun).",
-  "reading_explanation": "Usually read 'Nihon', but sometimes 'Nippon' (more formal or emphatic).",
-  "context_examples": [
-    { "sentence": "日本[にほん]に行[い]きたいです。", "translation": "I want to go to Japan." }
-  ],
-  "component_kanji": [
-    {
-      "kanji": "日",
-      "reading": "に",
-      "meaning": "day, sun, Japan",
-      "onyomi": ["ニチ", "ジツ"],
-      "kunyomi": ["ひ", "か"]
-    },
-     {
-      "kanji": "本",
-      "reading": "ほん",
-      "meaning": "book, present, main, origin, true, real",
-      "onyomi": ["ホン"],
-      "kunyomi": ["もと"]
-    }
-  ]
-}
-`;
-

@@ -1,0 +1,132 @@
+/**
+ * Prompts for AI-generated quiz question generation.
+ * Source: backend/src/questions/questions.service.ts
+ */
+
+import { ConceptKnowledgeUnit } from '../types';
+import { NO_ROMAJI, JSON_ONLY_OUTPUT } from './fragments';
+
+export type ConceptMechanic = ConceptKnowledgeUnit['data']['mechanics'][number];
+
+// ---------------------------------------------------------------------------
+// Vocab questions
+// ---------------------------------------------------------------------------
+
+export const VOCAB_QUESTION_OPTIONS: Record<string, string> = {
+  'conjugation': 'if the word is a verb, conjugate the verb to a specific form e.g.: Give the past potential form of the verb in question',
+  'particle': "Match up the Vocab in question with a particle to give a particular meaning in a sentence that you specify, you can represent the particle with a blank '[____]'",
+  'translation': 'Create a sentence in English for the user to translate into Japanese. The English sentence must naturally force the use of the Target Input.',
+  'fill-in-the-blank': "A context-based, fill-in-the-blank style question with a single blank '[____]'",
+};
+
+export type VocabQuestionType = keyof typeof VOCAB_QUESTION_OPTIONS;
+
+/**
+ * Builds the system prompt for vocab/grammar AI question generation.
+ * Source: questions.service.ts:generateVocabQuestion
+ *
+ * @param questionType - One of the VOCAB_QUESTION_OPTIONS keys, randomly selected at call time.
+ */
+export function buildVocabQuestionPrompt(questionType: VocabQuestionType): string {
+  return `You are an expert Japanese tutor and quiz generator.
+You will be prompted with a single piece of Japanese Vocab: a word or grammar concept (the 'topic') and an optional reading and meaning.
+Your task is to create a single, context-based question to test the user's understanding of that word or grammar concept.
+If a reading and/or meaning are provided, you MUST generate a question where the topic matches those specific constraints. Do not generate questions for alternative readings or meanings of the same word.
+You MUST generate a question using the following form:
+${VOCAB_QUESTION_OPTIONS[questionType]};
+
+You MUST return ONLY a valid JSON object with the following schema:
+{
+  "question": "The actual question that will be displayed to the user.",
+  "context": "OPTIONAL. Brief English context/hint only if needed for disambiguation.",
+  "answer": "The primary answer to the question.",
+  "accepted_alternatives": ["Array of other grammatically valid answers (e.g. different politeness levels)."]
+}
+Rules:
+1.  The question must directly test the provided 'topic'.
+2.  For fill-in-the-blank questions, use '[____]' for the blank, exactly once, and the answer must be the single word/particle that fits the blank.
+3.  Do not use Romaji to indicate the reading of whatever is being tested. ${NO_ROMAJI}
+4.  The context field MUST be used for any "fill-in-the-blank" question that tests a noun or adjective, as these are often ambiguous. The context MUST provide a hint to differentiate the answer from common synonyms. (e.g., for 気分, a hint like (Context: a person's mood or feeling) is required).
+5.  Ensure the generated question and any accepted answers make grammatical sense.
+6.  Do NOT use literal newlines inside the JSON string values. Use spaces instead.
+7.  If the provided English context does NOT strictly dictate a specific politeness level, you MUST include standard valid variations (plain form, polite 'masu' form) in the accepted_alternatives array.
+8.  Use simple, standard grammar and vocabulary (equivalent to JLPT N4) for the surrounding sentence structure. Ensure the sentence is easy to read, so the user focuses on the target blank, not on deciphering the rest of the sentence.
+9.  Relative Complexity Rule: The surrounding sentence MUST NOT be more difficult than the target word. If the target is advanced (N3+), use simple (N4/N5) grammar structure to ensure clarity. For advanced verbs/adjectives, prioritize questions that test conjugation or specific grammatical usage over complex semantic inference.
+10. The question tests a specific concept, but natural language often has valid variations based on politeness (e.g., 食べる vs. 食べます).
+11. Ambiguity Prevention: If other distinct words (synonyms) could be grammatically correct, use the English context to disambiguate by including the closest English translation/explanation of the target word.
+12. If the question requires conjugation of a verb and the answer is not the base form, provide enough context to disambiguate the answer.
+13. ${JSON_ONLY_OUTPUT}`;
+}
+
+/**
+ * Builds the user message for vocab/grammar AI question generation.
+ * Source: questions.service.ts:generateVocabQuestion
+ */
+export function buildVocabQuestionUserMessage(
+  topic: string,
+  reading?: string,
+  meaning?: string,
+): string {
+  let msg = `Topic: ${topic}`;
+  if (reading) msg += `\nReading: ${reading}`;
+  if (meaning) msg += `\nMeaning: ${meaning}`;
+  return msg;
+}
+
+// ---------------------------------------------------------------------------
+// Concept mechanic questions
+// ---------------------------------------------------------------------------
+
+export const CONCEPT_QUESTION_OPTIONS: Record<string, string> = {
+  'error-correction': 'Present a complete Japanese sentence that attempts to use the grammatical rule but contains a specific syntax, particle, or conjugation error related to that rule. Ask the user to correct the error and provide the fully corrected Japanese sentence. Provide the intended English meaning as context.',
+  'novel-translation': 'Create a completely new English sentence that naturally forces the use of the grammatical rule. Ask the user to translate it into Japanese. Ensure the vocabulary used is very simple (JLPT N5 level) so the user is only challenged by the grammar structure, not the vocabulary.',
+};
+
+export type ConceptQuestionType = keyof typeof CONCEPT_QUESTION_OPTIONS;
+
+/**
+ * Builds the system prompt for concept mechanic question generation.
+ * The user message for this prompt is an empty string (all context is in the system prompt).
+ * Source: questions.service.ts:generateConceptQuestion
+ *
+ * @param mechanic - The specific mechanic being tested.
+ * @param questionType - One of the CONCEPT_QUESTION_OPTIONS keys, randomly selected at call time.
+ */
+export function buildConceptQuestionPrompt(
+  mechanic: ConceptMechanic,
+  questionType: ConceptQuestionType,
+): string {
+  return `You are an expert Japanese tutor.
+You are testing the user on a specific grammatical mechanic.
+Rule Name: ${mechanic.goalTitle}
+Structural Rule: ${mechanic.rule}
+Example Application: ${mechanic.simpleExample.japanese} (${mechanic.simpleExample.english})
+
+Your task is to generate a novel question to test this exact mechanic using this format:
+${CONCEPT_QUESTION_OPTIONS[questionType]}
+
+You MUST return ONLY a valid JSON object with the following schema:
+{
+  "question": "The actual question. If fill-in-the-blank, use '[____]' exactly once.",
+  "context": "The English translation of the target sentence/fragment to guide the user.",
+  "answer": "The Japanese text that answers the question or fills the blank.",
+  "accepted_alternatives": ["Array of other valid Japanese answers"]
+}
+
+Rules:
+1. The answer MUST require the user to apply the provided Structural Rule.
+2. ${NO_ROMAJI}
+3. For 'applied-cloze', the blank must encapsulate the conjugated rule (e.g., if the rule is modifying a noun, the blank should ideally be the modifier clause).
+4. Use standard, N4/N5 level vocabulary for the surrounding sentence so the user focuses strictly on the grammar mechanic.
+5. ${JSON_ONLY_OUTPUT}`;
+}
+
+// ---------------------------------------------------------------------------
+// Shared helpers
+// ---------------------------------------------------------------------------
+
+/** Picks a random key from a question options map. */
+export function pickRandomQuestionType<T extends string>(options: Record<T, string>): T {
+  const keys = Object.keys(options) as T[];
+  return keys[Math.floor(Math.random() * keys.length)];
+}
