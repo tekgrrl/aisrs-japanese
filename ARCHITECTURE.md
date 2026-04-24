@@ -18,6 +18,15 @@ The application is built on a split architectural model:
 2. **AI-First Generation**: Content is dynamically generated using the current model (Gemini 3.0 Flash Preview) instead of relying on pre-authored datasets. Knowledge Units (KUs), lessons, and review-facets are distinct entity types, each having its own document, and are assembled just-in-time.
 3. **Database Workflow**: For local development, the backend handles all database interactions. You can optionally use the Firestore Emulator (`localhost:8080`) for testing.
 
+## Functional Requirements
+The system has three main learning mechanisms currently: 
+
+1. Vocab/Grammar Lessons
+2. Concepts 
+3. Scenarios
+
+Each of these has it's own, **built-in learning mechanism** and each can generate what we'll call **Drills** via the Reviews Service.   
+Scenarios and Concepts can also generate Vocab/Grammar lessons (a level of indirection) which can then generate drills via the Reviews Servce.
 ## Data and Types
 
 ### Types
