@@ -233,7 +233,7 @@ export class ReviewsService {
     ) {
         // Pre-fetch existing facets for the parent KU to prevent duplicates on re-submission
         const existingParentFacets = await this.getFacetsByKuId(uid, kuId);
-        const existingParentTypes = new Set(existingParentFacets.map(f => f.facetType));
+        const existingParentTypes = new Set<string>(existingParentFacets.map(f => f.facetType));
 
         const batch = this.db.batch();
         let count = 0;                        // review facets created for the parent KU
