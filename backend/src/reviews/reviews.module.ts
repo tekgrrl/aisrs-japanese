@@ -6,6 +6,7 @@ import { forwardRef } from '@nestjs/common';
 import { QuestionsModule } from 'src/questions/questions.module';
 import { KnowledgeUnitsModule } from 'src/knowledge-units/knowledge-units.module';
 import { StatsModule } from '../stats/stats.module';
+import { UserKnowledgeUnitsModule } from '../user-knowledge-units/user-knowledge-units.module';
 
 @Module({
   imports: [
@@ -13,6 +14,7 @@ import { StatsModule } from '../stats/stats.module';
     forwardRef(() => QuestionsModule),
     KnowledgeUnitsModule,
     StatsModule,
+    UserKnowledgeUnitsModule,
   ],
   controllers: [ReviewsController],
   providers: [ReviewsService],

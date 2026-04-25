@@ -48,6 +48,9 @@ export class UserKnowledgeUnitsService {
         personalNotes: uku.personalNotes,
         userNotes: uku.userNotes,
         createdAt: (kuData.createdAt as Timestamp).toDate().toISOString(),
+        // UKU state fields — projected onto the KU shape for the client
+        ukuStatus: uku.status,
+        ukuFacetCount: uku.facet_count,
       } as unknown as KnowledgeUnit);
     }
 
@@ -64,6 +67,16 @@ export class UserKnowledgeUnitsService {
       .where('status', '==', 'learning')
       .get();
     return this._joinKUs(uid, snapshot);
+  }
+
+  async update(uid: string, kuId: string, data: Record<string, any>): Promise<void> {
+    const uku = await this.findByKuId(uid, kuId);
+    if (!uku) {
+      this.logger.warn(`update: no UKU found for uid=${uid} kuId=${kuId}`);
+      return;
+    }
+    await this.userKusRef(uid).doc(uku.id).update(data);
+    this.logger.log(`Updated UKU ${uku.id} for uid=${uid} kuId=${kuId}`);
   }
 
   async create(uid: string, kuId: string): Promise<UserKnowledgeUnit> {

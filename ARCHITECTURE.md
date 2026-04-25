@@ -191,7 +191,7 @@ Per-user data lives in **Firestore sub-collections** under `users/{uid}/<collect
 | `users/{uid}/user-grammar-lessons` | Yes — sub-collection path | Per-user per-encounter `UserGrammarLesson` docs. Doc ID: `{kuId}_{sourceType}_{sourceId}` (deterministic, prevents duplicates per source). |
 | `questions` | **No** | Global question corpus — no `userId` on new docs. `rank` and `rejectionCount` fields drive selection. |
 | `users/{uid}/question-states` | Yes — sub-collection path | Per-user `UserQuestionState`: `rejected`, `consecutiveFailures`, `kuId` |
-| `scenarios` | Yes (field) | Roleplay scenario state |
+| `scenarios` | Yes (field) | Roleplay scenario state. `sourceKuId` field links back to the vocabulary KU that triggered generation from a context example. Requires composite index on `(userId, sourceKuId, createdAt)`. |
 | `user-stats` | Yes — doc ID is uid | Legacy stats; `USER_STATS_COLLECTION.doc(uid)` |
 | `users` | Yes — doc path `users/{uid}` | `UserRoot` document (stats, tutorContext, preferences) |
 | `concepts` | **No** | Global grammar concept corpus — no `userId` on docs; `createdBy` field for audit only |
@@ -397,6 +397,34 @@ Previously, the Next.js `frontend` app hosted Next API Routes (`/src/app/api/...
 - `frontend/src/app/concepts/[id]/page.tsx` — client component that fetches real concept data from `GET /api/concepts/:id` and renders it with two highlight helpers: `highlightGrammar` (red tint, used in Examples section) and `highlightClause` (bold + dotted underline, used in mechanics Simple/Natural examples).
 - `frontend/src/app/admin/concepts/page.tsx` — hidden admin page at `/admin/concepts` for triggering concept generation; accepts Topic and optional Detailed Notes fields that are appended to the prompt as `**Additional notes from the teacher:**`.
 - `frontend/src/app/concepts/page.tsx` — empty placeholder page for the Concepts nav link.
+
+---
+
+**Review facets + lesson page overhaul (2026-04-25)**
+
+`generateReviewFacets` (`ReviewsService`) now:
+- Pre-fetches existing parent facets before the batch write; standard facet types are skipped if already present (dedup).
+- Auto-creates `Kanji-Component-Meaning` + `Kanji-Component-Reading` review facets for each selected kanji component, with per-KU dedup (pre-fetches each kanji's existing facets before creating).
+- Tracks `newFacetCount` per kanji; UKU `facet_count` is only incremented for newly created facets.
+- Kanji UKU updates run in parallel via `Promise.all` (was sequential `for...await`).
+- `batch.commit()` is called _before_ all UKU updates (was after — bug fix).
+- Parent UKU `status` is set to `learning` if `count > 0 || kanjiLinked > 0` (was `count > 0` only — bug fix when only kanji components were selected).
+
+`GET /api/reviews/facets?kuId=` — new query param in `ReviewsController`/`ReviewsService` returns all facets for a given KU. Used by the lesson page to determine which facet types already exist.
+
+Lesson page (`/learn/[kuId]`):
+- Fetches existing facets and any linked scenarios on load (parallel with lesson fetch).
+- Facet checklist conditionally renders: already-configured types shown as disabled checked checkboxes in a subsection; unconfigured types remain selectable. Heading: "Select Additional Items to Review".
+- After submit: re-fetches facets and updates UI in-place — no redirect.
+- Kanji component status detection: switched from `?status=learning` (broken after `status` moved to UKU) to `?status=user` + client-side filter on `ukuStatus` field.
+- Context examples: display "✓ View scenario →" link if a scenario already exists for that sentence (`sourceKuId` lookup), preventing duplicate scenario generation.
+- Scenario generation POST includes `sourceKuId: ku.id`.
+
+`GET /api/scenarios?sourceKuId=` — new query param in `ScenariosController`/`ScenariosService`. Returns slim stubs (`id`, `title`, `sourceContextSentence`, `createdAt`) ordered by `createdAt desc`. Requires Firestore composite index on `(userId, sourceKuId, createdAt)` on `scenarios` collection.
+
+Scenario page (`/scenarios/[id]`): shows "← Back to Lesson" breadcrumb when `scenario.sourceKuId` is set.
+
+Library page (`/learn`): Kanji items now show `data.meaning` in the hint column (previously blank).
 
 ---
 

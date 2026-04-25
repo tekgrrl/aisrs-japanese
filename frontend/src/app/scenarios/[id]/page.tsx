@@ -370,6 +370,15 @@ export default function ScenarioPage({
         </button>
       )}
 
+      {scenario?.sourceKuId && (
+        <a
+          href={`/learn/${scenario.sourceKuId}`}
+          className="mb-2 text-sm text-slate-500 hover:text-indigo-600 transition-colors flex items-center gap-1"
+        >
+          ← Back to Lesson
+        </a>
+      )}
+
       {/* Header Info */}
       <header className="border-b border-slate-200 pb-6">
         <div className="flex justify-between items-start mb-4">

@@ -48,9 +48,10 @@ Create a "Genki-style" learning scenario for an ADULT traveler/expat (not a stud
 3. **Grammar Notes:** Identify 1-2 key grammar points used in the dialogue and explain them like a textbook (Genki style).
 4. **Visual Context:** Provide a descriptive prompt that could be used to generate an image of the scene.
 5. **Role Constraints:**
-   - **User Roles:** ${ALLOWED_USER_ROLES.join(', ')}
-   - **Partner Roles:** ${ALLOWED_AI_ROLES.join(', ')}
-   - Use these exact terms (or their Japanese equivalents provided in the list) for the 'roles' object and 'participants' array.
+${dto.userRole && dto.aiRole
+  ? `   - **User Role:** ${dto.userRole}\n   - **AI Role:** ${dto.aiRole}\n   - Use these exact terms for the 'roles' object and 'participants' array.`
+  : `   - **User Roles:** ${ALLOWED_USER_ROLES.join(', ')}\n   - **Partner Roles:** ${ALLOWED_AI_ROLES.join(', ')}\n   - Use these exact terms (or their Japanese equivalents provided in the list) for the 'roles' object and 'participants' array.`
+}
 6. **Data Formatting (CRITICAL):**
    - \`title\`, \`description\` and all \`setting\` object fields should be in English
    - **NO ROMAJI**. Never include Romaji in any field.

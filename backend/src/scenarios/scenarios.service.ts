@@ -47,6 +47,18 @@ export class ScenariosService {
     return snapshot.docs.map(doc => doc.data() as Scenario);
   }
 
+  async getScenariosBySourceKuId(userId: string, sourceKuId: string): Promise<Pick<Scenario, 'id' | 'title' | 'sourceContextSentence' | 'createdAt'>[]> {
+    const snapshot = await this.collectionRef
+      .where('userId', '==', userId)
+      .where('sourceKuId', '==', sourceKuId)
+      .orderBy('createdAt', 'desc')
+      .get();
+    return snapshot.docs.map(doc => {
+      const d = doc.data() as Scenario;
+      return { id: doc.id, title: d.title, sourceContextSentence: d.sourceContextSentence, createdAt: d.createdAt };
+    });
+  }
+
   getTemplates(): ScenarioTemplate[] {
     return SCENARIO_TEMPLATES;
   }
@@ -104,7 +116,8 @@ export class ScenariosService {
         isActive: true,
         sourceType: dto.sourceType,
         sourceContextSentence: dto.sourceContextSentence,
-        targetVocab: dto.targetVocab
+        targetVocab: dto.targetVocab,
+        sourceKuId: dto.sourceKuId
       };
 
       // console.log(newScenario);

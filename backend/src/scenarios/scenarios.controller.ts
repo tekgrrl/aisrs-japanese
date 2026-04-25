@@ -35,7 +35,14 @@ export class ScenariosController {
   }
 
   @Get()
-  async getAllScenarios(@UserId() uid: string, @Query('days') days?: string) {
+  async getAllScenarios(
+    @UserId() uid: string,
+    @Query('days') days?: string,
+    @Query('sourceKuId') sourceKuId?: string,
+  ) {
+    if (sourceKuId) {
+      return this.scenariosService.getScenariosBySourceKuId(uid, sourceKuId);
+    }
     const limitDays = days ? parseInt(days, 10) : undefined;
     if (limitDays !== undefined && isNaN(limitDays)) {
       throw new BadRequestException('Invalid days parameter');

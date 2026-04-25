@@ -111,11 +111,8 @@ export class KnowledgeUnitsService {
                 onyomi: metadata?.onyomi || [],
                 kunyomi: metadata?.kunyomi || [],
             },
-            status: 'learning',
-            facet_count: 0,
             createdAt: Timestamp.now(),
             relatedUnits: [],
-            personalNotes: 'Auto-generated component',
         });
 
         return newRef.id;
