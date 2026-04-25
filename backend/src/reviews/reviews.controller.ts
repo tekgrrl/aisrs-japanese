@@ -59,7 +59,14 @@ export class ReviewsController {
   }
 
   @Get('facets')
-  async getFacets(@UserId() uid: string, @Query('due') due: string) {
+  async getFacets(
+    @UserId() uid: string,
+    @Query('due') due: string,
+    @Query('kuId') kuId: string,
+  ) {
+    if (kuId) {
+      return this.reviewsService.getFacetsByKuId(uid, kuId);
+    }
     if (due === 'true') {
       return this.reviewsService.getDueReviews(uid);
     }

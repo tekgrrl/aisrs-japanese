@@ -245,8 +245,6 @@ export interface KnowledgeUnitBase {
   /** @deprecated migrating to User state models */
   createdAt: Timestamp;
   /** @deprecated migrating to User state models */
-  status: "learning" | "reviewing";
-  /** @deprecated migrating to User state models */
   facet_count: number;
   /** @deprecated migrating to User state models */
   history?: any[];
@@ -355,7 +353,7 @@ export interface UserKnowledgeUnit {
   personalNotes: string;
   userNotes?: string;
   createdAt: Timestamp;
-  status: "learning" | "reviewing";
+  status: "learning" | "reviewing" | "mastered";
   facet_count: number;
   history?: any[];
 }

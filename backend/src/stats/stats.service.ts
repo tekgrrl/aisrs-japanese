@@ -2,7 +2,6 @@ import { Injectable, Inject, Logger } from '@nestjs/common';
 import { Firestore, Timestamp, Transaction } from 'firebase-admin/firestore';
 import {
     FIRESTORE_CONNECTION,
-    KNOWLEDGE_UNITS_COLLECTION,
     REVIEW_FACETS_COLLECTION,
     USER_STATS_COLLECTION,
     USER_KUS_SUBCOLLECTION,
@@ -19,20 +18,14 @@ export class StatsService {
 
     async getDashboardStats(uid: string) {
         // ... existing queries ...
-        const learnQuery = this.db.collection(KNOWLEDGE_UNITS_COLLECTION)
-            .where("userId", "==", uid)
-            .where("status", "==", "learning")
-            .count()
-            .get();
-
         const ukuLearnQuery = this.db.collection('users').doc(uid)
             .collection(USER_KUS_SUBCOLLECTION)
             .where("status", "==", "learning")
             .count()
             .get();
 
-        const reviewQuery = this.db.collection(KNOWLEDGE_UNITS_COLLECTION)
-            .where("userId", "==", uid)
+        const reviewQuery = this.db.collection('users').doc(uid)
+            .collection(USER_KUS_SUBCOLLECTION)
             .where("status", "==", "reviewing")
             .count()
             .get();
@@ -49,8 +42,7 @@ export class StatsService {
         // New: Fetch User Stats Document
         const userStatsQuery = this.db.collection(USER_STATS_COLLECTION).doc(uid).get();
 
-        const [learnSnapshot, ukuLearnSnapshot, reviewingSnapshot, reviewsSnapshot, userStatsDoc] = await Promise.all([
-            learnQuery,
+        const [ukuLearnSnapshot, reviewingSnapshot, reviewsSnapshot, userStatsDoc] = await Promise.all([
             ukuLearnQuery,
             reviewQuery,
             reviewsDueQuery,
@@ -131,7 +123,7 @@ export class StatsService {
         }
 
         return {
-            learnCount: learnSnapshot.data().count + ukuLearnSnapshot.data().count,
+            learnCount: ukuLearnSnapshot.data().count,
             reviewCount: totalActive,
             reviewsDue: reviewsDueCount,
 

@@ -18,6 +18,8 @@ export default function ScenariosDashboard() {
   // Generation Form State
   const [theme, setTheme] = useState("");
   const [difficulty, setDifficulty] = useState<ScenarioDifficulty>("N5");
+  const [userRole, setUserRole] = useState("");
+  const [aiRole, setAiRole] = useState("");
 
   useEffect(() => {
     fetchScenarios();
@@ -49,7 +51,9 @@ export default function ScenariosDashboard() {
         },
         body: JSON.stringify({
           difficulty,
-          theme: theme || undefined, // Send undefined if empty to let AI decide
+          theme: theme || undefined,
+          userRole: userRole || undefined,
+          aiRole: aiRole || undefined,
         }),
       });
 
@@ -133,6 +137,32 @@ export default function ScenariosDashboard() {
                 <option value="N2">N2 (Business)</option>
                 <option value="N1">N1 (Fluent)</option>
               </select>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-600 mb-1">
+                Your Role <span className="text-slate-400 font-normal">(optional)</span>
+              </label>
+              <input
+                type="text"
+                value={userRole}
+                onChange={(e) => setUserRole(e.target.value)}
+                placeholder="e.g. Software Engineer"
+                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-600 mb-1">
+                AI Role <span className="text-slate-400 font-normal">(optional)</span>
+              </label>
+              <input
+                type="text"
+                value={aiRole}
+                onChange={(e) => setAiRole(e.target.value)}
+                placeholder="e.g. Colleague"
+                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+              />
             </div>
           </div>
           <div className="flex justify-end">

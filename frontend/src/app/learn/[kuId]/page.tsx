@@ -30,6 +30,9 @@ export default function LearnItemPage() {
     {},
   );
   const [userGrammarLessons, setUserGrammarLessons] = useState<UserGrammarLesson[]>([]);
+  const [existingFacets, setExistingFacets] = useState<any[] | null>(null);
+  // scenarios keyed by sourceContextSentence so each context example can show its link
+  const [kuScenarios, setKuScenarios] = useState<Record<string, { id: string; title: string }>>({});
 
   const fetchVocabLesson = async (ku: KnowledgeUnit) => {
     setIsLoading(true);
@@ -73,24 +76,18 @@ export default function LearnItemPage() {
         lessonData.component_kanji &&
         lessonData.component_kanji.length > 0
       ) {
-        const kanjiChars = lessonData.component_kanji.map((k) => k.kanji);
-        const response = await apiFetch(
-          "/api/knowledge-units/get-all?status=learning&content=" +
-            kanjiChars.join(","),
-        );
+        const kanjiChars = new Set(lessonData.component_kanji.map((k) => k.kanji));
+        const response = await apiFetch("/api/knowledge-units/get-all?status=user");
 
         if (!response.ok) throw new Error(response.statusText);
 
-        const data = (await response.json()) as KnowledgeUnit[]; // Cast here
-
-        const kanjiKus = data.map(
-          (thing: KnowledgeUnit) => ({ ...thing }) as KnowledgeUnit,
-        );
+        const data = (await response.json()) as KnowledgeUnit[];
 
         const statuses: Record<string, string> = {};
-
-        kanjiKus.forEach((kanjiKu) => {
-          statuses[kanjiKu.content] = kanjiKu.status;
+        data.forEach((ku) => {
+          if (kanjiChars.has(ku.content) && (ku as any).ukuStatus) {
+            statuses[ku.content] = (ku as any).ukuStatus;
+          }
         });
 
         setKanjiStatuses(statuses);
@@ -154,12 +151,30 @@ export default function LearnItemPage() {
         setKu(kuData);
 
         // 2. Branch Logic
-        if (kuData.type === "Vocab") {
-          await fetchVocabLesson(kuData);
-        } else if (kuData.type === "Kanji") {
-          await fetchKanjiLesson(kuData);
-        } else if (kuData.type === "Grammar") {
-          await fetchGrammarLesson(kuData);
+        const [, facetsRes, scenariosRes] = await Promise.all([
+          kuData.type === "Vocab"
+            ? fetchVocabLesson(kuData)
+            : kuData.type === "Kanji"
+              ? fetchKanjiLesson(kuData)
+              : fetchGrammarLesson(kuData),
+          apiFetch(`/api/reviews/facets?kuId=${kuData.id}`),
+          apiFetch(`/api/scenarios?sourceKuId=${kuData.id}`),
+        ]);
+
+        if (facetsRes.ok) {
+          const facets = await facetsRes.json();
+          setExistingFacets(Array.isArray(facets) ? facets : []);
+        } else {
+          setExistingFacets([]);
+        }
+
+        if (scenariosRes.ok) {
+          const scenarios = await scenariosRes.json() as { id: string; title: string; sourceContextSentence?: string }[];
+          const byContextSentence: Record<string, { id: string; title: string }> = {};
+          scenarios.forEach(s => {
+            if (s.sourceContextSentence) byContextSentence[s.sourceContextSentence] = { id: s.id, title: s.title };
+          });
+          setKuScenarios(byContextSentence);
         }
       } catch (err: any) {
         setError(err.message);
@@ -217,16 +232,17 @@ export default function LearnItemPage() {
         const index = parseInt(indexStr, 10);
         const ex = vocabLesson.context_examples?.[index];
 
-        if (ex) {
+        if (ex && !kuScenarios[ex.sentence]) {
           const p = apiFetch("/api/scenarios/generate", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              difficulty: "N4", // Default baseline for context examples
+              difficulty: "N4",
               theme: "Practice vocabulary in context",
               sourceType: "context-example",
               sourceContextSentence: ex.sentence,
               targetVocab: ku.content,
+              sourceKuId: ku.id,
             }),
           }).then(async (res) => {
             if (!res.ok) {
@@ -383,7 +399,12 @@ export default function LearnItemPage() {
       await Promise.all(promises);
 
       window.dispatchEvent(new CustomEvent("refreshStats"));
-      router.push("/learn");
+      setSelectedFacets({});
+      const updated = await apiFetch(`/api/reviews/facets?kuId=${ku.id}`);
+      if (updated.ok) {
+        const facets = await updated.json();
+        setExistingFacets(Array.isArray(facets) ? facets : []);
+      }
     } catch (err: any) {
       setError(err.message || "An unknown error occurred.");
     } finally {
@@ -416,82 +437,135 @@ export default function LearnItemPage() {
     }
   };
 
-  const renderFacetChecklist = () => (
-    <div className="bg-gray-100 dark:bg-gray-800 p-6 rounded-lg shadow-lg">
-      <h2 className="text-2xl font-semibold mb-4 text-gray-900 dark:text-white">
-        Choose What to Learn
-      </h2>
-      <div className="space-y-4">
-        {lesson?.type === "Vocab" && (
-          <>
-            <label className="flex items-center p-4 bg-gray-200 dark:bg-gray-700 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 cursor-pointer">
-              <input
-                type="checkbox"
-                className="h-5 w-5 rounded bg-gray-300 dark:bg-gray-900 border-gray-400 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
-                checked={!!selectedFacets["Definition-to-Content"]} // the !! makes sure that the evaluation is boolean and not undefined or null
-                onChange={() => handleCheckboxChange("Definition-to-Content")}
-              />
-              <span className="ml-3 text-lg text-gray-900 dark:text-white">
-                Content
-              </span>
-            </label>
-            <label className="flex items-center p-4 bg-gray-200 dark:bg-gray-700 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 cursor-pointer">
-              <input
-                type="checkbox"
-                className="h-5 w-5 rounded bg-gray-300 dark:bg-gray-900 border-gray-400 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
-                checked={!!selectedFacets["Content-to-Definition"]} // the !! makes sure that the evaluation is boolean and not undefined or null
-                onChange={() => handleCheckboxChange("Content-to-Definition")}
-              />
-              <span className="ml-3 text-lg text-gray-900 dark:text-white">
-                Meaning
-              </span>
-            </label>
-            {ku?.type === 'Vocab' && ku.data.reading !== ku?.content && (
-              <label className="flex items-center p-4 bg-gray-200 dark:bg-gray-700 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 cursor-pointer">
-                <input
-                  type="checkbox"
-                  className="h-5 w-5 rounded bg-gray-300 dark:bg-gray-900 border-gray-400 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
-                  checked={!!selectedFacets["Content-to-Reading"]}
-                  onChange={() => handleCheckboxChange("Content-to-Reading")}
-                />
-                <span className="ml-3 text-lg text-gray-900 dark:text-white">
-                  Reading
-                </span>
-              </label>
-            )}
+  const renderFacetChecklist = (existingFacetTypes: Set<string>) => {
+    const isAddMore = existingFacetTypes.size > 0;
 
-            {lesson.type === "Vocab" && (lesson as VocabLesson).context_examples && (lesson as VocabLesson).context_examples!.length > 0 && (
-              <label className="flex items-center p-4 bg-gray-200 dark:bg-gray-700 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 cursor-pointer">
-                <input
-                  type="checkbox"
-                  className="h-5 w-5 rounded bg-gray-300 dark:bg-gray-900 border-gray-400 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
-                  checked={!!selectedFacets["audio"]}
-                  onChange={() => handleCheckboxChange("audio")}
-                />
-                <span className="ml-3 text-lg text-gray-900 dark:text-white">
-                  Audio Comprehension
-                </span>
-              </label>
-            )}
+    // Determine which standard options remain unconfigured
+    const hasReadingFacet = ku?.type === "Vocab" && (ku as any).data?.reading !== ku?.content;
+    const hasAudio = lesson?.type === "Vocab" && ((lesson as VocabLesson).context_examples?.length ?? 0) > 0;
+    const hasContextExamples = lesson?.type === "Vocab" && ((lesson as VocabLesson).context_examples?.length ?? 0) > 0;
+    const availableKanjiComponents = lesson?.type === "Vocab"
+      ? ((lesson as VocabLesson).component_kanji ?? []).filter(k => !kanjiStatuses[k.kanji])
+      : [];
 
-            {/* --- REFACTOR: Conditional Component Kanji Display --- */}
-            {lesson.component_kanji &&
-              lesson.component_kanji.map((kanji, index) => {
+    const newVocabKeys = lesson?.type === "Vocab" ? (["Definition-to-Content", "Content-to-Definition",
+      ...(hasReadingFacet ? ["Content-to-Reading"] : []),
+      ...(hasAudio ? ["audio"] : []),
+      "AI-Generated-Question",
+    ] as string[]).filter(k => !existingFacetTypes.has(k)) : [];
+
+    const newKanjiKeys = lesson?.type === "Kanji" ? (["Kanji-Component-Meaning", "Kanji-Component-Reading", "AI-Generated-Question"] as string[])
+      .filter(k => !existingFacetTypes.has(k)) : [];
+
+    const anythingLeft = lesson?.type === "Vocab"
+      ? newVocabKeys.length > 0 || availableKanjiComponents.length > 0 || hasContextExamples
+      : lesson?.type === "Kanji"
+        ? newKanjiKeys.length > 0
+        : !existingFacetTypes.has("AI-Generated-Question");
+
+    const noneSelected = Object.values(selectedFacets).every(v => !v);
+
+    const FACET_LABELS: Record<string, string> = {
+      "Definition-to-Content": "Content",
+      "Content-to-Definition": "Meaning",
+      "Content-to-Reading": "Reading",
+      "audio": "Audio Comprehension",
+      "Kanji-Component-Meaning": "Meaning (Kanji → Meaning)",
+      "Kanji-Component-Reading": "Reading (Kanji → On/Kun)",
+      "AI-Generated-Question": "AI-Generated Questions",
+      "sentence-assembly": "Sentence Assembly",
+    };
+
+    return (
+      <div className="bg-gray-100 dark:bg-gray-800 p-6 rounded-lg shadow-lg">
+        <h2 className="text-2xl font-semibold mb-4 text-gray-900 dark:text-white">
+          {isAddMore ? "Select Additional Items to Review" : "Choose What to Learn"}
+        </h2>
+
+        {existingFacets && existingFacets.length > 0 && (
+          <div className="mb-6">
+            <div className="space-y-4">
+              {existingFacets.map((f: any) => {
+                const label = FACET_LABELS[f.facetType];
+                if (!label) return null;
+                return (
+                  <label key={f.id} className="flex items-center p-4 bg-gray-200 dark:bg-gray-700 rounded-md opacity-60 cursor-not-allowed">
+                    <input
+                      type="checkbox"
+                      className="h-5 w-5 rounded bg-gray-300 dark:bg-gray-900 border-gray-400 dark:border-gray-600 text-blue-600"
+                      checked={true}
+                      disabled
+                      onChange={() => {}}
+                    />
+                    <span className="ml-3 text-lg text-gray-900 dark:text-white">{label}</span>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {isAddMore && !anythingLeft ? (
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            All available facets are already configured.
+          </p>
+        ) : (
+        <div className="space-y-4">
+          {lesson?.type === "Vocab" && (
+            <>
+              {!existingFacetTypes.has("Definition-to-Content") && (
+                <label className="flex items-center p-4 bg-gray-200 dark:bg-gray-700 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="h-5 w-5 rounded bg-gray-300 dark:bg-gray-900 border-gray-400 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
+                    checked={!!selectedFacets["Definition-to-Content"]}
+                    onChange={() => handleCheckboxChange("Definition-to-Content")}
+                  />
+                  <span className="ml-3 text-lg text-gray-900 dark:text-white">Content</span>
+                </label>
+              )}
+              {!existingFacetTypes.has("Content-to-Definition") && (
+                <label className="flex items-center p-4 bg-gray-200 dark:bg-gray-700 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="h-5 w-5 rounded bg-gray-300 dark:bg-gray-900 border-gray-400 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
+                    checked={!!selectedFacets["Content-to-Definition"]}
+                    onChange={() => handleCheckboxChange("Content-to-Definition")}
+                  />
+                  <span className="ml-3 text-lg text-gray-900 dark:text-white">Meaning</span>
+                </label>
+              )}
+              {hasReadingFacet && !existingFacetTypes.has("Content-to-Reading") && (
+                <label className="flex items-center p-4 bg-gray-200 dark:bg-gray-700 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="h-5 w-5 rounded bg-gray-300 dark:bg-gray-900 border-gray-400 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
+                    checked={!!selectedFacets["Content-to-Reading"]}
+                    onChange={() => handleCheckboxChange("Content-to-Reading")}
+                  />
+                  <span className="ml-3 text-lg text-gray-900 dark:text-white">Reading</span>
+                </label>
+              )}
+              {hasAudio && !existingFacetTypes.has("audio") && (
+                <label className="flex items-center p-4 bg-gray-200 dark:bg-gray-700 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="h-5 w-5 rounded bg-gray-300 dark:bg-gray-900 border-gray-400 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
+                    checked={!!selectedFacets["audio"]}
+                    onChange={() => handleCheckboxChange("audio")}
+                  />
+                  <span className="ml-3 text-lg text-gray-900 dark:text-white">Audio Comprehension</span>
+                </label>
+              )}
+
+              {(lesson as VocabLesson).component_kanji?.map((kanji, index) => {
                 const status = kanjiStatuses[kanji.kanji];
                 return (
-                  <div
-                    key={`${kanji.kanji}-${index}`}
-                    className="p-4 bg-gray-300 dark:bg-gray-800 rounded-md"
-                  >
-                    <h3 className="text-xl font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                      Component Kanji
-                    </h3>
+                  <div key={`${kanji.kanji}-${index}`} className="p-4 bg-gray-300 dark:bg-gray-800 rounded-md">
+                    <h3 className="text-xl font-semibold text-gray-700 dark:text-gray-300 mb-2">Component Kanji</h3>
                     <p className="text-gray-600 dark:text-gray-400 mb-3">
-                      The kanji is{" "}
-                      <span className="font-bold text-lg">{kanji.kanji}</span>,
-                      which generally means "{kanji.meaning}".
+                      The kanji is <span className="font-bold text-lg">{kanji.kanji}</span>, which generally means "{kanji.meaning}".
                     </p>
-
                     {status ? (
                       <div className="p-2 bg-gray-400 dark:bg-gray-700 rounded-md">
                         <p className="text-lg text-gray-800 dark:text-gray-200">
@@ -503,116 +577,123 @@ export default function LearnItemPage() {
                     ) : (
                       <>
                         <p className="text-gray-600 dark:text-gray-400 mb-3">
-                          In this word, it uses the reading{" "}
-                          <span className="font-bold text-lg">
-                            {kanji.reading}
-                          </span>
-                          .
+                          In this word, it uses the reading <span className="font-bold text-lg">{kanji.reading}</span>.
                         </p>
                         <label className="flex items-center p-2 rounded-md hover:bg-gray-400 dark:hover:bg-gray-700 cursor-pointer">
                           <input
                             type="checkbox"
                             className="h-5 w-5 rounded bg-gray-400 dark:bg-gray-900 border-gray-500 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
-                            checked={
-                              !!selectedFacets[`Kanji-Component-${kanji.kanji}`]
-                            }
-                            onChange={() =>
-                              handleCheckboxChange(
-                                `Kanji-Component-${kanji.kanji}`,
-                              )
-                            }
+                            checked={!!selectedFacets[`Kanji-Component-${kanji.kanji}`]}
+                            onChange={() => handleCheckboxChange(`Kanji-Component-${kanji.kanji}`)}
                           />
-                          <span className="ml-3 text-lg text-gray-900 dark:text-white">
-                            Add {kanji.kanji}
-                          </span>
+                          <span className="ml-3 text-lg text-gray-900 dark:text-white">Add {kanji.kanji}</span>
                         </label>
                       </>
                     )}
                   </div>
                 );
               })}
-            {/* --- END REFACTOR --- */}
 
-            {/* --- Context Example Scenarios --- */}
-            {lesson.type === "Vocab" && (lesson as VocabLesson).context_examples && ((lesson as VocabLesson).context_examples?.length || 0) > 0 && (
-              <div className="p-4 bg-gray-300 dark:bg-gray-800 rounded-md">
-                <h3 className="text-xl font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                  Context Example Scenarios
-                </h3>
-                <p className="text-gray-600 dark:text-gray-400 mb-3 block">
-                  Select examples to instantly architect roleplay scenarios where you must use the word <strong>{ku?.content}</strong> in context.
-                </p>
-                <div className="space-y-3">
-                  {(lesson as VocabLesson).context_examples?.map((ex, index) => (
-                    <label key={index} className="flex items-start p-3 rounded-md hover:bg-gray-400 dark:hover:bg-gray-700 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        className="mt-1 h-5 w-5 rounded bg-gray-400 dark:bg-gray-900 border-gray-500 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
-                        checked={!!selectedFacets[`Context-Example-${index}`]}
-                        onChange={() => handleCheckboxChange(`Context-Example-${index}`)}
-                      />
-                      <span className="ml-3 text-lg text-gray-900 dark:text-white flex flex-col">
-                        <span>{ex.sentence}</span>
-                        <span className="text-sm text-gray-600 dark:text-gray-400">{ex.translation}</span>
-                      </span>
-                    </label>
-                  ))}
+              {hasContextExamples && (
+                <div className="p-4 bg-gray-300 dark:bg-gray-800 rounded-md">
+                  <h3 className="text-xl font-semibold text-gray-700 dark:text-gray-300 mb-2">Context Example Scenarios</h3>
+                  <p className="text-gray-600 dark:text-gray-400 mb-3 block">
+                    Select examples to instantly architect roleplay scenarios where you must use the word <strong>{ku?.content}</strong> in context.
+                  </p>
+                  <div className="space-y-3">
+                    {(lesson as VocabLesson).context_examples?.map((ex, index) => {
+                      const existing = kuScenarios[ex.sentence];
+                      if (existing) {
+                        return (
+                          <div key={index} className="flex items-start p-3 rounded-md bg-gray-400 dark:bg-gray-700">
+                            <span className="mt-1 h-5 w-5 flex items-center justify-center text-green-600 dark:text-green-400 font-bold text-sm flex-shrink-0">✓</span>
+                            <div className="ml-3 flex flex-col">
+                              <span className="text-lg text-gray-900 dark:text-white">{ex.sentence}</span>
+                              <span className="text-sm text-gray-600 dark:text-gray-400">{ex.translation}</span>
+                              <a
+                                href={`/scenarios/${existing.id}`}
+                                className="mt-1 text-sm text-blue-600 dark:text-blue-400 hover:underline"
+                              >
+                                → View scenario
+                              </a>
+                            </div>
+                          </div>
+                        );
+                      }
+                      return (
+                        <label key={index} className="flex items-start p-3 rounded-md hover:bg-gray-400 dark:hover:bg-gray-700 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            className="mt-1 h-5 w-5 rounded bg-gray-400 dark:bg-gray-900 border-gray-500 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
+                            checked={!!selectedFacets[`Context-Example-${index}`]}
+                            onChange={() => handleCheckboxChange(`Context-Example-${index}`)}
+                          />
+                          <span className="ml-3 text-lg text-gray-900 dark:text-white flex flex-col">
+                            <span>{ex.sentence}</span>
+                            <span className="text-sm text-gray-600 dark:text-gray-400">{ex.translation}</span>
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
-            )}
-            {/* --- End Context Example Scenarios --- */}
-          </>
-        )}
+              )}
+            </>
+          )}
 
-        {lesson?.type === "Kanji" && (
-          <>
+          {lesson?.type === "Kanji" && (
+            <>
+              {!existingFacetTypes.has("Kanji-Component-Meaning") && (
+                <label className="flex items-center p-4 bg-gray-200 dark:bg-gray-700 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="h-5 w-5 rounded bg-gray-300 dark:bg-gray-900 border-gray-400 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
+                    checked={!!selectedFacets["Kanji-Component-Meaning"]}
+                    onChange={() => handleCheckboxChange("Kanji-Component-Meaning")}
+                  />
+                  <span className="ml-3 text-lg text-gray-900 dark:text-white">Meaning (Kanji {"->"} Meaning)</span>
+                </label>
+              )}
+              {!existingFacetTypes.has("Kanji-Component-Reading") && (
+                <label className="flex items-center p-4 bg-gray-200 dark:bg-gray-700 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="h-5 w-5 rounded bg-gray-300 dark:bg-gray-900 border-gray-400 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
+                    checked={!!selectedFacets["Kanji-Component-Reading"]}
+                    onChange={() => handleCheckboxChange("Kanji-Component-Reading")}
+                  />
+                  <span className="ml-3 text-lg text-gray-900 dark:text-white">Reading (Kanji {"->"} On/Kun)</span>
+                </label>
+              )}
+            </>
+          )}
+
+          {!existingFacetTypes.has("AI-Generated-Question") && (
             <label className="flex items-center p-4 bg-gray-200 dark:bg-gray-700 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 cursor-pointer">
               <input
                 type="checkbox"
                 className="h-5 w-5 rounded bg-gray-300 dark:bg-gray-900 border-gray-400 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
-                checked={!!selectedFacets["Kanji-Component-Meaning"]}
-                onChange={() => handleCheckboxChange("Kanji-Component-Meaning")}
+                checked={!!selectedFacets["AI-Generated-Question"]}
+                onChange={() => handleCheckboxChange("AI-Generated-Question")}
               />
-              <span className="ml-3 text-lg text-gray-900 dark:text-white">
-                Meaning (Kanji {"->"} Meaning)
-              </span>
+              <span className="ml-3 text-lg text-gray-900 dark:text-white">AI-Generated Questions</span>
             </label>
-            <label className="flex items-center p-4 bg-gray-200 dark:bg-gray-700 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 cursor-pointer">
-              <input
-                type="checkbox"
-                className="h-5 w-5 rounded bg-gray-300 dark:bg-gray-900 border-gray-400 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
-                checked={!!selectedFacets["Kanji-Component-Reading"]}
-                onChange={() => handleCheckboxChange("Kanji-Component-Reading")}
-              />
-              <span className="ml-3 text-lg text-gray-900 dark:text-white">
-                Reading (Kanji {"->"} On/Kun)
-              </span>
-            </label>
-          </>
+          )}
+        </div>
         )}
 
-        <label className="flex items-center p-4 bg-gray-200 dark:bg-gray-700 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 cursor-pointer">
-          <input
-            type="checkbox"
-            className="h-5 w-5 rounded bg-gray-300 dark:bg-gray-900 border-gray-400 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
-            checked={!!selectedFacets["AI-Generated-Question"]}
-            onChange={() => handleCheckboxChange("AI-Generated-Question")}
-          />
-          <span className="ml-3 text-lg text-gray-900 dark:text-white">
-            AI-Generated Questions
-          </span>
-        </label>
+        {!(isAddMore && !anythingLeft) && (
+          <button
+            onClick={handleSubmitFacets}
+            disabled={isSubmitting || !lesson || noneSelected}
+            className="mt-6 w-full px-4 py-3 bg-blue-600 text-white font-semibold rounded-md shadow-md hover:bg-blue-700 disabled:bg-gray-500 disabled:cursor-not-allowed"
+          >
+            {isSubmitting ? "Saving..." : isAddMore ? "Add Selected Facets" : "Start Learning Selected Items"}
+          </button>
+        )}
       </div>
-
-      <button
-        onClick={handleSubmitFacets}
-        disabled={isSubmitting || !lesson}
-        className="mt-6 w-full px-4 py-3 bg-blue-600 text-white font-semibold rounded-md shadow-md hover:bg-blue-700 disabled:bg-gray-500 disabled:cursor-wait"
-      >
-        {isSubmitting ? "Saving..." : "Start Learning Selected Items"}
-      </button>
-    </div>
-  );
+    );
+  };
 
   // Used to determine if the call to this page came from the review facet
   const searchParams = useSearchParams();
@@ -679,26 +760,24 @@ export default function LearnItemPage() {
           />
         )}
 
-        {!isLoading && !error && lesson && source !== "review" && ku?.type !== "Grammar" && (
-          <>
-            {renderFacetChecklist()}
-          </>
-        )}
-
-        {!isLoading && !error && lesson && source !== "review" && ku?.type === "Grammar" && (
-          <div className="mt-6">
-            {error && (
-              <div className="mb-4 text-red-600 text-sm">{error}</div>
-            )}
-            <button
-              onClick={handleSubmitFacets}
-              disabled={isSubmitting || !lesson}
-              className="w-full py-4 text-lg bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isSubmitting ? "Saving..." : "Start Learning Selected Items"}
-            </button>
-          </div>
-        )}
+        {!isLoading && !error && lesson && source !== "review" && (() => {
+          const existingFacetTypes = new Set<string>((existingFacets ?? []).map((f: any) => f.facetType));
+          if (ku?.type !== "Grammar") {
+            return renderFacetChecklist(existingFacetTypes);
+          }
+          return (
+            <div>
+              {error && <div className="mb-4 text-red-600 text-sm">{error}</div>}
+              <button
+                onClick={handleSubmitFacets}
+                disabled={isSubmitting || !lesson}
+                className="w-full py-4 text-lg bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isSubmitting ? "Saving..." : existingFacets && existingFacets.length > 0 ? "Add Selected Facets" : "Start Learning Selected Items"}
+              </button>
+            </div>
+          );
+        })()}
       </main>
     </>
   );

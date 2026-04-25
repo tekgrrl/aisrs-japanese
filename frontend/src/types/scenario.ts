@@ -102,6 +102,7 @@ export interface Scenario {
   sourceType?: 'library' | 'custom' | 'context-example';
   sourceContextSentence?: string;
   targetVocab?: string;
+  sourceKuId?: string;
   isActive?: boolean;
 }
 
@@ -151,6 +152,9 @@ export class GenerateScenarioDto {
   sourceType?: 'library' | 'custom' | 'context-example';
   sourceContextSentence?: string;
   targetVocab?: string;
+  sourceKuId?: string;
+  userRole?: string;
+  aiRole?: string;
 }
 
 export class ChatTurnDto {

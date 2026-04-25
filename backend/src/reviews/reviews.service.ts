@@ -9,7 +9,6 @@ import { CollectionReference, FieldValue, Firestore, Query, Timestamp } from 'fi
 import {
     FIRESTORE_CONNECTION,
     REVIEW_FACETS_COLLECTION,
-    KNOWLEDGE_UNITS_COLLECTION,
     USER_STATS_COLLECTION,
 } from '../firebase/firebase.module';
 import { ADMIN_USER_ID } from '../lib/constants';
@@ -17,6 +16,7 @@ import { GeminiService } from '../gemini/gemini.service';
 import { QuestionsService } from '../questions/questions.service';
 import { ReviewFacet } from '@/types';
 import { KnowledgeUnitsService } from '../knowledge-units/knowledge-units.service';
+import { UserKnowledgeUnitsService } from '../user-knowledge-units/user-knowledge-units.service';
 import { StatsService } from '../stats/stats.service';
 import { buildAnswerEvaluatorPrompt } from '../prompts/evaluation.prompts';
 
@@ -43,6 +43,7 @@ export class ReviewsService {
         @Inject(forwardRef(() => QuestionsService))
         private readonly questionsService: QuestionsService,
         private readonly knowledgeUnitsService: KnowledgeUnitsService,
+        private readonly userKnowledgeUnitsService: UserKnowledgeUnitsService,
         private readonly statsService: StatsService,
     ) { }
 
@@ -65,7 +66,7 @@ export class ReviewsService {
     }
 
     async updateFacetSrs(uid: string, facetId: string, result: 'pass' | 'fail') {
-        return this.db.runTransaction(async (transaction) => {
+        const txResult = await this.db.runTransaction(async (transaction) => {
             const facetRef = this.facetsColRef(uid).doc(facetId);
             const facetDoc = await transaction.get(facetRef);
 
@@ -119,16 +120,6 @@ export class ReviewsService {
                 }),
             });
 
-            // 4. WRITE (Knowledge Unit Propagation)
-            // If the item reached Mastered (Mushin - Stage 8), we update the KU status.
-            if (nextSrsStage === 8 && facetData.kuId) {
-                const kuRef = this.db
-                    .collection(KNOWLEDGE_UNITS_COLLECTION)
-                    .doc(facetData.kuId);
-                // Optimistic update for now
-                transaction.update(kuRef, { status: 'mastered' });
-            }
-
             this.logger.log(
                 `SRS Update [${facetId}]: ${result.toUpperCase()} | Stage ${currentSrsStage} -> ${nextSrsStage}`,
             );
@@ -138,8 +129,22 @@ export class ReviewsService {
                 facetId,
                 newStage: nextSrsStage,
                 nextReview: nextReviewDate,
+                kuId: facetData.kuId,
+                reachedMastered: nextSrsStage === 8,
             };
         });
+
+        // Post-transaction: propagate mastered status to UKU (outside transaction — queries not allowed inside)
+        if (txResult.reachedMastered && txResult.kuId) {
+            try {
+                await this.userKnowledgeUnitsService.update(uid, txResult.kuId, { status: 'mastered' });
+                this.logger.log(`Marked UKU mastered for uid=${uid} kuId=${txResult.kuId}`);
+            } catch (e) {
+                this.logger.error(`Failed to mark UKU mastered for uid=${uid} kuId=${txResult.kuId}`, e);
+            }
+        }
+
+        return { success: txResult.success, facetId: txResult.facetId, newStage: txResult.newStage, nextReview: txResult.nextReview };
     }
 
     /**
@@ -226,31 +231,75 @@ export class ReviewsService {
         kuId: string,
         facetsToCreate: { key: string; data?: any }[],
     ) {
+        // Pre-fetch existing facets for the parent KU to prevent duplicates on re-submission
+        const existingParentFacets = await this.getFacetsByKuId(uid, kuId);
+        const existingParentTypes = new Set(existingParentFacets.map(f => f.facetType));
+
         const batch = this.db.batch();
-        let count = 0;
+        let count = 0;                        // review facets created for the parent KU
+        let kanjiLinked = 0;                  // Kanji component stubs linked
+        const kanjiLinkedKuIds: { kuId: string; newFacetCount: number }[] = [];
         const now = Timestamp.now();
-        let parentFacetCount = 0; // Correctly track parent's direct facets
 
         for (const facet of facetsToCreate) {
             const { key, data } = facet;
-            this.logger.log(`Generating review facet ${key} for KU ${kuId}`);
-            let targetKuId = kuId; // Default to the parent KU (Vocab)
+            this.logger.log(`Processing facet ${key} for KU ${kuId}`);
+            const targetKuId = kuId;
 
             // --- Handle Kanji Components ---
             if (key.startsWith('Kanji-Component-') && key !== 'Kanji-Component-Meaning' && key !== 'Kanji-Component-Reading') {
                 const parts = key.split('-');
                 if (parts.length === 3) {
                     const kanjiChar = parts[2];
-                    targetKuId = await this.knowledgeUnitsService.ensureKanjiStub(kanjiChar, data);
+                    const kanjiKuId = await this.knowledgeUnitsService.ensureKanjiStub(kanjiChar, data);
+                    await this.userKnowledgeUnitsService.create(uid, kanjiKuId);
+
+                    // Dedup: only create facets that don't already exist on the Kanji KU
+                    const existingKanjiFacets = await this.getFacetsByKuId(uid, kanjiKuId);
+                    const existingKanjiTypes = new Set(existingKanjiFacets.map(f => f.facetType));
+                    let newFacetCount = 0;
+
+                    if (!existingKanjiTypes.has('Kanji-Component-Meaning')) {
+                        batch.set(this.facetsColRef(uid).doc(), {
+                            kuId: kanjiKuId,
+                            facetType: 'Kanji-Component-Meaning',
+                            srsStage: 0,
+                            nextReviewAt: now,
+                            createdAt: now,
+                            history: [],
+                            ...(uid === ADMIN_USER_ID ? { userId: uid } : {}),
+                            data: { content: kanjiChar, meaning: data?.meaning },
+                        });
+                        newFacetCount++;
+                    }
+
+                    if (!existingKanjiTypes.has('Kanji-Component-Reading')) {
+                        batch.set(this.facetsColRef(uid).doc(), {
+                            kuId: kanjiKuId,
+                            facetType: 'Kanji-Component-Reading',
+                            srsStage: 0,
+                            nextReviewAt: now,
+                            createdAt: now,
+                            history: [],
+                            ...(uid === ADMIN_USER_ID ? { userId: uid } : {}),
+                            data: { content: kanjiChar, onyomi: data?.onyomi, kunyomi: data?.kunyomi },
+                        });
+                        newFacetCount++;
+                    }
+
+                    kanjiLinkedKuIds.push({ kuId: kanjiKuId, newFacetCount });
+                    kanjiLinked++;
                 }
-                // At this point we should have a KU for the Kanji Component, so skip the rest of the loop
                 continue;
             }
 
-            let modifiedData: any = undefined;
-            if (data) {
-                modifiedData = { ...data };
+            // Dedup: skip standard facets that already exist for the parent KU
+            if (existingParentTypes.has(key)) {
+                this.logger.log(`Skipping duplicate facet ${key} for KU ${kuId}`);
+                continue;
             }
+
+            let modifiedData = data ? { ...data } : undefined;
 
             if (key === 'audio' && modifiedData?.contextExample && modifiedData?.content) {
                 try {
@@ -277,20 +326,34 @@ export class ReviewsService {
             count++;
         }
 
-        if (count > 0) {
+        await batch.commit();
+
+        // Update parent UKU (vocab/grammar) if any facets or kanji components were selected
+        if (count > 0 || kanjiLinked > 0) {
             try {
-                await this.knowledgeUnitsService.update(kuId, {
+                await this.userKnowledgeUnitsService.update(uid, kuId, {
                     status: 'reviewing',
-                    // Atomically increment existing value by count
-                    facet_count: FieldValue.increment(count)
+                    ...(count > 0 ? { facet_count: FieldValue.increment(count) } : {}),
                 });
-                this.logger.log(`Updated parent KU ${kuId}: status=reviewing, facet_count+=${count}`);
+                this.logger.log(`Updated UKU for uid=${uid} kuId=${kuId}: status=reviewing${count > 0 ? `, facet_count+=${count}` : ''}`);
             } catch (e) {
-                this.logger.error(`Failed to update parent KU ${kuId}`, e);
+                this.logger.error(`Failed to update UKU for uid=${uid} kuId=${kuId}`, e);
             }
         }
 
-        await batch.commit();
+        // Update each Kanji UKU to reviewing in parallel
+        await Promise.all(kanjiLinkedKuIds.map(async ({ kuId: kanjiKuId, newFacetCount }) => {
+            try {
+                await this.userKnowledgeUnitsService.update(uid, kanjiKuId, {
+                    status: 'reviewing',
+                    ...(newFacetCount > 0 ? { facet_count: FieldValue.increment(newFacetCount) } : {}),
+                });
+                this.logger.log(`Updated Kanji UKU for uid=${uid} kuId=${kanjiKuId}: status=reviewing${newFacetCount > 0 ? `, facet_count+=${newFacetCount}` : ''}`);
+            } catch (e) {
+                this.logger.error(`Failed to update Kanji UKU for uid=${uid} kuId=${kanjiKuId}`, e);
+            }
+        }));
+
         return { success: true, count };
     } // END generateReviewFacets
 
