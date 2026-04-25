@@ -85,7 +85,7 @@ export class UserService {
     return { id: uid, ...userDoc.data() } as UserRoot;
   }
 
-  async updatePreferences(uid: string, prefs: { showFurigana?: boolean }): Promise<void> {
+  async updatePreferences(uid: string, prefs: { showFurigana?: boolean; jlptLevel?: string; preferredUserRole?: string }): Promise<void> {
     await this.db.collection('users').doc(uid).set({ preferences: prefs }, { merge: true });
   }
 }

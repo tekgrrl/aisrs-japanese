@@ -147,7 +147,7 @@ export interface ScenarioAttempt {
 }
 
 export class GenerateScenarioDto {
-  difficulty!: ScenarioDifficulty;
+  difficulty?: ScenarioDifficulty;
   theme?: string;
   sourceType?: 'library' | 'custom' | 'context-example';
   sourceContextSentence?: string;

@@ -107,6 +107,10 @@ export interface UserRoot {
   /** Top-level user-facing preferences stored directly on the UserRoot document. */
   preferences?: {
     showFurigana?: boolean;
+    /** User's current JLPT study level — used as default difficulty for generated scenarios. */
+    jlptLevel?: 'N5' | 'N4' | 'N3' | 'N2' | 'N1';
+    /** Default user persona in roleplay scenarios (e.g. "Traveler", "Student"). */
+    preferredUserRole?: string;
   };
 }
 

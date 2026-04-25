@@ -15,6 +15,7 @@ import { ScenariosService } from './scenarios.service';
 import { GenerateScenarioDto, ChatTurnDto, ResetSessionDto } from '../types/scenario';
 import { FirebaseAuthGuard } from '../auth/firebase-auth.guard';
 import { UserId } from '../auth/user-id.decorator';
+import { ALLOWED_USER_ROLES, ALLOWED_AI_ROLES } from '../prompts/scenario.prompts';
 
 @Controller('scenarios')
 @UseGuards(FirebaseAuthGuard)
@@ -24,6 +25,11 @@ export class ScenariosController {
   @Get('templates')
   getTemplates() {
     return this.scenariosService.getTemplates();
+  }
+
+  @Get('roles')
+  getRoles() {
+    return { userRoles: ALLOWED_USER_ROLES, aiRoles: ALLOWED_AI_ROLES };
   }
 
   @Post('generate')

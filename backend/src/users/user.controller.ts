@@ -35,7 +35,7 @@ export class UserController {
   @Patch('me/preferences')
   async updatePreferences(
     @UserId() uid: string,
-    @Body() body: { showFurigana?: boolean },
+    @Body() body: { showFurigana?: boolean; jlptLevel?: string; preferredUserRole?: string },
   ) {
     await this.userService.updatePreferences(uid, body);
     return { ok: true };

@@ -12,13 +12,15 @@ import { FRAGMENT_CONTRACT, ACCEPTED_ALTERNATIVES_DEF } from './fragments';
 // ---------------------------------------------------------------------------
 
 export const ALLOWED_USER_ROLES = [
-  'Traveler', 'Traveller', 'Customer', 'Guest', 'Student', 'Patient', 'Me', 'Watashi', 'Passenger',
-  '客', '私', '旅行者', '学生', '患者', '乗客',
+  'Traveller', 'Customer', 'Guest', 'Student', 'Patient', 'Me', 'Passenger',
+  'Software Engineer', 'Pedestrian', 'Diner', 'Driver', 'Japanophile',
+  '客', '私', '旅行者', '学生', '患者', '乗客', 'プログラマー', '歩行者', 'ダイナー', 'ドライバー'
 ];
 
 export const ALLOWED_AI_ROLES = [
   'Teacher', 'Sensei', 'Staff', 'Clerk', 'Shopkeeper', 'Manager', 'Doctor', 'Nurse', 'Police', 'Officer', 'Station Attendant',
-  '先生', '店員', '医者', '看護師', '警察', '駅員', '係員',
+  'Colleague', 'Pedestrian', 'Server', 'Receptionist',
+  '先生', '店員', '医者', '看護師', '警察', '駅員', '係員', '受付',
 ];
 
 // ---------------------------------------------------------------------------
@@ -49,9 +51,11 @@ Create a "Genki-style" learning scenario for an ADULT traveler/expat (not a stud
 4. **Visual Context:** Provide a descriptive prompt that could be used to generate an image of the scene.
 5. **Role Constraints:**
 ${dto.userRole && dto.aiRole
-  ? `   - **User Role:** ${dto.userRole}\n   - **AI Role:** ${dto.aiRole}\n   - Use these exact terms for the 'roles' object and 'participants' array.`
-  : `   - **User Roles:** ${ALLOWED_USER_ROLES.join(', ')}\n   - **Partner Roles:** ${ALLOWED_AI_ROLES.join(', ')}\n   - Use these exact terms (or their Japanese equivalents provided in the list) for the 'roles' object and 'participants' array.`
-}
+      ? `   - **User Role:** ${dto.userRole}\n   - **AI Role:** ${dto.aiRole}\n   - Use these exact terms for the 'roles' object and 'participants' array.`
+      : dto.userRole
+        ? `   - **User Role:** ${dto.userRole} — use this exact term for the user in the 'roles' object and 'participants' array.\n   - **Partner Roles:** ${ALLOWED_AI_ROLES.join(', ')}\n   - Choose an appropriate partner role from the list above for this scenario.`
+        : `   - **User Roles:** ${ALLOWED_USER_ROLES.join(', ')}\n   - **Partner Roles:** ${ALLOWED_AI_ROLES.join(', ')}\n   - Use these exact terms (or their Japanese equivalents provided in the list) for the 'roles' object and 'participants' array.`
+    }
 6. **Data Formatting (CRITICAL):**
    - \`title\`, \`description\` and all \`setting\` object fields should be in English
    - **NO ROMAJI**. Never include Romaji in any field.
