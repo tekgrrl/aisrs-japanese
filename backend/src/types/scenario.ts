@@ -144,7 +144,7 @@ export interface ScenarioSession {
 
 // FIX: DTOs must be Classes for NestJS reflection/validation to work
 export class GenerateScenarioDto {
-    difficulty!: ScenarioDifficulty;
+    difficulty?: ScenarioDifficulty;
     theme?: string;
     sourceType?: 'library' | 'custom' | 'context-example';
     sourceContextSentence?: string;

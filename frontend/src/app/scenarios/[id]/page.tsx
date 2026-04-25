@@ -706,19 +706,20 @@ export default function ScenarioPage({
             </div>
 
             <div className="space-y-4">
-              {scenario.dialogue.map((line, idx) => (
-                <div
-                  key={idx}
-                  className={`flex gap-4 p-4 rounded-xl ${
-                    line.speaker === "User" || line.speaker === "Traveler"
-                      ? "bg-indigo-50 border border-indigo-100 ml-12"
-                      : "bg-white border border-slate-200 mr-12"
-                  }`}
-                >
-                  <div className="flex-shrink-0 w-16 text-xs font-bold text-slate-400 uppercase tracking-wide pt-1">
-                    {line.speaker}
-                  </div>
-                  <div>
+              {scenario.dialogue.map((line, idx) => {
+                const isUser = line.speaker === scenario.roles?.user;
+                return (
+                  <div
+                    key={idx}
+                    className={`p-4 rounded-xl ${
+                      isUser
+                        ? "bg-indigo-50 border border-indigo-100 ml-12"
+                        : "bg-white border border-slate-200 mr-12"
+                    }`}
+                  >
+                    <div className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-1">
+                      {line.speaker}
+                    </div>
                     <p className="text-lg font-medium text-slate-900 leading-relaxed">
                       {line.text}
                     </p>
@@ -728,8 +729,8 @@ export default function ScenarioPage({
                       </p>
                     )}
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </section>
 

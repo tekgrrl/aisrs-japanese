@@ -6,50 +6,71 @@ import { UserAvatar } from "@/components/UserAvatar";
 import { apiFetch } from "@/lib/api-client";
 import { applyFurigana, loadFurigana } from "@/lib/furigana";
 
+const JLPT_LEVELS = ["N5", "N4", "N3", "N2", "N1"] as const;
+
 export default function ProfilePage() {
   const { user } = useAuth();
   const [showFurigana, setShowFurigana] = useState(false);
+  const [jlptLevel, setJlptLevel] = useState<string>("");
+  const [preferredUserRole, setPreferredUserRole] = useState<string>("");
+  const [userRoles, setUserRoles] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
-    // Apply from localStorage immediately to avoid flicker
     setShowFurigana(loadFurigana());
 
-    // Then reconcile with the backend value
-    apiFetch("/api/users/me")
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.preferences?.showFurigana !== undefined) {
-          const val = Boolean(data.preferences.showFurigana);
+    Promise.all([
+      apiFetch("/api/users/me").then((r) => r.json()),
+      apiFetch("/api/scenarios/roles").then((r) => r.json()),
+    ])
+      .then(([userData, rolesData]) => {
+        if (userData.preferences?.showFurigana !== undefined) {
+          const val = Boolean(userData.preferences.showFurigana);
           setShowFurigana(val);
           applyFurigana(val);
         }
+        if (userData.preferences?.jlptLevel) setJlptLevel(userData.preferences.jlptLevel);
+        if (userData.preferences?.preferredUserRole) setPreferredUserRole(userData.preferences.preferredUserRole);
+        if (Array.isArray(rolesData.userRoles)) setUserRoles(rolesData.userRoles);
       })
       .catch(() => {});
   }, []);
 
-  const handleToggleFurigana = useCallback(async () => {
-    const newVal = !showFurigana;
-    setShowFurigana(newVal);
-    applyFurigana(newVal);
-
+  const patchPreferences = useCallback(async (patch: Record<string, unknown>) => {
     setSaving(true);
     setSaved(false);
     try {
       await apiFetch("/api/users/me/preferences", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ showFurigana: newVal }),
+        body: JSON.stringify(patch),
       });
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch {
-      // localStorage already updated; backend sync failed silently
+      // best-effort; UI already reflects the optimistic update
     } finally {
       setSaving(false);
     }
-  }, [showFurigana]);
+  }, []);
+
+  const handleToggleFurigana = useCallback(async () => {
+    const newVal = !showFurigana;
+    setShowFurigana(newVal);
+    applyFurigana(newVal);
+    await patchPreferences({ showFurigana: newVal });
+  }, [showFurigana, patchPreferences]);
+
+  const handleJlptLevel = useCallback(async (val: string) => {
+    setJlptLevel(val);
+    await patchPreferences({ jlptLevel: val || null });
+  }, [patchPreferences]);
+
+  const handlePreferredUserRole = useCallback(async (val: string) => {
+    setPreferredUserRole(val);
+    await patchPreferences({ preferredUserRole: val || null });
+  }, [patchPreferences]);
 
   if (!user?.email) return null;
 
@@ -102,6 +123,46 @@ export default function ProfilePage() {
                 />
               </button>
             </div>
+          </div>
+
+          {/* JLPT Level */}
+          <div className="flex items-center justify-between px-5 py-4">
+            <div>
+              <p className="text-sm font-medium text-shodo-ink">Current JLPT Level</p>
+              <p className="text-xs text-shodo-ink/50 mt-0.5">
+                Used as the default difficulty when generating scenarios
+              </p>
+            </div>
+            <select
+              value={jlptLevel}
+              onChange={(e) => handleJlptLevel(e.target.value)}
+              className="ml-4 shrink-0 text-sm border border-shodo-ink/20 rounded-md px-2 py-1.5 bg-shodo-paper text-shodo-ink focus:outline-none focus:ring-2 focus:ring-shodo-accent"
+            >
+              <option value="">Not set</option>
+              {JLPT_LEVELS.map((l) => (
+                <option key={l} value={l}>{l}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Preferred user role */}
+          <div className="flex items-center justify-between px-5 py-4">
+            <div>
+              <p className="text-sm font-medium text-shodo-ink">Default Scenario Role</p>
+              <p className="text-xs text-shodo-ink/50 mt-0.5">
+                Your default persona in generated roleplay scenarios
+              </p>
+            </div>
+            <select
+              value={preferredUserRole}
+              onChange={(e) => handlePreferredUserRole(e.target.value)}
+              className="ml-4 shrink-0 text-sm border border-shodo-ink/20 rounded-md px-2 py-1.5 bg-shodo-paper text-shodo-ink focus:outline-none focus:ring-2 focus:ring-shodo-accent"
+            >
+              <option value="">Not set (AI chooses)</option>
+              {userRoles.filter((r) => /^[\x20-\x7E]+$/.test(r)).map((r) => (
+                <option key={r} value={r}>{r}</option>
+              ))}
+            </select>
           </div>
         </div>
       </section>

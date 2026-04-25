@@ -10,6 +10,7 @@ import { Scenario, GenerateScenarioDto, ScenarioState, ExtractedKU, ChatMessage,
 import { KnowledgeUnitsService } from '../knowledge-units/knowledge-units.service';
 import { UserKnowledgeUnitsService } from '../user-knowledge-units/user-knowledge-units.service';
 import { LessonsService } from '../lessons/lessons.service';
+import { UserService } from '../users/user.service';
 import { FIRESTORE_CONNECTION, SCENARIOS_COLLECTION, REVIEW_FACETS_COLLECTION } from '../firebase/firebase.module';
 import { GeminiService } from '../gemini/gemini.service';
 import { ALLOWED_USER_ROLES, ALLOWED_AI_ROLES, buildArchitectPrompt, buildChatSystemPrompt } from '../prompts/scenario.prompts';
@@ -27,6 +28,7 @@ export class ScenariosService {
     private readonly knowledgeUnitsService: KnowledgeUnitsService,
     private readonly userKnowledgeUnitsService: UserKnowledgeUnitsService,
     private readonly lessonsService: LessonsService,
+    private readonly userService: UserService,
   ) {
     this.collectionRef = this.db.collection(SCENARIOS_COLLECTION);
   }
@@ -72,7 +74,15 @@ export class ScenariosService {
   }
 
   async generateScenario(userId: string, dto: GenerateScenarioDto): Promise<string> {
-    const prompt = buildArchitectPrompt(dto);
+    // Apply user preferences as defaults for fields not explicitly set in the DTO
+    const userPrefs = (await this.userService.findById(userId))?.preferences;
+    const resolvedDto: GenerateScenarioDto = {
+      ...dto,
+      difficulty: dto.difficulty ?? userPrefs?.jlptLevel ?? 'N4',
+      userRole: dto.userRole ?? userPrefs?.preferredUserRole,
+    };
+
+    const prompt = buildArchitectPrompt(resolvedDto);
 
     try {
       const jsonString = await this.geminiService.generateScenario(prompt);
@@ -90,7 +100,7 @@ export class ScenariosService {
         userId,
         title: data.title,
         description: data.description,
-        difficultyLevel: dto.difficulty,
+        difficultyLevel: resolvedDto.difficulty!,
         setting: {
           location: data.setting.location,
           participants: data.setting.participants,
@@ -114,14 +124,11 @@ export class ScenariosService {
         chatHistory: [],
         isObjectiveMet: false,
         isActive: true,
-        sourceType: dto.sourceType,
-        sourceContextSentence: dto.sourceContextSentence,
-        targetVocab: dto.targetVocab,
-        sourceKuId: dto.sourceKuId
+        sourceType: resolvedDto.sourceType,
+        sourceContextSentence: resolvedDto.sourceContextSentence,
+        targetVocab: resolvedDto.targetVocab,
+        sourceKuId: resolvedDto.sourceKuId
       };
-
-      // console.log(newScenario);
-      console.dir(dto, { depth: null, colors: true });
 
       const cleanData = Object.fromEntries(
         Object.entries(newScenario).filter(([_, value]) => value !== undefined)

@@ -237,7 +237,6 @@ export default function LearnItemPage() {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              difficulty: "N4",
               theme: "Practice vocabulary in context",
               sourceType: "context-example",
               sourceContextSentence: ex.sentence,
