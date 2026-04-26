@@ -28,10 +28,17 @@ export default function EditKnowledgeUnitModal({
   useEffect(() => {
     if (knowledgeUnit) {
       setContent(knowledgeUnit.content || "");
-      setReading(knowledgeUnit.data?.reading || "");
-      setDefinition(knowledgeUnit.data?.definition || "");
-      setJlptLevel(knowledgeUnit.data?.jlptLevel || "");
-      setWanikaniLevel(knowledgeUnit.data?.wanikaniLevel || "");
+      if (knowledgeUnit.type === "Vocab") {
+        setReading(knowledgeUnit.data?.reading || "");
+        setDefinition(knowledgeUnit.data?.definition || "");
+        setJlptLevel(knowledgeUnit.data?.jlptLevel || "");
+        setWanikaniLevel(knowledgeUnit.data?.wanikaniLevel || "");
+      } else {
+        setReading("");
+        setDefinition("");
+        setJlptLevel("");
+        setWanikaniLevel("");
+      }
       setUserNotes(knowledgeUnit.userNotes || "");
       setPersonalNotes(knowledgeUnit.personalNotes || "");
     }
@@ -41,10 +48,11 @@ export default function EditKnowledgeUnitModal({
 
   const hasChanges = () => {
     if (!knowledgeUnit) return false;
-    const currentReading = knowledgeUnit.data?.reading || "";
-    const currentDefinition = knowledgeUnit.data?.definition || "";
-    const currentJlptLevel = knowledgeUnit.data?.jlptLevel || "";
-    const currentWanikaniLevel = knowledgeUnit.data?.wanikaniLevel || "";
+    const vocabData = knowledgeUnit.type === "Vocab" ? knowledgeUnit.data : null;
+    const currentReading = vocabData?.reading || "";
+    const currentDefinition = vocabData?.definition || "";
+    const currentJlptLevel = vocabData?.jlptLevel || "";
+    const currentWanikaniLevel = vocabData?.wanikaniLevel || "";
     const currentUserNotes = knowledgeUnit.userNotes || "";
     const currentPersonalNotes = knowledgeUnit.personalNotes || "";
 

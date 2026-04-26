@@ -329,6 +329,7 @@ export interface ConceptKnowledgeUnit extends KnowledgeUnitBase {
   type: "Concept";
   data: {
     title: string;
+    reading?: string;
     overview: string;
     mechanics: Array<{
       goalTitle: string;

@@ -9,6 +9,16 @@ import { apiFetch } from "@/lib/api-client";
 // TODO: Align with dashboard config
 const API_BASE_URL = "http://localhost:3000/api";
 
+const JLPT_LEVELS: { value: ScenarioDifficulty; label: string }[] = [
+  { value: "N5", label: "N5 — Beginner" },
+  { value: "N4", label: "N4 — Basic" },
+  { value: "N3", label: "N3 — Intermediate" },
+  { value: "N2", label: "N2 — Business" },
+  { value: "N1", label: "N1 — Advanced" },
+];
+
+const LEVEL_RANK: Record<string, number> = { N5: 1, N4: 2, N3: 3, N2: 4, N1: 5 };
+
 interface ScenarioTemplate {
   id: string;
   title: string;
@@ -49,6 +59,7 @@ function ScenarioLibraryContent() {
   const [templates, setTemplates] = useState<ScenarioTemplate[]>([]);
   const [archives, setArchives] = useState<Scenario[]>([]);
   const [loading, setLoading] = useState(true);
+  const [userJlptLevel, setUserJlptLevel] = useState<ScenarioDifficulty | null>(null);
 
   // Modal State
   const [selectedTemplate, setSelectedTemplate] =
@@ -61,13 +72,19 @@ function ScenarioLibraryContent() {
     const fetchData = async () => {
       setLoading(true);
       try {
-        // Fetch Templates
-        const tplRes = await apiFetch(`${API_BASE_URL}/scenarios/templates`);
+        const [tplRes, archRes, userRes] = await Promise.all([
+          apiFetch(`${API_BASE_URL}/scenarios/templates`),
+          apiFetch(`${API_BASE_URL}/scenarios`),
+          apiFetch(`${API_BASE_URL}/users/me`),
+        ]);
         if (tplRes.ok) setTemplates(await tplRes.json());
-
-        // Fetch Archives (All history)
-        const archRes = await apiFetch(`${API_BASE_URL}/scenarios`);
         if (archRes.ok) setArchives(await archRes.json());
+        if (userRes.ok) {
+          const userData = await userRes.json();
+          if (userData.preferences?.jlptLevel) {
+            setUserJlptLevel(userData.preferences.jlptLevel as ScenarioDifficulty);
+          }
+        }
       } catch (error) {
         console.error("Failed to load library data", error);
       } finally {
@@ -225,9 +242,7 @@ function ScenarioLibraryContent() {
                   <button
                     onClick={() => {
                       setSelectedTemplate(tpl);
-                      setSelectedDifficulty(
-                        tpl.defaultLevel as ScenarioDifficulty,
-                      );
+                      setSelectedDifficulty(tpl.defaultLevel as ScenarioDifficulty);
                     }}
                     className="mt-6 w-full py-2 bg-indigo-50 text-indigo-600 font-medium rounded-lg hover:bg-indigo-100 transition-colors"
                   >
@@ -344,11 +359,33 @@ function ScenarioLibraryContent() {
                   }
                   className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
                 >
-                  <option value="N5">N5 (Beginner)</option>
-                  <option value="N4">N4 (Basic)</option>
-                  <option value="N3">N3 (Intermediate)</option>
-                  <option value="N2">N2 (Business)</option>
+                  {JLPT_LEVELS.map(({ value, label }) => {
+                    const isUserLevel = value === userJlptLevel;
+                    const isRecommended = value === selectedTemplate?.defaultLevel;
+                    if (isUserLevel && isRecommended) {
+                      return <option key={value} value={value}>{value} — Your Current Level</option>;
+                    }
+                    const tag = isUserLevel ? "Your Level" : isRecommended ? "Recommended" : null;
+                    return (
+                      <option key={value} value={value}>
+                        {label}{tag ? ` — ${tag}` : ""}
+                      </option>
+                    );
+                  })}
                 </select>
+                {(() => {
+                  if (!userJlptLevel || selectedDifficulty === userJlptLevel) return null;
+                  const selectedRank = LEVEL_RANK[selectedDifficulty] ?? 0;
+                  const userRank = LEVEL_RANK[userJlptLevel] ?? 0;
+                  const msg = selectedRank > userRank
+                    ? "The generated scenario may be too hard at your current level."
+                    : "The generated scenario may be too easy for your current level.";
+                  return (
+                    <p className="mt-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                      {msg}
+                    </p>
+                  );
+                })()}
               </div>
             </div>
             <div className="flex gap-3 pt-4">

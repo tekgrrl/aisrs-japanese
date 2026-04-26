@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, use, useRef } from "react";
+import { useState, useEffect, use, useRef, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Scenario, ChatMessage, ScenarioAttempt } from "@/types/scenario";
 import { useAudioPlayer } from "@/hooks/useAudioPlayer";
@@ -8,8 +8,17 @@ import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
 import { Volume2, Mic, MicOff } from "lucide-react";
 import { apiFetch } from "@/lib/api-client";
 
-// Configuration for API URL - adjust if using env vars
 const API_BASE_URL = "http://localhost:3000/api";
+
+function kuSrsBadge(maxSrsStage: number | null | undefined): { text: string; className: string } | null {
+  if (maxSrsStage === undefined) return null; // no kuId, no badge
+  if (maxSrsStage === null) return { text: 'Enrolled', className: 'bg-slate-100 text-slate-500' };
+  if (maxSrsStage === 0) return { text: 'New', className: 'bg-slate-100 text-slate-500' };
+  if (maxSrsStage <= 2) return { text: `Apprentice · ${maxSrsStage}`, className: 'bg-blue-100 text-blue-700' };
+  if (maxSrsStage <= 4) return { text: `Familiar · ${maxSrsStage}`, className: 'bg-amber-100 text-amber-700' };
+  if (maxSrsStage <= 6) return { text: `Proficient · ${maxSrsStage}`, className: 'bg-green-100 text-green-700' };
+  return { text: 'Mastered', className: 'bg-purple-100 text-purple-700' };
+}
 
 export default function ScenarioPage({
   params,
@@ -30,6 +39,12 @@ export default function ScenarioPage({
 
   // UI State
   const [showTranslations, setShowTranslations] = useState(false);
+  const [kuStatus, setKuStatus] = useState<Record<string, { maxSrsStage: number | null }>>({});
+
+  // Hint state
+  const [hintUnlocked, setHintUnlocked] = useState(false);
+  const [hintVisible, setHintVisible] = useState(false);
+  const lastInteractionAtRef = useRef<number>(Date.now());
 
   // Audio Hooks
   const { playBlob, isPlaying: isAudioPlaying } = useAudioPlayer();
@@ -118,8 +133,34 @@ export default function ScenarioPage({
     }
   }, [scenario]);
 
+  // Fetch live KU status for the drill vocab grid
+  useEffect(() => {
+    if (scenario?.state !== 'drill' && scenario?.state !== 'simulate') return;
+    apiFetch(`${API_BASE_URL}/scenarios/${id}/ku-status`)
+      .then(r => r.ok ? r.json() : {})
+      .then(setKuStatus)
+      .catch(() => {});
+  }, [id, scenario?.state]);
+
   const [advancing, setAdvancing] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+
+  // Next user line from the script, used as hint text
+  const nextHintLine = useMemo(() => {
+    if (!scenario || scenario.state !== "simulate") return null;
+    const userSpeaker = scenario.roles?.user;
+    const userTurnCount = chatHistory.filter((m) => m.speaker === "user").length;
+    const userLines = scenario.dialogue.filter((l) => l.speaker === userSpeaker);
+    return userLines[userTurnCount] ?? null;
+  }, [chatHistory, scenario]);
+
+  // Unlock hint button 30s after last interaction, reset on each send
+  useEffect(() => {
+    if (scenario?.state !== "simulate") return;
+    setHintUnlocked(false);
+    const timer = setTimeout(() => setHintUnlocked(true), 30_000);
+    return () => clearTimeout(timer);
+  }, [chatHistory.length, scenario?.state]);
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -130,6 +171,8 @@ export default function ScenarioPage({
 
     if (!userMessage.trim() || isSending) return;
 
+    setHintUnlocked(false);
+    setHintVisible(false);
     setIsSending(true);
     const currentMessage = userMessage;
     setUserMessage("");
@@ -651,6 +694,12 @@ export default function ScenarioPage({
 
           {/* Input Area */}
           <div className="p-4 bg-white border-t border-slate-200">
+            {hintVisible && nextHintLine && (
+              <div className="mb-3 px-4 py-2 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800 animate-in fade-in slide-in-from-bottom-1">
+                <span className="font-semibold text-amber-600 text-xs uppercase tracking-wide mr-2">Hint</span>
+                {nextHintLine.translation}
+              </div>
+            )}
             <form onSubmit={handleSendMessage} className="flex gap-2">
               <input
                 type="text"
@@ -675,6 +724,15 @@ export default function ScenarioPage({
                     size={20}
                     className={isListening ? "fill-current" : ""}
                   />
+                </button>
+              )}
+              {hintUnlocked && nextHintLine && (
+                <button
+                  type="button"
+                  onClick={() => setHintVisible((v) => !v)}
+                  className="px-4 py-3 rounded-lg font-bold text-sm border border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100 transition-colors animate-in fade-in"
+                >
+                  {hintVisible ? "Hide" : "Hint"}
                 </button>
               )}
               <button
@@ -771,31 +829,27 @@ export default function ScenarioPage({
             Key Vocabulary
           </h2>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {scenario.extractedKUs.map((ku, idx) => (
-              <div
-                key={idx}
-                className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden"
-              >
-                {/* Status Indicator */}
-                {ku.kuId && (
-                  <div className="absolute top-0 right-0 bg-green-100 text-green-700 text-xs px-2 py-1 rounded-bl-lg font-bold">
-                    Tracked
-                  </div>
-                )}
-
-                <div className="text-center">
-                  <div className="text-sm text-slate-500 mb-1">
-                    {ku.reading}
-                  </div>
-                  <div className="text-2xl font-bold text-slate-800 mb-2">
-                    {ku.content}
-                  </div>
-                  <div className="text-sm text-slate-600 font-medium">
-                    {ku.meaning}
+            {scenario.extractedKUs.map((ku, idx) => {
+              const status = ku.kuId ? kuStatus[ku.kuId] : undefined;
+              const badge = kuSrsBadge(status?.maxSrsStage ?? (ku.kuId ? null : undefined));
+              return (
+                <div
+                  key={idx}
+                  className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden"
+                >
+                  {badge && (
+                    <div className={`absolute top-0 right-0 text-xs px-2 py-1 rounded-bl-lg font-semibold ${badge.className}`}>
+                      {badge.text}
+                    </div>
+                  )}
+                  <div className="text-center">
+                    <div className="text-sm text-slate-500 mb-1">{ku.reading}</div>
+                    <div className="text-2xl font-bold text-slate-800 mb-2">{ku.content}</div>
+                    <div className="text-sm text-slate-600 font-medium">{ku.meaning}</div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </section>
       )}
