@@ -141,7 +141,10 @@ export default function ConceptPage() {
         <p className="text-xs font-semibold uppercase tracking-widest text-shodo-accent mb-2">
           Grammar Concept
         </p>
-        <h1 className="text-4xl font-bold text-shodo-ink mb-5">{data.title}</h1>
+        <h1 className="text-4xl font-bold text-shodo-ink mb-1">{data.title}</h1>
+        {data.reading && (
+          <p className="text-lg text-shodo-ink/50 mb-5">{data.reading}</p>
+        )}
         <p className="text-base text-shodo-ink/70 leading-relaxed">{data.overview}</p>
       </section>
 

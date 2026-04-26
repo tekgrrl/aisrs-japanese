@@ -217,13 +217,13 @@ export default function KnowledgeManagementPage() {
                 </button>
               </div>
 
-              {ku.data && ku.data.reading && (
+              {ku.type === "Vocab" && ku.data.reading && (
                 <p className="text-lg text-gray-300 break-all">
                   <span className="font-semibold">Reading:</span>{" "}
                   {ku.data.reading}
                 </p>
               )}
-              {ku.data && ku.data.definition && (
+              {ku.type === "Vocab" && ku.data.definition && (
                 <p className="text-lg text-gray-300 break-all">
                   <span className="font-semibold">Definition:</span>{" "}
                   {ku.data.definition}

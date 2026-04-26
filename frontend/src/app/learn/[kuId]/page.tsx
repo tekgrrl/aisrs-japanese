@@ -8,6 +8,8 @@ import KanjiLessonView from "@/components/lessons/KanjiLessonView";
 import GrammarLessonView from "@/components/lessons/GrammarLessonView";
 import { apiFetch } from "@/lib/api-client";
 
+const stripFurigana = (s: string) => s.replace(/\[[^\]]*\]/g, '').trim();
+
 export default function LearnItemPage() {
   const router = useRouter();
   const params = useParams();
@@ -31,6 +33,7 @@ export default function LearnItemPage() {
   );
   const [userGrammarLessons, setUserGrammarLessons] = useState<UserGrammarLesson[]>([]);
   const [existingFacets, setExistingFacets] = useState<any[] | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
   // scenarios keyed by sourceContextSentence so each context example can show its link
   const [kuScenarios, setKuScenarios] = useState<Record<string, { id: string; title: string }>>({});
 
@@ -394,6 +397,9 @@ export default function LearnItemPage() {
       promises.push(reviewPromise);
     }
 
+    // Count review items being added (exclude Context-Example scenario generations only)
+    const learningItemCount = reviewFacetKeys.length;
+
     try {
       await Promise.all(promises);
 
@@ -403,6 +409,11 @@ export default function LearnItemPage() {
       if (updated.ok) {
         const facets = await updated.json();
         setExistingFacets(Array.isArray(facets) ? facets : []);
+      }
+
+      if (learningItemCount > 0) {
+        setToast(`${learningItemCount} ${learningItemCount === 1 ? "item" : "items"} added to your Review Queue`);
+        setTimeout(() => setToast(null), 4000);
       }
     } catch (err: any) {
       setError(err.message || "An unknown error occurred.");
@@ -607,8 +618,8 @@ export default function LearnItemPage() {
                           <div key={index} className="flex items-start p-3 rounded-md bg-gray-400 dark:bg-gray-700">
                             <span className="mt-1 h-5 w-5 flex items-center justify-center text-green-600 dark:text-green-400 font-bold text-sm flex-shrink-0">✓</span>
                             <div className="ml-3 flex flex-col">
-                              <span className="text-lg text-gray-900 dark:text-white">{ex.sentence}</span>
-                              <span className="text-sm text-gray-600 dark:text-gray-400">{ex.translation}</span>
+                              <span className="text-lg text-gray-900 dark:text-white">{stripFurigana(ex.sentence)}</span>
+                              <span className="text-sm text-gray-600 dark:text-gray-400">{stripFurigana(ex.translation)}</span>
                               <a
                                 href={`/scenarios/${existing.id}`}
                                 className="mt-1 text-sm text-blue-600 dark:text-blue-400 hover:underline"
@@ -628,8 +639,8 @@ export default function LearnItemPage() {
                             onChange={() => handleCheckboxChange(`Context-Example-${index}`)}
                           />
                           <span className="ml-3 text-lg text-gray-900 dark:text-white flex flex-col">
-                            <span>{ex.sentence}</span>
-                            <span className="text-sm text-gray-600 dark:text-gray-400">{ex.translation}</span>
+                            <span>{stripFurigana(ex.sentence)}</span>
+                            <span className="text-sm text-gray-600 dark:text-gray-400">{stripFurigana(ex.translation)}</span>
                           </span>
                         </label>
                       );
@@ -701,6 +712,11 @@ export default function LearnItemPage() {
   // --- Main Render ---
   return (
     <>
+      {toast && (
+        <div className="fixed top-4 right-4 z-50 bg-green-600 text-white px-6 py-3 rounded-lg shadow-lg font-semibold animate-in fade-in slide-in-from-top-2">
+          {toast}
+        </div>
+      )}
       <main className="container mx-auto max-w-4xl p-8">
         <header className="mb-8">
           <h1 className="text-6xl font-bold text-gray-900 dark:text-white mb-2 break-all">
