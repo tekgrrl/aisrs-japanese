@@ -60,6 +60,20 @@ export interface ScenarioAttempt {
     evaluation: ScenarioEvaluation;
 }
 
+export type ProgressStatus = 'reviewing' | 'failing' | 'passing' | 'passed';
+
+export interface Attempt {
+    attemptedAt: Timestamp;
+    stars: 1 | 2 | 3 | 4 | 5;
+}
+
+export interface LevelProgress {
+    status: ProgressStatus;
+    bestStars: number; // 0 = no attempt yet
+    lastAttemptAt: Timestamp | null;
+    attempts: Attempt[];
+}
+
 export interface Scenario {
     id: string;
     /** @deprecated - migrating to User state models */
@@ -106,6 +120,9 @@ export interface Scenario {
     targetVocab?: string;
     sourceKuId?: string;
     isActive?: boolean;
+
+    progress?: Record<string, LevelProgress>;
+    currentLevelStatus?: ProgressStatus;
 }
 
 export interface ScenarioTemplate {

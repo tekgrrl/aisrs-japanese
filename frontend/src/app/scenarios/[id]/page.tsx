@@ -479,24 +479,23 @@ export default function ScenarioPage({
       {scenario.state === "completed" && scenario.evaluation ? (
         <section className="space-y-8">
           <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm animate-in fade-in slide-in-from-bottom-4">
-            <div className="bg-green-600 text-white p-6 text-center">
-              <div className="text-4xl mb-2">🎉</div>
-              <h2 className="text-3xl font-bold mb-2">Mission Debrief</h2>
-              <div className="flex justify-center gap-1 text-amber-300 text-2xl">
-                {[...Array(5)].map((_, i) => (
-                  <span
-                    key={i}
-                    className={
-                      i < scenario.evaluation!.rating
-                        ? "opacity-100"
-                        : "opacity-30"
-                    }
-                  >
-                    ★
-                  </span>
-                ))}
-              </div>
-            </div>
+            {(() => {
+              const rating = scenario.evaluation!.rating;
+              const headerBg = rating <= 2 ? "bg-red-600" : rating <= 4 ? "bg-amber-500" : "bg-green-600";
+              const emoji = rating <= 2 ? "😓" : rating <= 4 ? "👍" : "🎉";
+              const title = rating <= 2 ? "Keep Practising" : rating <= 4 ? "Good Effort!" : "Mission Complete!";
+              return (
+                <div className={`${headerBg} text-white p-6 text-center`}>
+                  <div className="text-4xl mb-2">{emoji}</div>
+                  <h2 className="text-3xl font-bold mb-2">{title}</h2>
+                  <div className="flex justify-center gap-1 text-amber-300 text-2xl">
+                    {[...Array(5)].map((_, i) => (
+                      <span key={i} className={i < rating ? "opacity-100" : "opacity-30"}>★</span>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
 
             <div className="p-8 space-y-8">
               {/* General Feedback */}
@@ -557,6 +556,26 @@ export default function ScenarioPage({
                   </div>
                 </div>
               )}
+
+              {/* Tiered guidance */}
+              {(() => {
+                const rating = scenario.evaluation!.rating;
+                if (rating <= 2) return (
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-800">
+                    You're still learning this one. Work through the grammar notes and vocabulary below, then come back and try again when you feel ready.
+                  </div>
+                );
+                if (rating <= 4) return (
+                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-sm text-amber-800">
+                    You did well, but there's room to improve. Study the notes and vocabulary again, then come back aiming for {rating === 3 ? "4 or even 5" : "5"} stars.
+                  </div>
+                );
+                return (
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-sm text-green-800">
+                    Outstanding! You've fully mastered this scenario. When you're ready, you can try a harder version — look for the option to regenerate at the next JLPT level from the scenarios library.
+                  </div>
+                );
+              })()}
 
               <div className="pt-6 border-t border-slate-100 flex justify-between items-center">
                 {scenario.evaluation.outcome === "failed" ? (

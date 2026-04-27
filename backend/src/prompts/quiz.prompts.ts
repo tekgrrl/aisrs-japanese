@@ -9,7 +9,7 @@ import { NO_ROMAJI, JSON_ONLY_OUTPUT } from './fragments';
 export type ConceptMechanic = ConceptKnowledgeUnit['data']['mechanics'][number];
 
 // ---------------------------------------------------------------------------
-// Vocab questions
+// Vocab questions (verbs and adjectives)
 // ---------------------------------------------------------------------------
 
 export const VOCAB_QUESTION_OPTIONS: Record<string, string> = {
@@ -72,6 +72,65 @@ export function buildVocabQuestionUserMessage(
   if (meaning) msg += `\nMeaning: ${meaning}`;
   return msg;
 }
+
+// ---------------------------------------------------------------------------
+// Noun questions
+// ---------------------------------------------------------------------------
+
+export const NOUN_QUESTION_OPTIONS: Record<string, string> = {
+  'noun-particle': 'noun + particle fill-in-the-blank',
+  'translation': 'Create a sentence in English for the user to translate into Japanese. The English sentence must naturally force the use of the Target Input.',
+};
+
+export type NounQuestionType = keyof typeof NOUN_QUESTION_OPTIONS;
+
+/**
+ * System prompt for noun + particle fill-in-the-blank questions.
+ * The blank encompasses <noun><particle> so the user must supply both the word and
+ * its grammatically correct particle for the specific context.
+ * accepted_alternatives is always empty — the sentence uniquely determines the particle.
+ * Pass NOUN_PARTICLE_FEW_SHOT_TURNS as fewShotTurns to generateQuestionAI.
+ */
+export function buildNounParticleQuestionPrompt(): string {
+  return `You are an expert Japanese tutor and quiz generator.
+You will be given a Japanese noun (the 'topic') with its reading and meaning.
+Your task is to write a single Japanese sentence that uses that noun with a specific particle, then blank out the noun+particle pair together so the user must supply both.
+
+Rules:
+1. The blank '[____]' replaces the noun AND its particle together — e.g. the answer might be 図書館で, 駅から, 友達と, 歯を.
+2. The 'context' field MUST follow this exact format: "Specify [English label] as [semantic role]" — where the semantic role describes the particle's function precisely enough that only one particle is correct.
+3. 'accepted_alternatives' MUST always be an empty array. The sentence structure uniquely determines the correct particle.
+4. Do NOT use は or が as the particle. Use action particles only: を, に, で, から, へ, と, まで.
+5. Use N4/N5 vocabulary for the surrounding sentence so the user focuses on the target noun and particle, not on decoding the rest.
+6. ${NO_ROMAJI}`;
+}
+
+/** Few-shot conversation turns for noun+particle questions.
+ *  Pass to generateQuestionAI as the fewShotTurns argument.
+ *  Each pair is a (user message, model JSON response) that demonstrates the expected format.
+ */
+export const NOUN_PARTICLE_FEW_SHOT_TURNS: Array<{ user: string; model: string }> = [
+  {
+    user: 'Topic: 図書館\nReading: としょかん\nMeaning: library',
+    model: '{"question":"週末はよく[____]本を読みます。","context":"Specify the library as the place where reading happens","answer":"図書館で","accepted_alternatives":[]}',
+  },
+  {
+    user: 'Topic: 駅\nReading: えき\nMeaning: train station',
+    model: '{"question":"毎朝[____]歩いて会社に向かいます。","context":"Specify the train station as the starting point of the walk","answer":"駅から","accepted_alternatives":[]}',
+  },
+  {
+    user: 'Topic: 友達\nReading: ともだち\nMeaning: friend',
+    model: '{"question":"昨日[____]映画を見に行きました。","context":"Specify the friend as the person you went with","answer":"友達と","accepted_alternatives":[]}',
+  },
+  {
+    user: 'Topic: 音楽\nReading: おんがく\nMeaning: music',
+    model: '{"question":"毎朝シャワーを浴びながら[____]聴きます。","context":"Specify music as the thing being listened to","answer":"音楽を","accepted_alternatives":[]}',
+  },
+  {
+    user: 'Topic: 学校\nReading: がっこう\nMeaning: school',
+    model: '{"question":"明日は早く[____]行かなければなりません。","context":"Specify the school as the destination","answer":"学校に","accepted_alternatives":[]}',
+  },
+];
 
 // ---------------------------------------------------------------------------
 // Concept mechanic questions
