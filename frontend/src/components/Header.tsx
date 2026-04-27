@@ -13,7 +13,7 @@ import { applyFurigana, loadFurigana } from "@/lib/furigana";
  */
 export default function Header() {
   const { user } = useAuth();
-  const [stats, setStats] = useState({ learnCount: 0, reviewsDue: 0 });
+  const [stats, setStats] = useState({ learnCount: 0, reviewsDue: 0, simulateCount: 0 });
 
   const fetchStats = useCallback(async () => {
     try {
@@ -100,9 +100,9 @@ export default function Header() {
           </Link>
           <Link
             href="/scenarios"
-            className="px-4 py-2 rounded-md text-shodo-ink font-medium hover:bg-shodo-ink/5 transition-colors duration-200"
+            className="whitespace-nowrap px-4 py-2 rounded-md text-shodo-ink font-medium hover:bg-shodo-ink/5 transition-colors duration-200"
           >
-            Scenarios
+            Scenarios ({stats.simulateCount})
           </Link>
           <Link
             href="/concepts"
