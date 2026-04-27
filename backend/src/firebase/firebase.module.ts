@@ -16,6 +16,7 @@ export const USER_KUS_SUBCOLLECTION = 'user-kus';
 export const USER_CONCEPTS_SUBCOLLECTION = 'user-concepts';
 export const QUESTION_STATES_SUBCOLLECTION = 'question-states';
 export const USER_GRAMMAR_LESSONS_SUBCOLLECTION = 'user-grammar-lessons';
+export const USER_LESSONS_SUBCOLLECTION = 'user-lessons';
 export const Timestamp = admin.firestore.Timestamp;
 export const FieldValue = admin.firestore.FieldValue;
 

@@ -45,6 +45,7 @@ You MUST return a valid JSON object matching this schema exactly:
   "relatedUnits": [],
   "data": {
     "title": "<Human-readable title>",
+    "reading": "<Kana reading of the core concept — e.g. 'まい' for 枚, 'をおねがいします' for ～をお願いします. Omit if the title contains no kanji or kana that need a reading.>",
     "overview": "<Two-sentence maximum introduction>",
     "mechanics": [
       {

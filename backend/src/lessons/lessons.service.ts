@@ -1,5 +1,5 @@
 import { Injectable, Inject, Logger, NotFoundException } from '@nestjs/common';
-import { FIRESTORE_CONNECTION, LESSONS_COLLECTION, KNOWLEDGE_UNITS_COLLECTION, USER_GRAMMAR_LESSONS_SUBCOLLECTION } from '../firebase/firebase.module';
+import { FIRESTORE_CONNECTION, LESSONS_COLLECTION, KNOWLEDGE_UNITS_COLLECTION, USER_GRAMMAR_LESSONS_SUBCOLLECTION, USER_LESSONS_SUBCOLLECTION, FieldValue } from '../firebase/firebase.module';
 import { Firestore, BulkWriter, Timestamp } from 'firebase-admin/firestore';
 import { GeminiService } from '../gemini/gemini.service';
 import { QuestionsService } from '../questions/questions.service';
@@ -34,16 +34,22 @@ export class LessonsService {
     const content = ku.content;
 
     const lessonDbRef = this.db.collection(LESSONS_COLLECTION).doc(kuId);
-
+    const overlayRef = this.db.collection('users').doc(uid).collection(USER_LESSONS_SUBCOLLECTION).doc(kuId);
 
     // Check for lesson in 'lessons' collection
-    const lessonDoc = await lessonDbRef.get();
+    const [lessonDoc, overlayDoc] = await Promise.all([lessonDbRef.get(), overlayRef.get()]);
     // Return existing lesson if it's completed OR if it has no status (legacy lesson)
     if (lessonDoc.exists && (lessonDoc.data()?.status === 'completed' || !lessonDoc.data()?.status)) {
-      this.logger.log(
-        `Returning existing lesson for KU ${kuId} from lessons collection`,
-      );
-      return lessonDoc.data() as Lesson;
+      this.logger.log(`Returning existing lesson for KU ${kuId} from lessons collection`);
+      const data = lessonDoc.data()!;
+      if (data.userId) {
+        void lessonDbRef.update({ userId: FieldValue.delete() });
+        delete data.userId;
+      }
+      if (overlayDoc.exists) {
+        return { ...data, ...overlayDoc.data() } as Lesson;
+      }
+      return data as Lesson;
     }
 
     this.logger.log(`No existing lesson for KU ${kuId}. Generating new lesson`);
@@ -92,7 +98,6 @@ export class LessonsService {
     try {
       lessonJson = JSON.parse(lessonString) as Lesson;
       (lessonJson as VocabLesson | KanjiLesson).kuId = kuId;
-      (lessonJson as any).userId = uid;
 
       // --- MERGE USER DEFINITIONS (if Vocab) ---
       // Rely on the KnowledgeUnit type, which is the source of truth
@@ -167,21 +172,9 @@ export class LessonsService {
   }
 
   async updateLesson(uid: string, kuId: string, section: string, content: string) {
-    // 1. Find the lesson document
-    const snapshot = await this.db.collection(LESSONS_COLLECTION)
-      .where('kuId', '==', kuId)
-      .where('userId', '==', uid)
-      .limit(1)
-      .get();
+    const lessonDoc = await this.db.collection(LESSONS_COLLECTION).doc(kuId).get();
+    if (!lessonDoc.exists) throw new NotFoundException('Lesson not found');
 
-    if (snapshot.empty) {
-      throw new NotFoundException('Lesson not found');
-    }
-
-    const doc = snapshot.docs[0];
-
-    // 2. Parse content if it looks like JSON (for array fields)
-    // This prevents saving "[{...}]" as a string literal in Firestore
     let valueToSave: any = content;
     try {
       const trimmed = content.trim();
@@ -190,38 +183,29 @@ export class LessonsService {
         valueToSave = JSON.parse(content);
       }
     } catch (e) {
-      // If parse fails, assume it's just a regular string
       valueToSave = content;
     }
 
-    // 3. Update
-    await doc.ref.update({
-      [section]: valueToSave
-    });
+    const overlayRef = this.db.collection('users').doc(uid).collection(USER_LESSONS_SUBCOLLECTION).doc(kuId);
+    await overlayRef.set({ [section]: valueToSave }, { merge: true });
 
     return { success: true };
   }
 
   async findByKuId(uid: string, kuId: string): Promise<Lesson | null> {
-    // Grammar lessons are global (no userId); read the doc directly
-    const directDoc = await this.db.collection(LESSONS_COLLECTION).doc(kuId).get();
-    if (directDoc.exists && directDoc.data()?.type === 'Grammar') {
-      return { ...directDoc.data() } as GrammarLesson;
+    const [lessonDoc, overlayDoc] = await Promise.all([
+      this.db.collection(LESSONS_COLLECTION).doc(kuId).get(),
+      this.db.collection('users').doc(uid).collection(USER_LESSONS_SUBCOLLECTION).doc(kuId).get(),
+    ]);
+
+    if (!lessonDoc.exists) return null;
+
+    const lesson = lessonDoc.data() as Lesson;
+    if (overlayDoc.exists) {
+      return { ...lesson, ...overlayDoc.data() } as Lesson;
     }
-
-    const snapshot = await this.db.collection(LESSONS_COLLECTION)
-      .where('kuId', '==', kuId)
-      .where('userId', '==', uid)
-      .limit(1)
-      .get();
-
-    if (snapshot.empty) {
-      return null;
-    }
-
-    const doc = snapshot.docs[0];
-    return { id: doc.id, ...doc.data() } as unknown as Lesson;
-  } // END findByKuId
+    return lesson;
+  }
 
   async createUserGrammarLesson(
     uid: string,
@@ -293,7 +277,6 @@ export class LessonsService {
           // Set status to generating
           await lessonRef.set({
             kuId: item.id,
-            userId: uid,
             status: 'generating',
             createdAt: new Date(),
           }, { merge: true });

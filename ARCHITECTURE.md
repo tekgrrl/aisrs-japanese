@@ -114,6 +114,7 @@ Create a new pipeline in `ConceptsService` to generate these units. Instruct the
 - (Done) User KU metadata is stored in `users/{uid}/user-kus` as `UserKnowledgeUnit` documents referencing global KUs via `kuId`. Managed by `UserKnowledgeUnitsService`.
 - (Done) Users can sign up and log in via passwordless email-link auth.
 - (Done) When a user interacts with a scenario and clicks "Start Drilling", `UserKnowledgeUnit` documents are created in their sub-collection — this populates their Learning Queue.
+- (Done) Scenarios migrated from top-level `scenarios` collection to `users/{uid}/scenarios` sub-collection (issue #133).
 - (Done) Questions have been overhauled — see **Question Corpus** section below and Migration History.
 
 ## User Management, Authentication & Multi-Tenancy
@@ -173,8 +174,7 @@ Per-user data lives in **Firestore sub-collections** under `users/{uid}/<collect
 **Global collections** (`knowledge-units`, `concepts`, `questions`, `lessons/{kuId}`) have no `userId` on new documents. `createdBy` is used for audit only where present.
 
 **Exceptions still using `userId` field scoping:**
-- `scenarios` top-level collection — per-user but not yet migrated to sub-collection (issue #133).
-- `lessons` for Vocab/Kanji types — legacy documents still carry a `userId` field.
+- `lessons` for Vocab/Kanji types — legacy documents still carry a `userId` field (lazy migration: field is deleted on read).
 - `api-logs` — no user scoping.
 
 ---
@@ -187,11 +187,12 @@ Per-user data lives in **Firestore sub-collections** under `users/{uid}/<collect
 | `users/{uid}/user-kus` | Yes — sub-collection path | Per-user KU metadata; `kuId` references global KU |
 | `users/{uid}/review-facets` | Yes — sub-collection path | Per-user SRS facets (non-admin users) |
 | `review-facets` | Yes (field) | Admin (`user_default`) SRS facets only; `userId` field still required |
-| `lessons` | **No** (Grammar); Yes (field, Vocab/Kanji) | Global `GrammarLesson` docs stored at `lessons/{kuId}` — no `userId`. Vocab/Kanji lessons still scoped by `userId` field. |
+| `lessons` | **No** | All lesson types stored globally at `lessons/{kuId}` — no `userId`. Legacy Vocab/Kanji docs may still carry a `userId` field; lazily deleted on read. User edits live in `users/{uid}/user-lessons/{kuId}` overlay (merged on read). |
+| `users/{uid}/user-lessons` | Yes — sub-collection path | Per-user lesson overrides (`meaning_explanation`, etc.). Written by `updateLesson`; merged on top of the global doc in `generateLesson` and `findByKuId`. |
 | `users/{uid}/user-grammar-lessons` | Yes — sub-collection path | Per-user per-encounter `UserGrammarLesson` docs. Doc ID: `{kuId}_{sourceType}_{sourceId}` (deterministic, prevents duplicates per source). |
 | `questions` | **No** | Global question corpus — no `userId` on new docs. `rank` and `rejectionCount` fields drive selection. |
 | `users/{uid}/question-states` | Yes — sub-collection path | Per-user `UserQuestionState`: `rejected`, `consecutiveFailures`, `kuId` |
-| `scenarios` | Yes (field) | Roleplay scenario state. `sourceKuId` field links back to the vocabulary KU that triggered generation from a context example. Requires composite index on `(userId, sourceKuId, createdAt)`. |
+| `users/{uid}/scenarios` | Yes — sub-collection path | Roleplay scenario state. Admin (`user_default`) uses root `scenarios` collection. `sourceKuId` field links back to the vocabulary KU that triggered generation from a context example. Requires composite index on `(sourceKuId, createdAt)`. |
 | `user-stats` | Yes — doc ID is uid | Legacy stats; `USER_STATS_COLLECTION.doc(uid)` |
 | `users` | Yes — doc path `users/{uid}` | `UserRoot` document (stats, tutorContext, preferences) |
 | `concepts` | **No** | Global grammar concept corpus — no `userId` on docs; `createdBy` field for audit only |

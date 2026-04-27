@@ -38,6 +38,7 @@ export interface ApiLog {
  */
 export interface UserRoot {
   id: string; // The Firestore document ID (which corresponds to the user's auth UID)
+  email?: string;
 
   /**
    * Statistical data related to the user's reviews, engagement, and progression.
@@ -293,6 +294,7 @@ export interface ConceptKnowledgeUnit extends KnowledgeUnitBase {
   type: "Concept";
   data: {
     title: string;
+    reading?: string;
     overview: string;
     mechanics: Array<{
       goalTitle: string;
@@ -360,6 +362,10 @@ export interface UserKnowledgeUnit {
   status: "learning" | "reviewing" | "mastered";
   facet_count: number;
   history?: any[];
+  source?: {
+    type: 'scenario' | 'lesson';
+    id: string;
+  };
 }
 
 export interface UserConcept {
@@ -406,6 +412,10 @@ export interface ReviewFacet {
   /** @deprecated - failure tracking moved to UserQuestionState.consecutiveFailures */
   questionAttempts?: number;
   data?: any;
+  source?: {
+    type: 'lesson' | 'concept';
+    id: string;
+  };
 }
 
 export interface ReviewItem {
