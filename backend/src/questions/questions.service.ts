@@ -16,6 +16,9 @@ import {
   buildVocabQuestionPrompt,
   buildVocabQuestionUserMessage,
   pickRandomQuestionType,
+  NOUN_QUESTION_OPTIONS,
+  buildNounParticleQuestionPrompt,
+  NOUN_PARTICLE_FEW_SHOT_TURNS,
   CONCEPT_QUESTION_OPTIONS,
   buildConceptQuestionPrompt,
   ConceptMechanic,
@@ -159,9 +162,6 @@ export class QuestionsService {
   }
 
   private async generateVocabQuestion(uid: string, topic: string, kuId: string, facetId?: string): Promise<QuestionResponse> {
-    const selectedType = pickRandomQuestionType(VOCAB_QUESTION_OPTIONS);
-    const systemPrompt = buildVocabQuestionPrompt(selectedType);
-
     let reading: string | undefined;
     let meaning: string | undefined;
     if (kuId) {
@@ -178,9 +178,27 @@ export class QuestionsService {
       }
     }
 
+    const isVerb = meaning?.toLowerCase().trimStart().startsWith('to ') ?? false;
+    this.logger.log(`Question type selection: kuId=${kuId} meaning="${meaning}" isVerb=${isVerb}`);
+
+    let systemPrompt: string;
+    let fewShotTurns: Array<{ user: string; model: string }> | undefined;
+
+    if (isVerb) {
+      systemPrompt = buildVocabQuestionPrompt(pickRandomQuestionType(VOCAB_QUESTION_OPTIONS));
+    } else {
+      const selectedType = pickRandomQuestionType(NOUN_QUESTION_OPTIONS);
+      if (selectedType === 'noun-particle') {
+        systemPrompt = buildNounParticleQuestionPrompt();
+        fewShotTurns = NOUN_PARTICLE_FEW_SHOT_TURNS;
+      } else {
+        systemPrompt = buildVocabQuestionPrompt(selectedType);
+      }
+    }
+
     const userMessage = buildVocabQuestionUserMessage(topic, reading, meaning);
 
-    const questionString = await this.geminiService.generateQuestionAI(userMessage, systemPrompt, {});
+    const questionString = await this.geminiService.generateQuestionAI(userMessage, systemPrompt, {}, fewShotTurns);
 
     if (!questionString) throw new Error('AI response was empty.');
 

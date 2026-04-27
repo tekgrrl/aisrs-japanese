@@ -6,7 +6,7 @@ import {
   NotFoundException
 } from '@nestjs/common';
 import { Firestore, CollectionReference, Timestamp, FieldValue } from 'firebase-admin/firestore';
-import { Scenario, GenerateScenarioDto, ScenarioState, ExtractedKU, ChatMessage, ScenarioEvaluation, ScenarioAttempt } from '../types/scenario';
+import { Scenario, GenerateScenarioDto, ScenarioState, ExtractedKU, ChatMessage, ScenarioEvaluation, ScenarioAttempt, ProgressStatus, LevelProgress, Attempt } from '../types/scenario';
 import { KnowledgeUnitsService } from '../knowledge-units/knowledge-units.service';
 import { UserKnowledgeUnitsService } from '../user-knowledge-units/user-knowledge-units.service';
 import { LessonsService } from '../lessons/lessons.service';
@@ -244,6 +244,7 @@ export class ScenariosService {
           const evaluation = await this.generateEvaluation(scenario);
           if (evaluation) {
             updateData.evaluation = evaluation;
+            this.writeProgressUpdate(scenario, evaluation.rating, updateData);
           }
         } catch (e) {
           this.logger.error("Failed to generate scenario evaluation", e);
@@ -445,6 +446,40 @@ export class ScenariosService {
     return evaluation;
   }
 
+
+  private progressStatusFromStars(stars: number): ProgressStatus {
+    if (stars <= 0) return 'reviewing';
+    if (stars <= 2) return 'failing';
+    if (stars <= 4) return 'passing';
+    return 'passed';
+  }
+
+  private writeProgressUpdate(scenario: Scenario, rawRating: number, updateData: Record<string, any>): void {
+    const level = scenario.difficultyLevel;
+    const stars = Math.max(1, Math.min(5, Math.round(rawRating))) as 1 | 2 | 3 | 4 | 5;
+    const now = Timestamp.now();
+
+    const existing: LevelProgress = scenario.progress?.[level] ?? {
+      status: 'reviewing',
+      bestStars: 0,
+      lastAttemptAt: null,
+      attempts: [],
+    };
+
+    const newAttempt: Attempt = { attemptedAt: now, stars };
+    const newBestStars = Math.max(existing.bestStars, stars);
+    const newStatus = this.progressStatusFromStars(newBestStars);
+
+    const updated: LevelProgress = {
+      status: newStatus,
+      bestStars: newBestStars,
+      lastAttemptAt: now,
+      attempts: [...existing.attempts, newAttempt],
+    };
+
+    updateData[`progress.${level}`] = updated;
+    updateData.currentLevelStatus = newStatus;
+  }
 
   private determineRoles(participants: string[]): { aiRole: string; userRole: string } {
     if (!participants || participants.length === 0) {

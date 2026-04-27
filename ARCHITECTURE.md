@@ -276,12 +276,54 @@ The following work is required to complete proper multi-user support. Each item 
 
 Rank nominally 0–100 but is not hard-clamped; `>= 30` is the only gate used in queries.
 
+### Verb vs noun question type branching
+
+`generateVocabQuestion` inspects `meaning` (fetched from the KU) before picking a question type:
+- **Verb** (`meaning` starts with `"to "`) → picks randomly from `VOCAB_QUESTION_OPTIONS` (conjugation, particle, translation, fill-in-the-blank).
+- **Non-verb** (nouns, adjectives, anything else) → picks randomly from `NOUN_QUESTION_OPTIONS` (noun-particle, translation).
+
+`noun-particle` questions blank out `<noun><particle>` together (e.g. `図書館で`, `歯を`). The `context` field follows the format "Specify [label] as [role]" to uniquely identify the correct particle. `accepted_alternatives` is always empty. `NOUN_PARTICLE_FEW_SHOT_TURNS` (five `{user, model}` pairs) are passed as real conversation turns in `contents` — NOT embedded in the system prompt — because `generateQuestionAI` uses `responseSchema` (controlled generation mode), where JSON in the system instruction is misinterpreted.
+
+`GeminiService.generateQuestionAI` accepts an optional `fewShotTurns?: Array<{ user: string; model: string }>` parameter. When provided, each pair is prepended to `contents` as `role: 'user'` / `role: 'model'` turns before the actual question message.
+
 ### Key endpoints
 - `GET /api/questions/generate?topic=&facetId=&kuId=` — returns `{ question, answer, context, accepted_alternatives, questionId, isNew }`. `isNew: true` means no `UserQuestionState` exists yet for this user; the frontend uses this to decide whether to show the feedback modal.
 - `PATCH /api/questions/:id/feedback` — body `{ feedback: 'keep' | 'request-new' | 'report' }`.
 
 ### Migration note for existing question documents
 Legacy docs lack `rank` and `rejectionCount`. They are served correctly on first use (`rank ?? 50` at read time) but fall below the suitability threshold after their first correct answer or feedback write (`FieldValue.increment` initialises missing fields from 0). Run a one-time backfill of `{ rank: 50, rejectionCount: 0 }` across the `questions` collection to restore them.
+
+---
+
+## Scenario Progress Tracking
+
+Each `Scenario` document tracks the user's best performance per JLPT level:
+
+```typescript
+progress?: Record<string, LevelProgress>  // keyed by ScenarioDifficulty e.g. 'N5'
+currentLevelStatus?: ProgressStatus        // denormalised for Firestore queries
+```
+
+`ProgressStatus = 'reviewing' | 'failing' | 'passing' | 'passed'` — derived from `bestStars`:
+- 0 stars → `reviewing`, 1–2 → `failing`, 3–4 → `passing`, 5 → `passed` (sticky — never regresses)
+
+`LevelProgress` stores `{ status, bestStars, lastAttemptAt, attempts[] }`. Each `Attempt` records `{ attemptedAt, stars: 1|2|3|4|5 }`.
+
+Written in `ScenariosService.writeProgressUpdate` (called from the `advanceState` completed branch after evaluation). Uses Firestore dot-notation (`progress.N5`) so multiple level entries coexist in the map without clobbering.
+
+`currentLevelStatus` mirrors `progress[scenario.difficultyLevel].status` and is written on the same update. Intended for dashboard queries such as `where('currentLevelStatus', '==', 'passing')`.
+
+### Assessment screen tiered messaging
+
+| Stars | Header | Guidance |
+|---|---|---|
+| 1–2 | "Keep Practising" (red) | Review grammar notes and vocab, retry when ready |
+| 3–4 | "Good Effort!" (amber) | Study notes again, come back aiming for 5 stars |
+| 5 | "Mission Complete!" (green) | Try next JLPT level from the scenario library |
+
+### `vocabReady` flag (planned)
+
+Once all vocab KUs linked to a `drill`-state scenario have `minSrsStage >= 1`, a `vocabReady: true` flag should be written to the scenario document. Trigger: `ReviewsService` SRS update — look up the UKU's `source.type === 'scenario'` to find the scenario, run `getKuStatus`, write the flag if all pass. Needed for dashboard queries like "scenarios ready to start roleplay".
 
 ---
 

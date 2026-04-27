@@ -422,7 +422,8 @@ export class GeminiService implements OnModuleInit {
   async generateQuestionAI(
     userMessage: string,
     systemPrompt: string,
-    logContext?: Record<string, any>
+    logContext?: Record<string, any>,
+    fewShotTurns?: Array<{ user: string; model: string }>,
   ) {
     let startTime = performance.now();
     let errorOccurred = false;
@@ -450,9 +451,14 @@ export class GeminiService implements OnModuleInit {
 
 
     try {
+      const fewShotContents = (fewShotTurns ?? []).flatMap(({ user, model }) => [
+        { role: 'user' as const, parts: [{ text: user }] },
+        { role: 'model' as const, parts: [{ text: model }] },
+      ]);
+
       const response = await this.client.models.generateContent({
         model: this.modelName,
-        contents: [{ parts: [{ text: userMessage }] }],
+        contents: [...fewShotContents, { parts: [{ text: userMessage }] }],
         config: {
           systemInstruction: { parts: [{ text: systemPrompt }] },
           responseMimeType: "application/json",
