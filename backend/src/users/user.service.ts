@@ -53,20 +53,24 @@ export class UserService {
    *
    * Safe to call on every request — no overwrites, no side-effects for existing users.
    */
-  async findOrCreate(uid: string): Promise<UserRoot> {
+  async findOrCreate(uid: string, email?: string): Promise<UserRoot> {
     const userRef = this.db.collection('users').doc(uid);
     const userDoc = await userRef.get();
 
     if (userDoc.exists) {
       this.logger.log(`UserRoot found for uid: ${uid}`);
-      return { id: uid, ...userDoc.data() } as UserRoot;
+      const data = userDoc.data()!;
+      if (email && !data.email) {
+        void userRef.update({ email });
+        data.email = email;
+      }
+      return { id: uid, ...data } as UserRoot;
     }
 
     this.logger.log(`UserRoot not found for uid: ${uid}. Creating default document.`);
     const defaultUser = this.buildDefaultUserRoot(uid);
+    if (email) defaultUser.email = email;
 
-    // Use set() — the doc doesn't exist so there's no overwrite risk.
-    // We intentionally don't use merge here because we're creating from scratch.
     await userRef.set(defaultUser);
 
     this.logger.log(`Default UserRoot created for uid: ${uid}`);

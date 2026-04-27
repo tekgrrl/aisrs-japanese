@@ -123,7 +123,7 @@ export class ConceptsService {
       });
     }
 
-    const created = await this.reviewsService.createFacetBatch(uid, facets);
+    const created = await this.reviewsService.createFacetBatch(uid, facets, { type: 'concept', id: conceptId });
 
     await this.userConceptsRef(uid)
       .where('conceptId', '==', conceptId)

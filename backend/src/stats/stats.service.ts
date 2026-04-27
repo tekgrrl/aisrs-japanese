@@ -5,10 +5,9 @@ import {
     REVIEW_FACETS_COLLECTION,
     USER_STATS_COLLECTION,
     USER_KUS_SUBCOLLECTION,
+    SCENARIOS_COLLECTION,
 } from '../firebase/firebase.module';
 import { ADMIN_USER_ID } from '../lib/constants';
-
-// Removed ADMIN_USER_ID
 
 @Injectable()
 export class StatsService {
@@ -42,11 +41,20 @@ export class StatsService {
         // New: Fetch User Stats Document
         const userStatsQuery = this.db.collection(USER_STATS_COLLECTION).doc(uid).get();
 
-        const [ukuLearnSnapshot, reviewingSnapshot, reviewsSnapshot, userStatsDoc] = await Promise.all([
+        const scenariosCol = uid === ADMIN_USER_ID
+            ? this.db.collection(SCENARIOS_COLLECTION)
+            : this.db.collection('users').doc(uid).collection(SCENARIOS_COLLECTION);
+        const simulateScenariosQuery = scenariosCol
+            .where('state', '==', 'simulate')
+            .count()
+            .get();
+
+        const [ukuLearnSnapshot, reviewingSnapshot, reviewsSnapshot, userStatsDoc, simulateScenariosSnapshot] = await Promise.all([
             ukuLearnQuery,
             reviewQuery,
             reviewsDueQuery,
-            userStatsQuery
+            userStatsQuery,
+            simulateScenariosQuery,
         ]);
 
         const reviewsDueCount = reviewsSnapshot.data().count;
@@ -126,6 +134,7 @@ export class StatsService {
             learnCount: ukuLearnSnapshot.data().count,
             reviewCount: totalActive,
             reviewsDue: reviewsDueCount,
+            simulateCount: simulateScenariosSnapshot.data().count,
 
             // New Widget Data
             next24HoursCount: next24HoursCount,

@@ -280,8 +280,9 @@ export default function ReviewPage() {
       // *Now* we dispatch the event from the client.
       window.dispatchEvent(new Event("refreshStats"));
     } catch (err) {
-      if (err instanceof Error) setError(err.message);
-      else setError("An unknown error occurred");
+      // SRS update failure is non-blocking — the user already saw their result and can continue.
+      // Show a soft warning rather than a hard error so the review flow isn't disrupted.
+      setError("SRS update failed — your answer was recorded but your schedule may not have updated. You can continue reviewing.");
     }
   };
 
@@ -470,6 +471,7 @@ export default function ReviewPage() {
     setUserAnswer("");
     setAnswerState("unanswered");
     setAiExplanation("");
+    setError(null);
     setPendingSrsResult(null);
     setShowFeedbackModal(false);
     setLevelStatus(null);
@@ -666,6 +668,7 @@ export default function ReviewPage() {
   const questionText = getQuestion(currentItem);
   const isDynamicLoading =
     currentItem.facet.facetType === "AI-Generated-Question" &&
+    !error &&
     (isFetchingDynamicQuestion || !questionText);
 
   return (
@@ -677,8 +680,64 @@ export default function ReviewPage() {
       </header>
 
       {error && (
-        <div className="bg-red-800 border border-red-600 text-red-100 p-4 rounded-md mb-6">
-          {error}
+        <div className={`border p-4 rounded-md mb-6 flex flex-col gap-3 ${
+          error.startsWith("SRS update failed")
+            ? "bg-yellow-900 border-yellow-600 text-yellow-100"
+            : "bg-red-900 border-red-600 text-red-100"
+        }`}>
+          <div className="flex justify-between items-start gap-4">
+            <p className="text-sm leading-snug">{error}</p>
+            <button
+              type="button"
+              onClick={() => setError(null)}
+              className="text-current opacity-60 hover:opacity-100 shrink-0 text-lg leading-none"
+              aria-label="Dismiss"
+            >
+              ✕
+            </button>
+          </div>
+          {/* Contextual escape hatches */}
+          <div className="flex gap-3 flex-wrap">
+            {answerState === "unanswered" && currentItem.facet.facetType === "AI-Generated-Question" && (
+              <button
+                type="button"
+                onClick={() => {
+                  setError(null);
+                  setDynamicQuestion(null);
+                  setDynamicAnswer(null);
+                  setDynamicAltAnswers([]);
+                  setDynamicContext(null);
+                  lastFetchedIndex.current = null;
+                  fetchDynamicQuestion(
+                    currentItem.facet.data?.topic || currentItem.facet.data?.content || '',
+                    currentItem.facet.id,
+                    currentItem.facet.kuId,
+                  );
+                }}
+                className="text-sm px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded font-medium"
+              >
+                Retry question
+              </button>
+            )}
+            {answerState === "unanswered" && (
+              <button
+                type="button"
+                onClick={() => { setError(null); advanceToNext(); }}
+                className="text-sm px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded font-medium"
+              >
+                Skip item
+              </button>
+            )}
+            {(answerState === "correct" || answerState === "incorrect") && (
+              <button
+                type="button"
+                onClick={() => { setError(null); goToNextItem(); }}
+                className="text-sm px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded font-medium"
+              >
+                Continue
+              </button>
+            )}
+          </div>
         </div>
       )}
 

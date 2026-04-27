@@ -12,6 +12,7 @@ import { UserKnowledgeUnitsService } from '../user-knowledge-units/user-knowledg
 import { LessonsService } from '../lessons/lessons.service';
 import { UserService } from '../users/user.service';
 import { FIRESTORE_CONNECTION, SCENARIOS_COLLECTION, REVIEW_FACETS_COLLECTION } from '../firebase/firebase.module';
+import { ADMIN_USER_ID } from '../lib/constants';
 import { GeminiService } from '../gemini/gemini.service';
 import { ALLOWED_USER_ROLES, ALLOWED_AI_ROLES, buildArchitectPrompt, buildChatSystemPrompt } from '../prompts/scenario.prompts';
 
@@ -20,7 +21,6 @@ import { ScenarioTemplate, SCENARIO_TEMPLATES } from './templates';
 @Injectable()
 export class ScenariosService {
   private readonly logger = new Logger(ScenariosService.name);
-  private collectionRef: CollectionReference;
 
   constructor(
     @Inject(FIRESTORE_CONNECTION) private readonly db: Firestore,
@@ -29,13 +29,17 @@ export class ScenariosService {
     private readonly userKnowledgeUnitsService: UserKnowledgeUnitsService,
     private readonly lessonsService: LessonsService,
     private readonly userService: UserService,
-  ) {
-    this.collectionRef = this.db.collection(SCENARIOS_COLLECTION);
+  ) {}
+
+  private scenariosColRef(uid: string): CollectionReference {
+    if (uid === ADMIN_USER_ID) {
+      return this.db.collection(SCENARIOS_COLLECTION);
+    }
+    return this.db.collection('users').doc(uid).collection(SCENARIOS_COLLECTION);
   }
 
-  async getAllScenarios(userId: string, limitDays?: number): Promise<Scenario[]> {
-    let query = this.collectionRef
-      .where('userId', '==', userId)
+  async getAllScenarios(userId: string, limitDays?: number, state?: string): Promise<Scenario[]> {
+    let query = this.scenariosColRef(userId)
       .orderBy('createdAt', 'desc');
 
     if (limitDays) {
@@ -45,13 +49,18 @@ export class ScenariosService {
       query = query.where('createdAt', '>', timestamp);
     }
 
+    if (state) {
+      query = query.where('state', '==', state);
+    }
+
     const snapshot = await query.get();
     return snapshot.docs.map(doc => doc.data() as Scenario);
   }
 
   async getScenariosBySourceKuId(userId: string, sourceKuId: string): Promise<Pick<Scenario, 'id' | 'title' | 'sourceContextSentence' | 'createdAt'>[]> {
-    const snapshot = await this.collectionRef
-      .where('userId', '==', userId)
+    // NOTE: Requires Firestore composite index on (sourceKuId ASC, createdAt DESC)
+    // for the 'scenarios' collection group (covers both root and users/{uid}/scenarios).
+    const snapshot = await this.scenariosColRef(userId)
       .where('sourceKuId', '==', sourceKuId)
       .orderBy('createdAt', 'desc')
       .get();
@@ -66,11 +75,9 @@ export class ScenariosService {
   }
 
   async getScenario(uid: string, id: string): Promise<Scenario | null> {
-    const doc = await this.collectionRef.doc(id).get();
+    const doc = await this.scenariosColRef(uid).doc(id).get();
     if (!doc.exists) return null;
-    const data = doc.data() as Scenario;
-    if (data.userId !== uid) return null;
-    return data;
+    return doc.data() as Scenario;
   }
 
   async generateScenario(userId: string, dto: GenerateScenarioDto): Promise<string> {
@@ -80,6 +87,7 @@ export class ScenariosService {
       ...dto,
       difficulty: dto.difficulty ?? userPrefs?.jlptLevel ?? 'N4',
       userRole: dto.userRole ?? userPrefs?.preferredUserRole,
+      sourceContextSentence: dto.sourceContextSentence?.replace(/\[[^\]]*\]/g, '').trim(),
     };
 
     const prompt = buildArchitectPrompt(resolvedDto);
@@ -88,7 +96,7 @@ export class ScenariosService {
       const jsonString = await this.geminiService.generateScenario(prompt);
       const data = JSON.parse(jsonString);
 
-      const docRef = this.collectionRef.doc();
+      const docRef = this.scenariosColRef(userId).doc();
       const id = docRef.id;
 
       // Helper to clean "helpful" formatting like "本屋 (Bookstore)" or "ほんや (honya)"
@@ -170,7 +178,7 @@ export class ScenariosService {
 
               if (globalKu) {
                 this.logger.log(`Linking "${ku.content}" to existing global KU ${globalKu.id}`);
-                await this.userKnowledgeUnitsService.create(uid, globalKu.id);
+                await this.userKnowledgeUnitsService.create(uid, globalKu.id, { type: 'scenario', id: scenario.id });
                 updatedKUs.push({ ...ku, kuId: globalKu.id, status: 'learning' });
               } else {
                 this.logger.log(`No global KU found for "${ku.content}" — creating new KU with level hint ${ku.jlptLevel ?? 'none'}`);
@@ -179,7 +187,7 @@ export class ScenariosService {
                   definition: ku.meaning,
                   jlptLevel: ku.jlptLevel,
                 });
-                await this.userKnowledgeUnitsService.create(uid, newKuId);
+                await this.userKnowledgeUnitsService.create(uid, newKuId, { type: 'scenario', id: scenario.id });
                 updatedKUs.push({ ...ku, kuId: newKuId, status: 'learning' });
               }
             } catch (error) {
@@ -196,7 +204,7 @@ export class ScenariosService {
           for (const note of scenario.grammarNotes) {
             try {
               const kuId = await this.knowledgeUnitsService.ensureGrammarKU(note);
-              await this.userKnowledgeUnitsService.create(uid, kuId);
+              await this.userKnowledgeUnitsService.create(uid, kuId, { type: 'scenario', id: scenario.id });
               await this.lessonsService.createUserGrammarLesson(
                 uid,
                 kuId,
@@ -244,7 +252,7 @@ export class ScenariosService {
     }
 
     this.logger.log(`Updating state for scenario ${id} to ${newState}`);
-    await this.collectionRef.doc(id).update(updateData);
+    await this.scenariosColRef(uid).doc(id).update(updateData);
   }
 
 
@@ -273,14 +281,14 @@ export class ScenariosService {
       updateData.pastAttempts = FieldValue.arrayUnion(attempt);
     }
 
-    await this.collectionRef.doc(id).update(updateData);
+    await this.scenariosColRef(uid).doc(id).update(updateData);
   }
 
   async deactivateScenario(uid: string, id: string): Promise<void> {
     this.logger.log(`Deactivating scenario ${id}`);
     const scenario = await this.getScenario(uid, id);
     if (!scenario) throw new NotFoundException('Scenario not found');
-    await this.collectionRef.doc(id).update({ isActive: false });
+    await this.scenariosColRef(uid).doc(id).update({ isActive: false });
   }
 
   async handleChat(uid: string, id: string, userMessage: string): Promise<ChatMessage[]> {
@@ -355,7 +363,7 @@ export class ScenariosService {
       updateData.isActive = false; // Auto-deactivate
     }
 
-    await this.collectionRef.doc(id).update(updateData);
+    await this.scenariosColRef(uid).doc(id).update(updateData);
 
     // 6. Return Full History (so frontend can sync)
     // We assume the frontend has the previous state, but returning full history is safer for sync
@@ -472,5 +480,33 @@ export class ScenariosService {
     this.logger.log(`AI Role: ${aiRole}, User Role: ${userRole}`);
 
     return { aiRole, userRole };
+  }
+
+  async getKuStatus(uid: string, scenarioId: string): Promise<Record<string, { maxSrsStage: number | null; minSrsStage: number | null }>> {
+    const scenario = await this.getScenario(uid, scenarioId);
+    if (!scenario) throw new NotFoundException('Scenario not found');
+
+    const kuIds = scenario.extractedKUs
+      .filter(ku => ku.kuId)
+      .map(ku => ku.kuId!);
+
+    if (kuIds.length === 0) return {};
+
+    const facetsRef = uid === ADMIN_USER_ID
+      ? this.db.collection(REVIEW_FACETS_COLLECTION)
+      : this.db.collection('users').doc(uid).collection(REVIEW_FACETS_COLLECTION);
+
+    const result: Record<string, { maxSrsStage: number | null; minSrsStage: number | null }> = {};
+
+    await Promise.all(kuIds.map(async (kuId) => {
+      const snap = await facetsRef.where('kuId', '==', kuId).get();
+      const stages = snap.docs.map(d => (d.data().srsStage as number) ?? 0);
+      result[kuId] = {
+        maxSrsStage: stages.length > 0 ? Math.max(...stages) : null,
+        minSrsStage: stages.length > 0 ? Math.min(...stages) : null,
+      };
+    }));
+
+    return result;
   }
 }

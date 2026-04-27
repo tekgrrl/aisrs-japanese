@@ -45,6 +45,7 @@ export class ScenariosController {
     @UserId() uid: string,
     @Query('days') days?: string,
     @Query('sourceKuId') sourceKuId?: string,
+    @Query('state') state?: string,
   ) {
     if (sourceKuId) {
       return this.scenariosService.getScenariosBySourceKuId(uid, sourceKuId);
@@ -53,7 +54,12 @@ export class ScenariosController {
     if (limitDays !== undefined && isNaN(limitDays)) {
       throw new BadRequestException('Invalid days parameter');
     }
-    return this.scenariosService.getAllScenarios(uid, limitDays);
+    return this.scenariosService.getAllScenarios(uid, limitDays, state);
+  }
+
+  @Get(':id/ku-status')
+  async getKuStatus(@UserId() uid: string, @Param('id') id: string) {
+    return this.scenariosService.getKuStatus(uid, id);
   }
 
   @Get(':id')

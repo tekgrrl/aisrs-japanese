@@ -252,7 +252,7 @@ export class ReviewsService {
                 if (parts.length === 3) {
                     const kanjiChar = parts[2];
                     const kanjiKuId = await this.knowledgeUnitsService.ensureKanjiStub(kanjiChar, data);
-                    await this.userKnowledgeUnitsService.create(uid, kanjiKuId);
+                    await this.userKnowledgeUnitsService.create(uid, kanjiKuId, { type: 'lesson', id: kuId });
 
                     // Dedup: only create facets that don't already exist on the Kanji KU
                     const existingKanjiFacets = await this.getFacetsByKuId(uid, kanjiKuId);
@@ -267,6 +267,7 @@ export class ReviewsService {
                             nextReviewAt: now,
                             createdAt: now,
                             history: [],
+                            source: { type: 'lesson', id: kuId },
                             ...(uid === ADMIN_USER_ID ? { userId: uid } : {}),
                             data: { content: kanjiChar, meaning: data?.meaning },
                         });
@@ -281,6 +282,7 @@ export class ReviewsService {
                             nextReviewAt: now,
                             createdAt: now,
                             history: [],
+                            source: { type: 'lesson', id: kuId },
                             ...(uid === ADMIN_USER_ID ? { userId: uid } : {}),
                             data: { content: kanjiChar, onyomi: data?.onyomi, kunyomi: data?.kunyomi },
                         });
@@ -319,6 +321,7 @@ export class ReviewsService {
                 nextReviewAt: now,
                 createdAt: now,
                 history: [],
+                source: { type: 'lesson', id: kuId },
                 ...(uid === ADMIN_USER_ID ? { userId: uid } : {}),
                 ...(modifiedData ? { data: modifiedData } : {}),
             });
@@ -414,6 +417,7 @@ export class ReviewsService {
     async createFacetBatch(
         uid: string,
         facets: Array<{ kuId: string; facetType: ReviewFacet['facetType']; data?: any }>,
+        source?: ReviewFacet['source'],
     ): Promise<number> {
         const batch = this.db.batch();
         const now = Timestamp.now();
@@ -427,6 +431,7 @@ export class ReviewsService {
                 nextReviewAt: now,
                 createdAt: now,
                 history: [],
+                ...(source ? { source } : {}),
                 ...(uid === ADMIN_USER_ID ? { userId: uid } : {}),
                 ...(facet.data ? { data: facet.data } : {}),
             });

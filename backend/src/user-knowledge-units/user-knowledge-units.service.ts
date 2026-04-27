@@ -79,10 +79,19 @@ export class UserKnowledgeUnitsService {
     this.logger.log(`Updated UKU ${uku.id} for uid=${uid} kuId=${kuId}`);
   }
 
-  async create(uid: string, kuId: string): Promise<UserKnowledgeUnit> {
+  async create(
+    uid: string,
+    kuId: string,
+    source?: UserKnowledgeUnit['source'],
+  ): Promise<UserKnowledgeUnit> {
     const existing = await this.findByKuId(uid, kuId);
     if (existing) {
       this.logger.log(`UKU already exists for uid=${uid} kuId=${kuId}`);
+      if (source && !existing.source) {
+        await this.userKusRef(uid).doc(existing.id).update({ source });
+        this.logger.log(`Backfilled source on existing UKU ${existing.id}`);
+        return { ...existing, source };
+      }
       return existing;
     }
 
@@ -94,10 +103,11 @@ export class UserKnowledgeUnitsService {
       createdAt: now,
       status: 'learning',
       facet_count: 0,
+      ...(source ? { source } : {}),
     };
 
     const ref = await this.userKusRef(uid).add(payload);
-    this.logger.log(`Created UKU id=${ref.id} for uid=${uid} kuId=${kuId}`);
+    this.logger.log(`Created UKU id=${ref.id} for uid=${uid} kuId=${kuId} source=${source?.type ?? 'none'}`);
     return { id: ref.id, ...payload };
   }
 }
