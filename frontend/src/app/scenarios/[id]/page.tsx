@@ -10,6 +10,8 @@ import { apiFetch } from "@/lib/api-client";
 
 const API_BASE_URL = "http://localhost:3000/api";
 
+const ROLEPLAY_MIN_SRS_STAGE = 1; // at least one successful review per facet before role-playing
+
 function kuSrsBadge(maxSrsStage: number | null | undefined): { text: string; className: string } | null {
   if (maxSrsStage === undefined) return null; // no kuId, no badge
   if (maxSrsStage === null) return { text: 'Enrolled', className: 'bg-slate-100 text-slate-500' };
@@ -39,7 +41,8 @@ export default function ScenarioPage({
 
   // UI State
   const [showTranslations, setShowTranslations] = useState(false);
-  const [kuStatus, setKuStatus] = useState<Record<string, { maxSrsStage: number | null }>>({});
+  const [kuStatus, setKuStatus] = useState<Record<string, { maxSrsStage: number | null; minSrsStage: number | null }>>({});
+  const [kuStatusLoading, setKuStatusLoading] = useState(false);
 
   // Hint state
   const [hintUnlocked, setHintUnlocked] = useState(false);
@@ -136,10 +139,11 @@ export default function ScenarioPage({
   // Fetch live KU status for the drill vocab grid
   useEffect(() => {
     if (scenario?.state !== 'drill' && scenario?.state !== 'simulate') return;
+    setKuStatusLoading(true);
     apiFetch(`${API_BASE_URL}/scenarios/${id}/ku-status`)
       .then(r => r.ok ? r.json() : {})
-      .then(setKuStatus)
-      .catch(() => {});
+      .then(data => { setKuStatus(data); setKuStatusLoading(false); })
+      .catch(() => setKuStatusLoading(false));
   }, [id, scenario?.state]);
 
   const [advancing, setAdvancing] = useState(false);
@@ -323,6 +327,11 @@ export default function ScenarioPage({
     );
   if (error || !scenario)
     return <div className="p-10 text-center text-red-500">{error}</div>;
+
+  // Readiness gate for drill → simulate transition
+  const linkedKUs = scenario.extractedKUs.filter(ku => ku.kuId);
+  const readyKUs = linkedKUs.filter(ku => (kuStatus[ku.kuId!]?.minSrsStage ?? -1) >= ROLEPLAY_MIN_SRS_STAGE);
+  const isReadyForRoleplay = !kuStatusLoading && linkedKUs.length > 0 && readyKUs.length === linkedKUs.length;
 
   // If viewing history, show a simplified report card for that attempt
   if (viewingHistory) {
@@ -869,35 +878,56 @@ export default function ScenarioPage({
               </button>
             ) : (
               <div className="flex justify-between items-center">
-                <div className="text-sm text-slate-500">
-                  {scenario.extractedKUs.length} items extracted
+                {scenario.state === "drill" ? (
+                  <div className="text-sm">
+                    {kuStatusLoading ? (
+                      <span className="text-slate-400">Checking vocab progress...</span>
+                    ) : (
+                      <span className={readyKUs.length === linkedKUs.length ? "text-green-600 font-medium" : "text-slate-500"}>
+                        {readyKUs.length}/{linkedKUs.length} vocab reviewed
+                      </span>
+                    )}
+                  </div>
+                ) : (
+                  <div className="text-sm text-slate-500">
+                    {scenario.extractedKUs.length} items extracted
+                  </div>
+                )}
+                <div className="flex flex-col items-end gap-1">
+                  <button
+                    onClick={handleAdvance}
+                    disabled={
+                      advancing ||
+                      (scenario.state === "drill" && !isReadyForRoleplay) ||
+                      (scenario.state === "simulate" && chatHistory.length === 0)
+                    }
+                    title={scenario.state === "drill" && !isReadyForRoleplay ? `${readyKUs.length}/${linkedKUs.length} vocab items need at least one successful review first` : undefined}
+                    className={`px-8 py-3 rounded-lg font-bold transition-colors shadow-sm ${
+                      scenario.state === "drill"
+                        ? isReadyForRoleplay
+                          ? "bg-purple-600 hover:bg-purple-700 text-white"
+                          : "bg-slate-300 text-slate-500 cursor-not-allowed"
+                        : scenario.state === "simulate"
+                          ? scenario.isObjectiveMet
+                            ? "bg-green-600 hover:bg-green-700 text-white"
+                            : "bg-amber-500 hover:bg-amber-600 text-white"
+                          : "bg-green-600 hover:bg-green-700 text-white"
+                    } ${advancing || (scenario.state === "simulate" && chatHistory.length === 0) ? "opacity-50 cursor-not-allowed" : ""}`}
+                  >
+                    {advancing
+                      ? "Processing..."
+                      : scenario.state === "drill"
+                        ? "Start Roleplay →"
+                        : scenario.state === "simulate"
+                          ? scenario.isObjectiveMet
+                            ? "Complete Mission"
+                            : "End Session Early"
+                          : "Completed"}
+                  </button>
+                  {scenario.state === "drill" && !isReadyForRoleplay && !kuStatusLoading && (
+                    <span className="text-xs text-slate-400">Review vocab to unlock</span>
+                  )}
                 </div>
-                <button
-                  onClick={handleAdvance}
-                  disabled={
-                    advancing ||
-                    (scenario.state === "simulate" && chatHistory.length === 0)
-                  }
-                  className={`px-8 py-3 rounded-lg font-bold transition-colors shadow-sm ${
-                    scenario.state === "drill"
-                      ? "bg-purple-600 hover:bg-purple-700 text-white"
-                      : scenario.state === "simulate"
-                        ? scenario.isObjectiveMet
-                          ? "bg-green-600 hover:bg-green-700 text-white"
-                          : "bg-amber-500 hover:bg-amber-600 text-white"
-                        : "bg-green-600 hover:bg-green-700 text-white"
-                  } ${advancing || (scenario.state === "simulate" && chatHistory.length === 0) ? "opacity-50 cursor-not-allowed" : ""}`}
-                >
-                  {advancing
-                    ? "Processing..."
-                    : scenario.state === "drill"
-                      ? "Start Roleplay →"
-                      : scenario.state === "simulate"
-                        ? scenario.isObjectiveMet
-                          ? "Complete Mission"
-                          : "End Session Early"
-                        : "Completed"}
-                </button>
               </div>
             )}
           </div>

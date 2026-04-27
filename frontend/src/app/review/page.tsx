@@ -2,8 +2,7 @@
 
 import React, { useState, useEffect, useRef, FormEvent } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { ReviewItem, ReviewFacet, KnowledgeUnit } from "@/types";
+import { ReviewItem, ReviewFacet, KnowledgeUnit, Lesson, VocabLesson, KanjiLesson, GrammarLesson } from "@/types";
 import * as wanakana from "wanakana";
 import { logger } from "@/lib/logger";
 import { QuestionFeedbackModal } from "@/components/QuestionFeedbackModal";
@@ -12,11 +11,13 @@ import { getSrsLevelName, getSrsLevelIndex } from "@/utils/srs";
 import { apiFetch } from "@/lib/api-client";
 import SentenceAssemblyCard from "@/components/review/SentenceAssemblyCard";
 import SentenceClozeCard from "@/components/review/SentenceClozeCard";
+import VocabLessonView from "@/components/lessons/VocabLessonView";
+import KanjiLessonView from "@/components/lessons/KanjiLessonView";
+import GrammarLessonView from "@/components/lessons/GrammarLessonView";
 
 type AnswerState = "unanswered" | "evaluating" | "correct" | "incorrect";
 
 export default function ReviewPage() {
-  const router = useRouter();
   const [reviewQueue, setReviewQueue] = useState<ReviewItem[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
@@ -56,6 +57,11 @@ export default function ReviewPage() {
   // --- Edit Modal State ---
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingKu, setEditingKu] = useState<KnowledgeUnit | null>(null);
+
+  // --- Inline Lesson Panel State ---
+  const [showLesson, setShowLesson] = useState(false);
+  const [lessonForReview, setLessonForReview] = useState<Lesson | null>(null);
+  const [isFetchingLesson, setIsFetchingLesson] = useState(false);
 
   // --- Audio State ---
   const audioCache = useRef<Record<string, string>>({});
@@ -419,6 +425,35 @@ export default function ReviewPage() {
     advanceToNext();
   };
 
+  const handleShowLesson = async () => {
+    if (showLesson) {
+      setShowLesson(false);
+      return;
+    }
+    if (lessonForReview) {
+      setShowLesson(true);
+      return;
+    }
+    if (!currentItem) return;
+    setIsFetchingLesson(true);
+    try {
+      const res = await apiFetch("/api/lessons/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kuId: currentItem.facet.kuId }),
+      });
+      if (res.ok) {
+        const data = await res.json() as Lesson;
+        setLessonForReview(data);
+        setShowLesson(true);
+      }
+    } catch (e) {
+      console.error("Failed to fetch lesson for review", e);
+    } finally {
+      setIsFetchingLesson(false);
+    }
+  };
+
   const goToNextItem = () => {
     // If it's a new AI question and we haven't shown feedback yet
     const isNew = isNewAiQuestion(currentItem);
@@ -438,6 +473,8 @@ export default function ReviewPage() {
     setPendingSrsResult(null);
     setShowFeedbackModal(false);
     setLevelStatus(null);
+    setShowLesson(false);
+    setLessonForReview(null);
     // Use functional update to ensure we use the latest state
     setCurrentIndex((prevIndex) => prevIndex + 1);
   };
@@ -767,15 +804,11 @@ export default function ReviewPage() {
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  if (currentItem) {
-                    router.push(`/learn/${currentItem.facet.kuId}?source=review`);
-                  }
-                }}
-                disabled={answerState !== "unanswered" || isDynamicLoading}
+                onClick={handleShowLesson}
+                disabled={isFetchingLesson}
                 className="flex-1 px-6 py-3 bg-[#0A5C36] text-white text-lg font-semibold rounded-md shadow-md hover:bg-[#084a2b] focus:outline-none focus:ring-2 focus:ring-green-800 focus:ring-offset-2 focus:ring-offset-gray-800 disabled:bg-gray-800 disabled:text-gray-500"
               >
-                Skip & Review Lesson
+                {isFetchingLesson ? "Loading..." : showLesson ? "Hide Lesson" : "Review Lesson"}
               </button>
             </div>
 
@@ -855,12 +888,14 @@ export default function ReviewPage() {
 
           {answerState === "incorrect" && currentItem && (
             <div className="mt-4">
-              <Link
-                href={`/learn/${currentItem.facet.kuId}?source=review`}
-                className="inline-block px-4 py-2 bg-[#0A5C36] text-white font-semibold rounded-md hover:bg-[#084a2b]"
+              <button
+                type="button"
+                onClick={handleShowLesson}
+                disabled={isFetchingLesson}
+                className="px-4 py-2 bg-[#0A5C36] text-white font-semibold rounded-md hover:bg-[#084a2b] disabled:opacity-50"
               >
-                Review lesson on {currentItem.facet.data?.content}
-              </Link>
+                {isFetchingLesson ? "Loading..." : showLesson ? "Hide Lesson" : `Review lesson on ${currentItem.facet.data?.content}`}
+              </button>
             </div>
           )}
 
@@ -879,6 +914,35 @@ export default function ReviewPage() {
               Next
             </button>
           </div>
+        </div>
+      )}
+
+      {/* --- Inline Lesson Panel --- */}
+      {showLesson && lessonForReview && (
+        <div className="mt-6 bg-shodo-paper border border-shodo-ink/20 rounded-lg p-6 shadow-md">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-semibold text-shodo-ink">Lesson</h2>
+            <button
+              type="button"
+              onClick={() => setShowLesson(false)}
+              className="text-shodo-ink-faint hover:text-shodo-ink text-sm"
+            >
+              Close
+            </button>
+          </div>
+          {lessonForReview.type === "Vocab" && (
+            <VocabLessonView lesson={lessonForReview as VocabLesson} readOnly />
+          )}
+          {lessonForReview.type === "Kanji" && (
+            <KanjiLessonView lesson={lessonForReview as KanjiLesson} />
+          )}
+          {lessonForReview.type === "Grammar" && (
+            <GrammarLessonView
+              lesson={lessonForReview as GrammarLesson}
+              selectedFacets={{}}
+              onToggleFacet={() => {}}
+            />
+          )}
         </div>
       )}
 

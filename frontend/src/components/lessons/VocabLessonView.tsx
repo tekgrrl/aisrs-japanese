@@ -31,21 +31,21 @@ export default function VocabLessonView({
       />
 
       {/* Definitions Section */}
-      <div className="bg-gray-100 dark:bg-gray-800 p-6 rounded-lg shadow-lg mb-8 border border-shodo-ink/5">
-        <h2 className="text-2xl font-semibold mb-4 text-gray-900 dark:text-white">
+      <div className="bg-shodo-paper-dark p-6 rounded-lg shadow-lg mb-8 border border-shodo-ink/5">
+        <h2 className="text-2xl font-semibold mb-4 text-shodo-ink">
           Definitions
         </h2>
         <ul className="list-disc list-inside space-y-2">
           {(
             lesson.definitions || (lesson.definition ? [lesson.definition] : [])
           ).map((def, i) => (
-            <li key={i} className="text-lg text-gray-700 dark:text-gray-300">
+            <li key={i} className="text-lg text-shodo-ink-light">
               {def}
             </li>
           ))}
           {(!lesson.definitions || lesson.definitions.length === 0) &&
             !lesson.definition && (
-              <p className="text-gray-500 dark:text-gray-400 italic">
+              <p className="text-shodo-ink-faint italic">
                 No definitions available.
               </p>
             )}
@@ -63,8 +63,8 @@ export default function VocabLessonView({
 
       {/* --- Context Examples --- */}
       {!hideContext && (
-        <div className="bg-gray-100 dark:bg-gray-800 p-6 rounded-lg shadow-lg mb-8 border border-shodo-ink/5">
-          <h2 className="text-2xl font-semibold mb-4 text-gray-900 dark:text-white">
+        <div className="bg-shodo-paper-dark p-6 rounded-lg shadow-lg mb-8 border border-shodo-ink/5">
+          <h2 className="text-2xl font-semibold mb-4 text-shodo-ink">
             Context Examples
           </h2>
           <ul className="space-y-4">
@@ -72,10 +72,10 @@ export default function VocabLessonView({
               lesson.context_examples.map((ex, i) => (
                 <li
                   key={i}
-                  className="p-4 bg-gray-200 dark:bg-gray-700 rounded-md"
+                  className="p-4 bg-shodo-paper-warm rounded-md"
                 >
                   {/* Japanese Sentence with Furigana */}
-                  <p className="text-2xl text-gray-900 dark:text-white mb-2">
+                  <p className="text-2xl text-shodo-ink mb-2">
                     <FuriganaText text={ex.sentence} />
                   </p>
 
@@ -86,7 +86,7 @@ export default function VocabLessonView({
                 </li>
               ))
             ) : (
-              <p className="text-gray-500 dark:text-gray-400 italic">
+              <p className="text-shodo-ink-faint italic">
                 No context examples provided.
               </p>
             )}
@@ -96,8 +96,8 @@ export default function VocabLessonView({
 
       {/* --- Component Kanji --- */}
       {!hideComponentKanji && (
-        <div className="bg-gray-100 dark:bg-gray-800 p-6 rounded-lg shadow-lg mb-8 border border-shodo-ink/5">
-          <h2 className="text-2xl font-semibold mb-4 text-gray-900 dark:text-white">
+        <div className="bg-shodo-paper-dark p-6 rounded-lg shadow-lg mb-8 border border-shodo-ink/5">
+          <h2 className="text-2xl font-semibold mb-4 text-shodo-ink">
             Component Kanji
           </h2>
           <ul className="space-y-2">
@@ -105,23 +105,23 @@ export default function VocabLessonView({
               lesson.component_kanji.map((k, i) => (
                 <li
                   key={`${k.kanji}-${i}`}
-                  className="flex items-center space-x-4 p-3 bg-gray-200 dark:bg-gray-700 rounded-md"
+                  className="flex items-center space-x-4 p-3 bg-shodo-paper-warm rounded-md"
                 >
-                  <span className="text-3xl text-gray-900 dark:text-white">
+                  <span className="text-3xl text-shodo-ink">
                     {k.kanji}
                   </span>
                   <div>
-                    <p className="text-lg text-gray-700 dark:text-gray-300">
+                    <p className="text-lg text-shodo-ink-light">
                       {k.reading}
                     </p>
-                    <p className="text-md text-gray-600 dark:text-gray-400">
+                    <p className="text-md text-shodo-ink-light">
                       {k.meaning}
                     </p>
                   </div>
                 </li>
               ))
             ) : (
-              <p className="text-gray-500 dark:text-gray-400 italic">
+              <p className="text-shodo-ink-faint italic">
                 No component kanji provided.
               </p>
             )}

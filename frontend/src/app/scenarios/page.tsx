@@ -11,7 +11,7 @@ const API_BASE_URL = "http://localhost:3000/api";
 
 export default function ScenariosDashboard() {
   const router = useRouter();
-  const [scenarios, setScenarios] = useState<Scenario[]>([]);
+  const [recentScenarios, setRecentScenarios] = useState<Scenario[]>([]);
   const [loading, setLoading] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
 
@@ -28,10 +28,7 @@ export default function ScenariosDashboard() {
   const fetchScenarios = async () => {
     try {
       const res = await apiFetch(`${API_BASE_URL}/scenarios?days=3`);
-      if (res.ok) {
-        const data = await res.json();
-        setScenarios(data);
-      }
+      if (res.ok) setRecentScenarios(await res.json());
     } catch (error) {
       console.error("Failed to fetch scenarios", error);
     } finally {
@@ -75,7 +72,7 @@ export default function ScenariosDashboard() {
     try {
       const res = await apiFetch(`${API_BASE_URL}/scenarios/${id}/deactivate`, { method: "POST" });
       if (res.ok) {
-        setScenarios(prev => prev.map(s => s.id === id ? { ...s, isActive: false } : s));
+        setRecentScenarios(prev => prev.map(s => s.id === id ? { ...s, isActive: false } : s));
       } else {
         alert("Failed to deactivate scenario.");
       }
@@ -84,8 +81,8 @@ export default function ScenariosDashboard() {
     }
   };
 
-  const activeContextScenarios = scenarios.filter(s => s.sourceType === 'context-example' && s.isActive !== false);
-  const otherScenarios = scenarios.filter(s => s.sourceType !== 'context-example' || s.isActive === false);
+  const activeContextScenarios = recentScenarios.filter(s => s.sourceType === 'context-example' && s.isActive !== false);
+  const otherScenarios = recentScenarios.filter(s => s.sourceType !== 'context-example' || s.isActive === false);
 
   return (
     <div className="max-w-4xl mx-auto p-6 space-y-8">
