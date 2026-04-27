@@ -63,20 +63,19 @@ export default function EditableSection({
 
   // --- DEFAULT VIEW ---
   return (
-    <div className="bg-gray-100 dark:bg-gray-800 p-6 rounded-lg shadow-lg mb-8 relative border border-shodo-ink/5">
+    <div className="bg-shodo-paper-dark p-6 rounded-lg shadow-sm mb-8 relative border border-shodo-ink/10">
       {!readOnly && onSave && (
         <button
           onClick={handleEdit}
-          className="absolute top-2 right-2 px-3 py-1 bg-gray-200 text-xs rounded-md"
+          className="absolute top-2 right-2 px-3 py-1 bg-shodo-paper text-shodo-ink-light text-xs rounded-md hover:bg-shodo-paper-warm"
         >
           Edit
         </button>
       )}
-      <h2 className="text-2xl font-semibold mb-4 text-gray-900 dark:text-white">
+      <h2 className="text-2xl font-semibold mb-4 text-shodo-ink">
         {title}
       </h2>
-      {/* This just displays the raw content. You'd format this better. */}
-      <p className="text-lg text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
+      <p className="text-lg text-shodo-ink-light whitespace-pre-wrap">
         {String(content)}
       </p>
     </div>
