@@ -18,6 +18,7 @@ import { ReviewFacet } from '@/types';
 import { KnowledgeUnitsService } from '../knowledge-units/knowledge-units.service';
 import { UserKnowledgeUnitsService } from '../user-knowledge-units/user-knowledge-units.service';
 import { StatsService } from '../stats/stats.service';
+import { ScenariosService } from '../scenarios/scenarios.service';
 import { buildAnswerEvaluatorPrompt } from '../prompts/evaluation.prompts';
 
 @Injectable()
@@ -45,6 +46,7 @@ export class ReviewsService {
         private readonly knowledgeUnitsService: KnowledgeUnitsService,
         private readonly userKnowledgeUnitsService: UserKnowledgeUnitsService,
         private readonly statsService: StatsService,
+        private readonly scenariosService: ScenariosService,
     ) { }
 
     private facetsColRef(uid: string): CollectionReference {
@@ -141,6 +143,18 @@ export class ReviewsService {
                 this.logger.log(`Marked UKU mastered for uid=${uid} kuId=${txResult.kuId}`);
             } catch (e) {
                 this.logger.error(`Failed to mark UKU mastered for uid=${uid} kuId=${txResult.kuId}`, e);
+            }
+        }
+
+        // Post-transaction: check if a linked scenario's vocab is now all drill-ready
+        if (txResult.newStage >= 1 && txResult.kuId) {
+            try {
+                const uku = await this.userKnowledgeUnitsService.findByKuId(uid, txResult.kuId);
+                if (uku?.source?.type === 'scenario') {
+                    await this.scenariosService.checkAndSetVocabReady(uid, uku.source.id);
+                }
+            } catch (e) {
+                this.logger.error(`Failed to check vocabReady for uid=${uid} kuId=${txResult.kuId}`, e);
             }
         }
 

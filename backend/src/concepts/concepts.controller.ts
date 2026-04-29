@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Logger, NotFoundException, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Logger, NotFoundException, Param, Post, UseGuards } from '@nestjs/common';
 import { ConceptsService } from './concepts.service';
 import { FirebaseAuthGuard } from '../auth/firebase-auth.guard';
 import { UserId } from '../auth/user-id.decorator';
@@ -11,16 +11,19 @@ export class ConceptsController {
   constructor(private readonly conceptsService: ConceptsService) {}
 
   @Post('generate')
-  async generate(
+  @HttpCode(202)
+  generate(
     @UserId() uid: string,
     @Body('topic') topic: string,
     @Body('notes') notes?: string,
   ) {
-    this.logger.log(`POST /concepts/generate — uid=${uid} topic="${topic}" notes=${notes ? `"${notes.slice(0, 80)}…"` : 'none'}`);
-    const result = await this.conceptsService.generate(uid, topic, notes);
-    await this.conceptsService.enroll(uid, result.id);
-    this.logger.log(`POST /concepts/generate — done, id=${result.id}`);
-    return result;
+    this.logger.log(`POST /concepts/generate — uid=${uid} topic="${topic}" (async)`);
+    this.conceptsService.generate(uid, topic, notes)
+      .then(result => this.conceptsService.enroll(uid, result.id)
+        .then(() => this.logger.log(`POST /concepts/generate — done, id=${result.id}`))
+      )
+      .catch(err => this.logger.error(`POST /concepts/generate — failed for uid=${uid} topic="${topic}"`, err));
+    return { status: 'generating' };
   }
 
   /**

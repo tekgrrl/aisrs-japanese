@@ -46,7 +46,7 @@ You MUST return a valid JSON object matching this schema exactly:
   "data": {
     "title": "<Human-readable title>",
     "reading": "<Kana reading of the core concept — e.g. 'まい' for 枚, 'をおねがいします' for ～をお願いします. Omit if the title contains no kanji or kana that need a reading.>",
-    "overview": "<Two-sentence maximum introduction>",
+    "overview": "<Multi-sentence introduction, soft maximum is four sentence but you can use more for more complex concepts>",
     "mechanics": [
       {
         "goalTitle": "<Action-oriented title, e.g. Describe a noun using a habitual or future action>",
