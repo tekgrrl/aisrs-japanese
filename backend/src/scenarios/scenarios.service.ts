@@ -18,6 +18,8 @@ import { ALLOWED_USER_ROLES, ALLOWED_AI_ROLES, buildArchitectPrompt, buildChatSy
 
 import { ScenarioTemplate, SCENARIO_TEMPLATES } from './templates';
 
+const VOCAB_READY_MIN_STAGE = 1;
+
 @Injectable()
 export class ScenariosService {
   private readonly logger = new Logger(ScenariosService.name);
@@ -515,6 +517,22 @@ export class ScenariosService {
     this.logger.log(`AI Role: ${aiRole}, User Role: ${userRole}`);
 
     return { aiRole, userRole };
+  }
+
+  async checkAndSetVocabReady(uid: string, scenarioId: string): Promise<void> {
+    const scenario = await this.getScenario(uid, scenarioId);
+    if (!scenario || scenario.state !== 'drill' || scenario.vocabReady === true) return;
+
+    const linkedKuIds = scenario.extractedKUs.filter(ku => ku.kuId).map(ku => ku.kuId!);
+    if (linkedKuIds.length === 0) return;
+
+    const kuStatus = await this.getKuStatus(uid, scenarioId);
+    const allReady = linkedKuIds.every(kuId => (kuStatus[kuId]?.minSrsStage ?? -1) >= VOCAB_READY_MIN_STAGE);
+
+    if (allReady) {
+      await this.scenariosColRef(uid).doc(scenarioId).update({ vocabReady: true });
+      this.logger.log(`Set vocabReady=true for scenario ${scenarioId} uid=${uid}`);
+    }
   }
 
   async getKuStatus(uid: string, scenarioId: string): Promise<Record<string, { maxSrsStage: number | null; minSrsStage: number | null }>> {

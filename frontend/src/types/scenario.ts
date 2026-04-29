@@ -107,6 +107,7 @@ export interface Scenario {
 
   progress?: Record<string, LevelProgress>;
   currentLevelStatus?: ProgressStatus;
+  vocabReady?: boolean;
 }
 
 export interface ScenarioTemplate {

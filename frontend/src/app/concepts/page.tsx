@@ -22,6 +22,7 @@ export default function ConceptsDashboard() {
   const [notes, setNotes] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [generateError, setGenerateError] = useState<string | null>(null);
+  const [generatePending, setGeneratePending] = useState(false);
 
   // Recent activity state
   const [recentConcepts, setRecentConcepts] = useState<UserConceptEntry[]>([]);
@@ -39,6 +40,7 @@ export default function ConceptsDashboard() {
     e.preventDefault();
     setIsGenerating(true);
     setGenerateError(null);
+    setGeneratePending(false);
 
     try {
       const res = await apiFetch("/api/concepts/generate", {
@@ -47,12 +49,19 @@ export default function ConceptsDashboard() {
         body: JSON.stringify({ topic: topic.trim(), notes: notes.trim() || undefined }),
       });
 
+      if (res.status === 202) {
+        setTopic("");
+        setNotes("");
+        setGeneratePending(true);
+        return;
+      }
+
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Generation failed");
-
       router.push(`/concepts/${data.id}`);
     } catch (err) {
-      setGenerateError(err instanceof Error ? err.message : "An unknown error occurred");
+      setGenerateError(err instanceof Error ? err.message : "Generation failed — please try again");
+    } finally {
       setIsGenerating(false);
     }
   };
@@ -107,6 +116,11 @@ export default function ConceptsDashboard() {
             />
           </div>
 
+          {generatePending && (
+            <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-4 py-3">
+              Your concept is being generated — check <a href="/concepts/library" className="underline font-medium">My Concepts</a> in a couple of minutes.
+            </p>
+          )}
           {generateError && (
             <p className="text-sm text-shodo-accent">{generateError}</p>
           )}
