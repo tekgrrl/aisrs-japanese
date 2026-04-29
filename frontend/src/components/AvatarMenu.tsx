@@ -4,11 +4,18 @@ import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { useAuth } from "@/providers/AuthProvider";
 import { UserAvatar } from "./UserAvatar";
+import { applyFurigana, loadFurigana } from "@/lib/furigana";
+import { apiFetch } from "@/lib/api-client";
 
 export function AvatarMenu() {
   const { user, signOut } = useAuth();
   const [open, setOpen] = useState(false);
+  const [showFurigana, setShowFurigana] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setShowFurigana(loadFurigana());
+  }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -22,6 +29,17 @@ export function AvatarMenu() {
   }, [open]);
 
   if (!user?.email) return null;
+
+  const handleToggleFurigana = () => {
+    const next = !showFurigana;
+    setShowFurigana(next);
+    applyFurigana(next);
+    apiFetch("/api/users/me/preferences", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ showFurigana: next }),
+    }).catch(() => {});
+  };
 
   const handleSignOut = async () => {
     setOpen(false);
@@ -53,6 +71,20 @@ export function AvatarMenu() {
           >
             Profile &amp; Settings
           </Link>
+
+          <button
+            onClick={handleToggleFurigana}
+            className="flex w-full items-center justify-between px-3 py-2 text-sm text-shodo-ink hover:bg-shodo-ink/5 transition-colors"
+          >
+            <span>Furigana</span>
+            <span
+              role="switch"
+              aria-checked={showFurigana}
+              className={`relative ml-3 w-8 h-4 rounded-full shrink-0 transition-colors duration-200 ${showFurigana ? "bg-shodo-ink" : "bg-shodo-ink/20"}`}
+            >
+              <span className={`absolute top-0.5 w-3 h-3 rounded-full bg-shodo-paper shadow-sm transition-all duration-200 ${showFurigana ? "left-4" : "left-0.5"}`} />
+            </span>
+          </button>
 
           <div className="h-px bg-shodo-ink/10 my-1" />
 

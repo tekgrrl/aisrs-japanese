@@ -276,6 +276,12 @@ The following work is required to complete proper multi-user support. Each item 
 
 Rank nominally 0–100 but is not hard-clamped; `>= 30` is the only gate used in queries.
 
+### Concept KU routing
+
+Before falling through to `generateVocabQuestion`, `generateAndSave` checks whether the `kuId` belongs to a Concept. It first tries `knowledgeUnitsService.findOne` (in case a Concept-typed KU ever lands in `knowledge-units`), then falls back to a direct Firestore read of the `concepts` collection — because `ConceptsService.createFacets` sets `kuId = conceptId`, pointing into `concepts` not `knowledge-units`. If the document exists and has mechanics, a random mechanic is picked and `generateConceptQuestion` is called. Only after both lookups fail does execution fall through to the vocab path.
+
+Concept questions: `buildConceptQuestionPrompt` enforces that the `question` field is written entirely in English; any Japanese sentence shown to the user is embedded as a quoted string within the English instruction.
+
 ### Verb vs noun question type branching
 
 `generateVocabQuestion` inspects `meaning` (fetched from the KU) before picking a question type:
@@ -321,9 +327,13 @@ Written in `ScenariosService.writeProgressUpdate` (called from the `advanceState
 | 3–4 | "Good Effort!" (amber) | Study notes again, come back aiming for 5 stars |
 | 5 | "Mission Complete!" (green) | Try next JLPT level from the scenario library |
 
-### `vocabReady` flag (planned)
+### `vocabReady` flag
 
-Once all vocab KUs linked to a `drill`-state scenario have `minSrsStage >= 1`, a `vocabReady: true` flag should be written to the scenario document. Trigger: `ReviewsService` SRS update — look up the UKU's `source.type === 'scenario'` to find the scenario, run `getKuStatus`, write the flag if all pass. Needed for dashboard queries like "scenarios ready to start roleplay".
+Once all vocab KUs linked to a `drill`-state scenario have `minSrsStage >= 1`, `vocabReady: true` is written to the scenario document.
+
+Trigger: post-transaction block in `ReviewsService.updateFacetSrs` — after a successful SRS stage increment, looks up the UKU by `kuId`; if `uku.source.type === 'scenario'`, calls `ScenariosService.checkAndSetVocabReady(uid, scenarioId)`. That method early-exits if already `true` or `state !== 'drill'`, then uses `getKuStatus` to check all linked KU facets. Errors are caught and logged (non-blocking). Constant `VOCAB_READY_MIN_STAGE = 1` in `scenarios.service.ts`.
+
+Intended use: dashboard queries such as `where('state','==','drill').where('vocabReady','==',true)`. Requires a Firestore composite index on `users/{uid}/scenarios`.
 
 ---
 
@@ -421,7 +431,7 @@ Previously, the Next.js `frontend` app hosted Next API Routes (`/src/app/api/...
 **UI overhaul — profile, avatar, nav restructure (2026-04)**
 
 - Added `frontend/src/components/UserAvatar.tsx` — initials-based avatar circle with deterministic colour derived from email hash.
-- Added `frontend/src/components/AvatarMenu.tsx` — avatar button on the far right of the header that opens a dropdown containing Profile & Settings, Library, Manage, and Sign Out. Manage and Library links removed from the main nav row.
+- Added `frontend/src/components/AvatarMenu.tsx` — avatar button on the far right of the header that opens a dropdown containing Profile & Settings, furigana toggle, Library, Manage, and Sign Out. Manage and Library links removed from the main nav row. The furigana toggle is a pill switch that calls `applyFurigana` + `PATCH /api/users/me/preferences` without closing the menu.
 - Added `frontend/src/app/profile/page.tsx` — user profile page showing avatar, email, and a Furigana toggle that persists to the backend.
 - Added `frontend/src/lib/furigana.ts` — shared `applyFurigana` / `loadFurigana` utilities (previously duplicated inline in `Header.tsx`).
 - `Header.tsx` restructured: furigana toggle removed from header bar (Alt+F shortcut retained, now also PATCHes the backend); Concepts link added between Scenarios and the avatar.
@@ -432,8 +442,9 @@ Previously, the Next.js `frontend` app hosted Next API Routes (`/src/app/api/...
 - New `ConceptKnowledgeUnit` type — fully typed `data` shape replacing the previous `[key: string]: any` open bag:
   - `title`, `overview` (≤ 2 sentences, no English grammar meta-language)
   - `mechanics[]` — intent-driven entries with `goalTitle`, `englishIntent`, `rule`, `simpleExample` (fragment + literal translation + `highlight`), `naturalExample` (full sentence embedding the fragment + `highlight`)
-  - `examples[]` — exactly 3 practical sentences with `japanese`, `reading`, `english`, `targetGrammar`
+  - `examples[]` — exactly 3 practical sentences with `japanese` (bracket-notation furigana e.g. `彼[かれ]は学生[がくせい]です`), `english`, `targetGrammar` (plain text, no brackets); `reading` field deprecated/optional for backward compat.
   - `highlight` fields use the same verbatim-substring contract as `targetGrammar` and drive bold + dotted-underline rendering in the mechanics cards.
+  - `examples` rendered in `concepts/[id]/page.tsx` via `furiganaHighlight` — position-maps plain-text `targetGrammar` into the bracket-notation `japanese` string, then renders each segment through `FuriganaText` with the matched segment wrapped in `<mark>`. Furigana show/hide respects the global `html[data-furigana]` toggle.
 - `backend/src/concepts/` module added: `ConceptsService` (generate / findById / findAll), `ConceptsController` (`POST /api/concepts/generate`, `GET /api/concepts`, `GET /api/concepts/:id`), `ConceptsModule` (imports `GeminiModule`).
 - `CONCEPTS_COLLECTION = 'concepts'` added to `firebase.module.ts`.
 - `GeminiService.generateConcept` added — mirrors `generateLesson` pattern (api-log start/complete, defensive JSON extraction) but uses `this.conceptModelName` sourced from `GEMINI_MODEL` env var, falling back to `this.modelName`. Logs startup line `Using Gemini concept model: …`.

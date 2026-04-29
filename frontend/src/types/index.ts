@@ -350,7 +350,7 @@ export interface ConceptKnowledgeUnit extends KnowledgeUnitBase {
     }>;
     examples: Array<{
       japanese: string;
-      reading: string;
+      reading?: string;
       english: string;
       targetGrammar: string;
     }>;

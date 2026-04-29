@@ -1,9 +1,10 @@
 "use client";
 
-import { Fragment, useEffect, useState } from "react";
+import React, { Fragment, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api-client";
 import { ConceptKnowledgeUnit } from "@/types";
+import { FuriganaText } from "@/components/FuriganaText";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -27,21 +28,39 @@ function highlightClause(text: string, target: string) {
   );
 }
 
-function highlightGrammar(text: string, target: string) {
-  const parts = text.split(target);
-  if (parts.length === 1) return <span>{text}</span>;
+function furiganaHighlight(text: string, target: string): React.ReactNode {
+  if (!target) return <FuriganaText text={text} />;
+
+  // Strip [reading] annotations to locate the plain-text target
+  const stripped = text.replace(/\[[^\]]+\]/g, '');
+  const idx = stripped.indexOf(target);
+  if (idx === -1) return <FuriganaText text={text} />;
+
+  // Build a map: stripped-text index → original-string index
+  const strippedToOrig: number[] = [];
+  let si = 0;
+  let inBracket = false;
+  for (let i = 0; i < text.length; i++) {
+    if (text[i] === '[') { inBracket = true; continue; }
+    if (text[i] === ']') { inBracket = false; continue; }
+    if (!inBracket) strippedToOrig[si++] = i;
+  }
+
+  const origStart = strippedToOrig[idx];
+  let origEnd = strippedToOrig[idx + target.length - 1] + 1;
+  // Include any [reading] bracket that immediately follows the last target character
+  if (origEnd < text.length && text[origEnd] === '[') {
+    const close = text.indexOf(']', origEnd);
+    if (close !== -1) origEnd = close + 1;
+  }
+
   return (
     <>
-      {parts.map((part, i) => (
-        <Fragment key={i}>
-          {part}
-          {i < parts.length - 1 && (
-            <mark className="bg-shodo-accent/15 text-shodo-accent rounded px-0.5 not-italic">
-              {target}
-            </mark>
-          )}
-        </Fragment>
-      ))}
+      <FuriganaText text={text.slice(0, origStart)} />
+      <mark className="bg-shodo-accent/15 text-shodo-accent rounded px-0.5 not-italic">
+        <FuriganaText text={text.slice(origStart, origEnd)} />
+      </mark>
+      <FuriganaText text={text.slice(origEnd)} />
     </>
   );
 }
@@ -194,9 +213,8 @@ export default function ConceptPage() {
           {data.examples.map((ex, i) => (
             <div key={i} className="border border-shodo-ink/10 rounded-xl px-6 py-5 space-y-2">
               <p className="text-2xl text-shodo-ink leading-snug">
-                {highlightGrammar(ex.japanese, ex.targetGrammar)}
+                {furiganaHighlight(ex.japanese, ex.targetGrammar)}
               </p>
-              <p className="text-sm text-shodo-ink/45 leading-snug">{ex.reading}</p>
               <p className="text-sm text-shodo-ink/65 border-t border-shodo-ink/8 pt-2 mt-2">{ex.english}</p>
             </div>
           ))}
