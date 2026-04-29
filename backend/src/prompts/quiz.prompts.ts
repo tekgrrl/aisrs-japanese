@@ -174,10 +174,11 @@ You MUST return ONLY a valid JSON object with the following schema:
 
 Rules:
 1. The answer MUST require the user to apply the provided Structural Rule.
-2. ${NO_ROMAJI}
-3. For 'applied-cloze', the blank must encapsulate the conjugated rule (e.g., if the rule is modifying a noun, the blank should ideally be the modifier clause).
-4. Use standard, N4/N5 level vocabulary for the surrounding sentence so the user focuses strictly on the grammar mechanic.
-5. ${JSON_ONLY_OUTPUT}`;
+2. The 'question' field MUST be written entirely in English. Any Japanese sentence being shown to the user (e.g. an error-correction sentence) must be embedded inline as a quoted string within the English question text — never write the instruction itself in Japanese.
+3. ${NO_ROMAJI}
+4. For 'applied-cloze', the blank must encapsulate the conjugated rule (e.g., if the rule is modifying a noun, the blank should ideally be the modifier clause).
+5. Use standard, N4/N5 level vocabulary for the surrounding sentence so the user focuses strictly on the grammar mechanic.
+6. ${JSON_ONLY_OUTPUT}`;
 }
 
 // ---------------------------------------------------------------------------

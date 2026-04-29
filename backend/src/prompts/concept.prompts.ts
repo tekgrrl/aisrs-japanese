@@ -30,7 +30,9 @@ Write for an English-speaking learner at any level. Use Japanese text for all ex
 
 3. 'examples': Provide exactly 3 practical, everyday example sentences covering the concept. No more, no less.
 
-4. 'targetGrammar': The specific Japanese substring in the example sentence that directly represents the concept. Must appear verbatim inside the 'japanese' string.
+4. 'japanese': Write the sentence with furigana in bracket notation — attach the reading in square brackets immediately after each kanji or kanji compound, e.g. 彼[かれ]は学生[がくせい]です。 Pure kana and punctuation need no brackets.
+
+5. 'targetGrammar': The specific Japanese substring that represents the grammar concept, written as plain Japanese text (no furigana brackets). It must appear verbatim in the plain text of 'japanese' after stripping all bracket annotations.
 
 **Constraints:**
 - ${USER_TARGET_LEVEL}
@@ -41,7 +43,7 @@ Write for an English-speaking learner at any level. Use Japanese text for all ex
 You MUST return a valid JSON object matching this schema exactly:
 {
   "type": "Concept",
-  "content": "<slug — lowercase, hyphens, e.g. relative-clauses>",
+  "content": "The topic being introduced.",
   "relatedUnits": [],
   "data": {
     "title": "<Human-readable title>",
@@ -68,10 +70,9 @@ You MUST return a valid JSON object matching this schema exactly:
     ],
     "examples": [
       {
-        "japanese": "<Full Japanese sentence>",
-        "reading": "<Full reading in hiragana/katakana, space-separated by word>",
+        "japanese": "<Full Japanese sentence with furigana in bracket notation, e.g. 彼[かれ]は学生[がくせい]ではありません。>",
         "english": "<Natural English translation>",
-        "targetGrammar": "<Specific substring that represents the concept — must appear verbatim in japanese>"
+        "targetGrammar": "<Plain-text substring representing the concept — must appear verbatim in japanese after stripping bracket annotations>"
       }
     ]
   }

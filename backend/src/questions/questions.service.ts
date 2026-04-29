@@ -4,6 +4,7 @@ import {
   FIRESTORE_CONNECTION,
   QUESTIONS_COLLECTION,
   QUESTION_STATES_SUBCOLLECTION,
+  CONCEPTS_COLLECTION,
   Timestamp,
   FieldValue,
 } from '../firebase/firebase.module';
@@ -158,6 +159,32 @@ export class QuestionsService {
     if (mechanicData) {
       return this.generateConceptQuestion(uid, mechanicData, kuId, facetId);
     }
+
+    if (kuId) {
+      // Check knowledge-units collection first
+      try {
+        const kuData = await this.knowledgeUnitsService.findOne(kuId);
+        if (kuData.type === 'Concept' && kuData.data.mechanics?.length > 0) {
+          const mechanic = kuData.data.mechanics[Math.floor(Math.random() * kuData.data.mechanics.length)];
+          this.logger.log(`Routing concept KU ${kuId} to concept question path (mechanic: "${mechanic.goalTitle}")`);
+          return this.generateConceptQuestion(uid, mechanic, kuId, facetId);
+        }
+      } catch {
+        // Not in knowledge-units — try the concepts collection
+      }
+
+      // Concept KUs live in their own collection
+      const conceptDoc = await this.db.collection(CONCEPTS_COLLECTION).doc(kuId).get();
+      if (conceptDoc.exists) {
+        const concept = conceptDoc.data() as ConceptKnowledgeUnit;
+        if (concept.data?.mechanics?.length > 0) {
+          const mechanic = concept.data.mechanics[Math.floor(Math.random() * concept.data.mechanics.length)];
+          this.logger.log(`Routing concepts/${kuId} to concept question path (mechanic: "${mechanic.goalTitle}")`);
+          return this.generateConceptQuestion(uid, mechanic, kuId, facetId);
+        }
+      }
+    }
+
     return this.generateVocabQuestion(uid, topic, kuId, facetId);
   }
 
