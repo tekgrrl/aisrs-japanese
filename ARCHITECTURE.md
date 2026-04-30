@@ -506,6 +506,27 @@ Library page (`/learn`): Kanji items now show `data.meaning` in the hint column 
 
 ---
 
+**Manage page — Search & Enroll + Import Scenario (2026-04-30)**
+
+- **KU Search endpoint**: `GET /api/knowledge-units/search?q=` — Firestore prefix range query (`.where('content', '>=', q).where('content', '<=', q + '').limit(15)`). Guard on `data.createdAt` before calling `.toDate()` — WaniKani bulk-imported docs have no `createdAt` field.
+- **KU create find-or-create**: `KnowledgeUnitsController.create` now calls `findByContent` first; if found, links the user's UKU to the existing global KU and returns `{ id, isNew: false }`. No duplicate global KUs created.
+- **Manage page Search & Enroll section** (`frontend/src/app/manage/page.tsx`): debounced (300ms) search input, result list with per-item "Add"/"In queue" state, dedup against enrolled KUs.
+- **Import Scenario**: `POST /api/scenarios/import` — `ImportScenarioDto`: `conversationText`, `userRole`, `aiRoles?: string[]` (or legacy `aiRole?: string`), `difficulty?`, `sceneNotes?`. AI preserves Japanese verbatim, maps speaker labels to role names, extracts vocab + grammar. Stored with `sourceType: 'custom'`. New page at `/manage/scenarios`.
+- **`buildImportPrompt`** in `backend/src/prompts/scenario.prompts.ts` — instructs AI to preserve Japanese verbatim, map speaker labels to role names, infer setting, return same JSON schema as `buildArchitectPrompt`. Multi-role aware.
+
+**Three-role scenario support (2026-04-30)**
+
+- `Scenario.roles.ai: string | string[]` in both type files — existing single-string docs work without change.
+- `ChatMessage.roleName?: string` — set from `speaker` in Gemini's JSON response. Frontend chat bubble shows the actual character name instead of "ai". Falls back to `scenario.roles?.ai` (first element if array) for old messages.
+- `buildChatSystemPrompt` accepts `aiRoles: string | string[]`. Tells the AI which characters it plays; for multiple roles adds instruction to respond as ONE character per turn and always set `speaker` to the exact role name.
+- `buildImportPrompt` accepts `aiRoles: string[]`. Generates correct `participants` list and `roles.ai` as string (single) or array (multiple) in the output JSON.
+- `getInitialChatHistory` — fixed to prefer `scenario.roles` over `determineRoles` fallback; checks first dialogue speaker against all AI roles (array).
+- `generateEvaluation` — normalises `roles.ai` to string (`join(', ')`) for the evaluation context passed to Gemini.
+- Import form — "Other Role" input is now a dynamic list; "Add another role" link appends a new row; `×` removes. Sends `aiRoles: string[]`.
+- Gemini chat response schema already had `speaker: STRING` — now used to populate `ChatMessage.roleName`.
+
+---
+
 - **Firebase Console prerequisites** for project `gen-lang-client-0878434798`:
   1. Authentication → Sign-in method → **Email/Password** enabled.
   2. Authentication → Sign-in method → **Email link (passwordless sign-in)** enabled (sub-toggle under Email/Password).

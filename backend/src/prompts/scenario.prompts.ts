@@ -3,7 +3,7 @@
  * Source: backend/src/scenarios/scenarios.service.ts
  */
 
-import { GenerateScenarioDto, Scenario } from '../types/scenario';
+import { GenerateScenarioDto, ImportScenarioDto, Scenario } from '../types/scenario';
 import { FRAGMENT_CONTRACT, ACCEPTED_ALTERNATIVES_DEF } from './fragments';
 
 // ---------------------------------------------------------------------------
@@ -135,17 +135,21 @@ ${dto.userRole && dto.aiRole
  */
 export function buildChatSystemPrompt(
   scenario: Scenario,
-  aiRole: string,
+  aiRoles: string | string[],
   userRole: string,
   referenceScript: string,
   historyLines: string,
 ): string {
+  const rolesArray = Array.isArray(aiRoles) ? aiRoles : [aiRoles];
+  const multiRole = rolesArray.length > 1;
+  const roleLabel = multiRole ? rolesArray.join(', ') : rolesArray[0];
+
   return `
       You are a roleplay partner in a Japanese immersion scenario.
       **Scenario Context:**
       - Title: ${scenario.title}
       - Setting: ${scenario.setting.location}
-      - Your Role: ${aiRole}
+      - Your Role(s): ${roleLabel}
       - User Role: ${userRole}
       - Goal: ${scenario.setting.goal}
       - Difficulty: ${scenario.difficultyLevel}
@@ -157,9 +161,9 @@ export function buildChatSystemPrompt(
       ${historyLines}
 
       **INSTRUCTIONS:**
-      1. You are acting out the role of ${aiRole}.
+      1. You are acting out the role(s) of ${roleLabel}.${multiRole ? `\n      1a. Each response should come from ONE character. Pick the most appropriate character to respond based on context and the reference script.` : ''}
       2. Use the 'REFERENCE SCRIPT' as your guide for the conversation flow.
-      3. You must ensure key events/questions from the script occur (e.g., if the script has the shopkeeper ask for a passport, YOU must ask for the passport).
+      3. You must ensure key events/questions from the script occur.
       4. Speak ONLY in Japanese appropriate for the setting and your role.
       5. Engage the user to help them achieve the goal.
       6. Do NOT repeat greetings if they have already been said (check 'PREVIOUS CHAT HISTORY').
@@ -168,5 +172,87 @@ export function buildChatSystemPrompt(
       9. If the user makes a mistake (grammar/vocab), reply naturally but include a short "correction" in the JSON.
       10. Keep responses concise (1-2 sentences).
       11. CHECK GOAL: If the user has explicitly and successfully achieved the goal ("${scenario.setting.goal}") during this turn, set 'sceneFinished' to true in your JSON response. Otherwise false.
+      12. Set 'speaker' in your JSON response to the exact role name of the character speaking (one of: ${rolesArray.join(', ')}).
     `;
+}
+
+// ---------------------------------------------------------------------------
+// Manual conversation import prompt
+// ---------------------------------------------------------------------------
+
+/**
+ * Builds the prompt for structuring a user-provided conversation into a scenario.
+ * Preserves the original Japanese verbatim — no corrections or rewrites.
+ */
+export function buildImportPrompt(dto: ImportScenarioDto): string {
+  const aiRoles = dto.aiRoles ?? (dto.aiRole ? [dto.aiRole] : []);
+  const aiRoleList = aiRoles.join(', ');
+  const participantList = [dto.userRole, ...aiRoles].map(r => `"${r}"`).join(', ');
+  const aiRolesJson = aiRoles.length === 1 ? `"${aiRoles[0]}"` : JSON.stringify(aiRoles);
+
+  return `You are a Japanese language curriculum assistant.
+A learner has provided a conversation they want to practice. Structure it as a learning scenario.
+
+**Provided Conversation:**
+${dto.conversationText}
+
+**Parameters:**
+- Learner's Role: ${dto.userRole}
+- Partner Role(s): ${aiRoleList}
+- Target Level: ${dto.difficulty ?? 'N4'}${dto.sceneNotes ? `\n- Scene Context: ${dto.sceneNotes}` : ''}
+
+**Instructions:**
+1. **Dialogue:** Parse the conversation into structured lines.
+   - PRESERVE the original Japanese text VERBATIM — do NOT change, correct, or rewrite any Japanese.
+   - Identify which lines belong to "${dto.userRole}" and which to the partner role(s) (${aiRoleList}). Use these exact names as the speaker field.
+   - If there are multiple partner roles, assign each line to the most appropriate one based on the conversation context.
+   - If the conversation uses labels (A/B, names, numbers), map them to the correct role.
+   - Add an accurate English translation for each line.
+2. **Setting:** Infer location, participants, goal, timeOfDay, and visualPrompt from the conversation.${dto.sceneNotes ? ' Use the provided scene context as your primary guide.' : ''}
+3. **Vocabulary:** Extract 3-8 key vocabulary items the learner needs to participate in this conversation.
+4. **Grammar Notes:** Identify 1-3 grammar patterns used in the conversation and explain them Genki-style.
+5. **Title & Description:** Write a short English title and description for this scenario.
+
+**Data Formatting Rules:**
+- \`title\`, \`description\`, and all \`setting\` fields in English.
+- NO ROMAJI anywhere.
+- Extracted KUs: \`content\` = Japanese only, \`reading\` = kana only, \`meaning\` = English definition, \`jlptLevel\` = one of N5/N4/N3/N2/N1.
+- Grammar note fragments: ${FRAGMENT_CONTRACT}
+- ${ACCEPTED_ALTERNATIVES_DEF}
+
+**Output Schema (Return ONLY raw JSON):**
+{
+  "title": "Scenario Title",
+  "description": "Brief English context",
+  "setting": {
+    "location": "Specific location",
+    "participants": [${participantList}],
+    "goal": "What the learner needs to achieve",
+    "timeOfDay": "Morning/Afternoon/Evening/etc",
+    "visualPrompt": "Detailed visual description of the scene"
+  },
+  "roles": {
+    "user": "${dto.userRole}",
+    "ai": ${aiRolesJson}
+  },
+  "dialogue": [
+    { "speaker": "EXACT_ROLE_NAME", "text": "Japanese text verbatim", "translation": "English translation" }
+  ],
+  "extractedKUs": [
+    { "content": "本屋", "reading": "ほんや", "meaning": "Bookstore", "type": "vocab", "jlptLevel": "N4" }
+  ],
+  "grammarNotes": [
+    {
+      "pattern": "～をお願いします",
+      "title": "Grammar Point Name",
+      "explanation": "Clear explanation",
+      "exampleInContext": {
+        "japanese": "Example sentence from the conversation",
+        "english": "English translation",
+        "fragments": ["minimal", "chunks"],
+        "accepted_alternatives": []
+      }
+    }
+  ]
+}`;
 }

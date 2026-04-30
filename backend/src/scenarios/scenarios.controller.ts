@@ -12,7 +12,7 @@ import {
   UseGuards
 } from '@nestjs/common';
 import { ScenariosService } from './scenarios.service';
-import { GenerateScenarioDto, ChatTurnDto, ResetSessionDto } from '../types/scenario';
+import { GenerateScenarioDto, ImportScenarioDto, ChatTurnDto, ResetSessionDto } from '../types/scenario';
 import { FirebaseAuthGuard } from '../auth/firebase-auth.guard';
 import { UserId } from '../auth/user-id.decorator';
 import { ALLOWED_USER_ROLES, ALLOWED_AI_ROLES } from '../prompts/scenario.prompts';
@@ -35,8 +35,16 @@ export class ScenariosController {
   @Post('generate')
   async generateScenario(@UserId() uid: string, @Body() dto: GenerateScenarioDto) {
     const id = await this.scenariosService.generateScenario(uid, dto);
+    return { id };
+  }
 
-    // FIX: Must return an object, not a raw string, so the frontend can parse it as JSON
+  @Post('import')
+  async importScenario(@UserId() uid: string, @Body() dto: ImportScenarioDto) {
+    const hasAiRole = dto.aiRole || (dto.aiRoles && dto.aiRoles.length > 0);
+    if (!dto.conversationText || !dto.userRole || !hasAiRole) {
+      throw new BadRequestException('conversationText, userRole, and at least one aiRole are required');
+    }
+    const id = await this.scenariosService.importScenario(uid, dto);
     return { id };
   }
 

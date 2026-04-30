@@ -391,7 +391,7 @@ export default function ScenarioPage({
                       }`}
                     >
                       <div className="font-bold text-xs opacity-70 mb-1">
-                        {msg.speaker}
+                        {msg.speaker === "user" ? (scenario.roles?.user ?? "You") : (msg.roleName ?? (Array.isArray(scenario.roles?.ai) ? scenario.roles.ai[0] : scenario.roles?.ai) ?? "AI")}
                       </div>
                       {msg.text}
                     </div>
@@ -686,7 +686,7 @@ export default function ScenarioPage({
                   }`}
                 >
                   <div className="text-xs opacity-70 mb-1 flex items-center gap-2">
-                    <span>{msg.speaker}</span>
+                    <span>{msg.speaker === "user" ? (scenario.roles?.user ?? "You") : (msg.roleName ?? (Array.isArray(scenario.roles?.ai) ? scenario.roles.ai[0] : scenario.roles?.ai) ?? "AI")}</span>
                     {msg.speaker !== "user" && (
                       <button
                         onClick={() => playTts(msg.text)}

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, FormEvent } from "react";
+import React, { useState, useEffect, useRef, FormEvent } from "react";
 import { KnowledgeUnit, ReviewFacet } from "@/types";
 import Link from "next/link";
 import EditKnowledgeUnitModal from "@/components/EditKnowledgeUnitModal";
@@ -36,6 +36,13 @@ export default function KnowledgeManagementPage() {
   // --- Edit Modal State ---
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingKu, setEditingKu] = useState<KnowledgeUnit | null>(null);
+
+  // --- Search & Enroll State ---
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<KnowledgeUnit[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [enrollingId, setEnrollingId] = useState<string | null>(null);
+  const searchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // --- VALIDATION ---
   // Derived state to determine if the form is valid.
@@ -171,6 +178,40 @@ export default function KnowledgeManagementPage() {
     }
   };
 
+  // --- Search & Enroll Handlers ---
+  const handleSearchChange = (q: string) => {
+    setSearchQuery(q);
+    if (searchDebounce.current) clearTimeout(searchDebounce.current);
+    if (!q.trim()) { setSearchResults([]); return; }
+    searchDebounce.current = setTimeout(async () => {
+      setSearchLoading(true);
+      try {
+        const res = await apiFetch(`/api/knowledge-units/search?q=${encodeURIComponent(q.trim())}`);
+        if (res.ok) setSearchResults(await res.json());
+      } finally {
+        setSearchLoading(false);
+      }
+    }, 300);
+  };
+
+  const handleEnroll = async (ku: KnowledgeUnit) => {
+    setEnrollingId(ku.id);
+    try {
+      const res = await apiFetch("/api/knowledge-units", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: ku.type, content: ku.content }),
+      });
+      if (!res.ok) throw new Error();
+      await fetchData();
+      window.dispatchEvent(new CustomEvent("refreshStats"));
+    } catch {
+      setError("Failed to add unit — please try again.");
+    } finally {
+      setEnrollingId(null);
+    }
+  };
+
   // --- Render Logic ---
   const renderKuList = () => {
     if (isLoading) {
@@ -272,9 +313,17 @@ export default function KnowledgeManagementPage() {
 
   return (
     <main className="container mx-auto max-w-4xl p-8">
-      <header className="mb-8">
-        <h1 className="text-4xl font-bold text-white mb-2">Manage Knowledge</h1>
-        <p className="text-xl text-gray-400">Your personal knowledge graph.</p>
+      <header className="mb-8 flex items-start justify-between">
+        <div>
+          <h1 className="text-4xl font-bold text-white mb-2">Manage Knowledge</h1>
+          <p className="text-xl text-gray-400">Your personal knowledge graph.</p>
+        </div>
+        <Link
+          href="/manage/scenarios"
+          className="shrink-0 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm font-medium rounded-lg transition-colors"
+        >
+          Import Conversation →
+        </Link>
       </header>
 
       {/* Show form-level error messages here */}
@@ -463,6 +512,61 @@ export default function KnowledgeManagementPage() {
             Add Unit
           </button>
         </form>
+      </div>
+
+      {/* Search & Enroll */}
+      <div className="bg-gray-800 p-6 rounded-lg shadow-lg mb-8">
+        <h2 className="text-2xl font-semibold mb-4 text-white">Search Existing Vocab</h2>
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={(e) => handleSearchChange(e.target.value)}
+          placeholder="Type Japanese or kana to search the corpus…"
+          className="w-full p-3 bg-gray-700 border-gray-600 text-white rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 mb-3"
+        />
+
+        {searchLoading && (
+          <p className="text-sm text-gray-400 animate-pulse">Searching…</p>
+        )}
+
+        {!searchLoading && searchResults.length > 0 && (
+          <ul className="space-y-2">
+            {searchResults.map((result) => {
+              const alreadyEnrolled = kus.some((k) => k.id === result.id);
+              const isEnrolling = enrollingId === result.id;
+              const hint = result.type === "Vocab"
+                ? [result.data.reading, result.data.definition].filter(Boolean).join(" · ")
+                : result.type === "Kanji"
+                  ? result.data.meaning
+                  : (result.data as any).title ?? "";
+
+              return (
+                <li key={result.id} className="flex items-center justify-between gap-4 bg-gray-700 rounded-lg px-4 py-3">
+                  <div className="min-w-0">
+                    <span className="text-white font-semibold mr-2">{result.content}</span>
+                    <span className="text-xs font-mono bg-gray-600 text-gray-300 px-1.5 py-0.5 rounded mr-2">{result.type}</span>
+                    {hint && <span className="text-sm text-gray-400 truncate">{hint}</span>}
+                  </div>
+                  {alreadyEnrolled ? (
+                    <span className="text-xs text-green-400 shrink-0">In queue</span>
+                  ) : (
+                    <button
+                      onClick={() => handleEnroll(result)}
+                      disabled={isEnrolling}
+                      className="shrink-0 text-sm px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-500 text-white rounded transition-colors"
+                    >
+                      {isEnrolling ? "Adding…" : "Add"}
+                    </button>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+
+        {!searchLoading && searchQuery.trim() && searchResults.length === 0 && (
+          <p className="text-sm text-gray-500 italic">No results — use the form above to add a new unit.</p>
+        )}
       </div>
 
       {/* "Explore & Connect" (Journey 1.3) list */}

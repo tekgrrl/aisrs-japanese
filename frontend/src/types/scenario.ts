@@ -13,6 +13,7 @@ export interface ChatMessage {
   timestamp: number;
   correction?: string;
   sceneFinished?: boolean;
+  roleName?: string;
 }
 
 export interface ScenarioDialogueLine {
@@ -96,7 +97,7 @@ export interface Scenario {
 
   roles?: {
     user: string;
-    ai: string;
+    ai: string | string[];
   };
 
   sourceType?: 'library' | 'custom' | 'context-example';
@@ -127,7 +128,7 @@ export interface ScenarioTemplate {
   grammarNotes: GrammarNote[];
   roles?: {
     user: string;
-    ai: string;
+    ai: string | string[];
   };
 }
 

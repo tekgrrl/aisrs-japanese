@@ -77,6 +77,27 @@ export class KnowledgeUnitsService {
         } as unknown as KnowledgeUnit;
     }
 
+    async search(query: string): Promise<KnowledgeUnit[]> {
+        const snapshot = await this.db
+            .collection(KNOWLEDGE_UNITS_COLLECTION)
+            .where('content', '>=', query)
+            .where('content', '<=', query + '\uf8ff')
+            .orderBy('content')
+            .limit(15)
+            .get();
+
+        if (snapshot.empty) return [];
+
+        return snapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+                id: doc.id,
+                ...data,
+                createdAt: data.createdAt ? (data.createdAt as Timestamp).toDate().toISOString() : null,
+            } as unknown as KnowledgeUnit;
+        });
+    }
+
     async findByKanjiComponent(kanjiChar: string): Promise<KnowledgeUnit[]> {
         const snapshot = await this.db.collection(KNOWLEDGE_UNITS_COLLECTION)
             .where('type', '==', 'Vocab')

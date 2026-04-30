@@ -6,7 +6,7 @@ import {
   NotFoundException
 } from '@nestjs/common';
 import { Firestore, CollectionReference, Timestamp, FieldValue } from 'firebase-admin/firestore';
-import { Scenario, GenerateScenarioDto, ScenarioState, ExtractedKU, ChatMessage, ScenarioEvaluation, ScenarioAttempt, ProgressStatus, LevelProgress, Attempt } from '../types/scenario';
+import { Scenario, GenerateScenarioDto, ImportScenarioDto, ScenarioState, ExtractedKU, ChatMessage, ScenarioEvaluation, ScenarioAttempt, ProgressStatus, LevelProgress, Attempt } from '../types/scenario';
 import { KnowledgeUnitsService } from '../knowledge-units/knowledge-units.service';
 import { UserKnowledgeUnitsService } from '../user-knowledge-units/user-knowledge-units.service';
 import { LessonsService } from '../lessons/lessons.service';
@@ -14,7 +14,7 @@ import { UserService } from '../users/user.service';
 import { FIRESTORE_CONNECTION, SCENARIOS_COLLECTION, REVIEW_FACETS_COLLECTION } from '../firebase/firebase.module';
 import { ADMIN_USER_ID } from '../lib/constants';
 import { GeminiService } from '../gemini/gemini.service';
-import { ALLOWED_USER_ROLES, ALLOWED_AI_ROLES, buildArchitectPrompt, buildChatSystemPrompt } from '../prompts/scenario.prompts';
+import { ALLOWED_USER_ROLES, ALLOWED_AI_ROLES, buildArchitectPrompt, buildImportPrompt, buildChatSystemPrompt } from '../prompts/scenario.prompts';
 
 import { ScenarioTemplate, SCENARIO_TEMPLATES } from './templates';
 
@@ -150,6 +150,74 @@ export class ScenariosService {
     } catch (error) {
       this.logger.error('Scenario Generation Failed:', error);
       throw new InternalServerErrorException('Failed to generate scenario from AI', error);
+    }
+  }
+
+  async importScenario(uid: string, dto: ImportScenarioDto): Promise<string> {
+    const resolvedAiRoles = dto.aiRoles?.length ? dto.aiRoles : (dto.aiRole ? [dto.aiRole] : []);
+    if (!dto.conversationText?.trim() || !dto.userRole?.trim() || resolvedAiRoles.length === 0) {
+      throw new InternalServerErrorException('conversationText, userRole, and at least one aiRole are required');
+    }
+
+    const prompt = buildImportPrompt({
+      ...dto,
+      aiRoles: resolvedAiRoles,
+      difficulty: dto.difficulty ?? 'N4',
+    });
+
+    try {
+      const jsonString = await this.geminiService.generateScenario(prompt);
+      const data = JSON.parse(jsonString);
+
+      const docRef = this.scenariosColRef(uid).doc();
+      const id = docRef.id;
+
+      const cleanContent = (str: string) => str ? str.replace(/\(.*\)/g, '').replace(/（.*）/g, '').trim() : '';
+      const cleanMeaning = (str: string) => str ? str.replace(/^-/, '').trim() : '';
+
+      const newScenario: Scenario = {
+        id,
+        userId: uid,
+        title: data.title,
+        description: data.description,
+        difficultyLevel: dto.difficulty ?? 'N4',
+        setting: {
+          location: data.setting.location,
+          participants: data.setting.participants,
+          goal: data.setting.goal,
+          timeOfDay: data.setting.timeOfDay,
+          visualPrompt: data.setting.visualPrompt,
+        },
+        roles: data.roles,
+        dialogue: data.dialogue,
+        extractedKUs: data.extractedKUs.map((ku: any) => ({
+          content: cleanContent(ku.content),
+          reading: cleanContent(ku.reading),
+          meaning: cleanMeaning(ku.meaning),
+          type: 'vocab',
+          status: 'new',
+          jlptLevel: ku.jlptLevel ?? null,
+        })),
+        grammarNotes: data.grammarNotes,
+        state: 'encounter',
+        createdAt: Timestamp.now(),
+        chatHistory: [],
+        isObjectiveMet: false,
+        isActive: true,
+        sourceType: 'custom',
+      };
+
+      const cleanData = Object.fromEntries(
+        Object.entries(newScenario).filter(([_, value]) => value !== undefined)
+      );
+
+      await docRef.set(cleanData);
+      this.logger.log(`Imported scenario ${id} for uid=${uid}`);
+      return id;
+
+    } catch (error) {
+      this.logger.error('Scenario Import Failed:', error);
+      throw new InternalServerErrorException('Failed to import scenario', error);
     }
   }
 
@@ -324,16 +392,16 @@ export class ScenariosService {
     }
 
     let userRole = scenario.roles?.user;
-    let aiRole = scenario.roles?.ai;
+    let aiRoles: string | string[] | undefined = scenario.roles?.ai;
 
-    if (!userRole || !aiRole) {
+    if (!userRole || !aiRoles) {
       // Fallback for older scenarios that lack the 'roles' field
       const roles = this.determineRoles(scenario.setting.participants);
       userRole = roles.userRole;
-      aiRole = roles.aiRole;
+      aiRoles = roles.aiRole;
     }
 
-    const systemPrompt = buildChatSystemPrompt(scenario, aiRole, userRole, referenceScript, historyLines);
+    const systemPrompt = buildChatSystemPrompt(scenario, aiRoles, userRole, referenceScript, historyLines);
 
     // 3. Get AI Response
     const aiResponse = await this.geminiService.generateChatResponse(
@@ -353,6 +421,7 @@ export class ScenariosService {
       timestamp: Date.now(),
       correction: aiResponse.correction,
       sceneFinished: aiResponse.sceneFinished,
+      roleName: aiResponse.speaker || undefined,
     };
 
     // 5. Persist to Firestore (Atomic Update)
@@ -379,24 +448,38 @@ export class ScenariosService {
     if (!scenario.dialogue || scenario.dialogue.length === 0) return [];
 
     const firstLine = scenario.dialogue[0];
-    const { aiRole, userRole } = this.determineRoles(scenario.setting.participants);
 
+    let userRole: string;
+    let aiRolesRaw: string | string[];
+
+    if (scenario.roles?.user && scenario.roles?.ai) {
+      userRole = scenario.roles.user;
+      aiRolesRaw = scenario.roles.ai;
+    } else {
+      const roles = this.determineRoles(scenario.setting.participants);
+      userRole = roles.userRole;
+      aiRolesRaw = roles.aiRole;
+    }
+
+    const aiRoles = Array.isArray(aiRolesRaw) ? aiRolesRaw : [aiRolesRaw];
     const speaker = firstLine.speaker.toLowerCase();
-    const ai = aiRole.toLowerCase();
     const user = userRole.toLowerCase();
 
-    // Safety: If speaker matches User, definitely DO NOT seed.
     if (user.includes(speaker) || speaker.includes(user)) {
       return [];
     }
 
-    // If the first speaker IS the AI, seed the chat
-    // Fuzzy match: if "Teacher" is in "Teacher (Sensei)" or vice versa
-    if (ai.includes(speaker) || speaker.includes(ai)) {
+    const matchedAiRole = aiRoles.find(r => {
+      const ai = r.toLowerCase();
+      return ai.includes(speaker) || speaker.includes(ai);
+    });
+
+    if (matchedAiRole) {
       return [{
         speaker: 'ai',
         text: firstLine.text,
-        timestamp: Date.now()
+        timestamp: Date.now(),
+        roleName: matchedAiRole,
       }];
     }
 
@@ -416,13 +499,14 @@ export class ScenariosService {
     }
 
     // 2. Prepare Context for Gemini Service
+    const aiRoleStr = Array.isArray(aiRole) ? aiRole.join(', ') : aiRole;
     const context = {
       title: scenario.title,
       goal: scenario.setting.goal,
       difficulty: scenario.difficultyLevel,
       isObjectiveMet: scenario.isObjectiveMet ?? false,
       userRole,
-      aiRole
+      aiRole: aiRoleStr,
     };
 
     // 3. Prepare History (Map ChatMessage[] to simpler structure if needed, though interfaces align)
