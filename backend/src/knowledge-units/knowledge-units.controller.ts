@@ -35,6 +35,12 @@ export class KnowledgeUnitsController {
         return this.knowledgeUnitsService.update(id, body);
     }
 
+    @Get('search')
+    async search(@Query('q') q: string) {
+        if (!q || q.trim().length === 0) return [];
+        return this.knowledgeUnitsService.search(q.trim());
+    }
+
     @Get(':id')
     async findOne(@UserId() uid: string, @Param('id') id: string) {
         const ku = await this.knowledgeUnitsService.findOneById(id);
@@ -68,11 +74,29 @@ export class KnowledgeUnitsController {
     }
 
     @Post()
-    async create(@Body() body: any) {
+    async create(@UserId() uid: string, @Body() body: any) {
         if (!body.content || !body.type) {
             throw new BadRequestException('Content and Type are required');
         }
-        return this.knowledgeUnitsService.create(body);
+
+        // Find-or-create the global KU
+        const existing = await this.knowledgeUnitsService.findByContent(body.content, body.type);
+        let kuId: string;
+        let isNewKu: boolean;
+
+        if (existing) {
+            kuId = existing.id;
+            isNewKu = false;
+        } else {
+            const created = await this.knowledgeUnitsService.create(body);
+            kuId = created.id;
+            isNewKu = true;
+        }
+
+        // Link the KU to the user (idempotent)
+        await this.userKnowledgeUnitsService.create(uid, kuId);
+
+        return { id: kuId, isNew: isNewKu };
     }
 
 }
