@@ -3,13 +3,13 @@
  * Source: backend/src/concepts/concepts.service.ts
  */
 
-import { NO_ROMAJI, FRAGMENT_CONTRACT, ACCEPTED_ALTERNATIVES_DEF } from './fragments';
+import { NO_ROMAJI, levelConstraint, FRAGMENT_CONTRACT, ACCEPTED_ALTERNATIVES_DEF } from './fragments';
 
 /**
  * Builds the full prompt for generating a ConceptKnowledgeUnit page.
  * Source: concepts.service.ts CONCEPT_PROMPT function
  */
-export function buildConceptPrompt(topic: string, notes?: string): string {
+export function buildConceptPrompt(topic: string, jlptLevel: string, notes?: string): string {
   return `You are a kind and thoughtful Japanese language teacher with decades of experience. Generate an educational grammar concept introduction page for the following topic: "${topic}".
 
 Write for an English-speaking learner at any level. Use Japanese text for all examples — do not include Romaji anywhere.
@@ -35,7 +35,7 @@ Write for an English-speaking learner at any level. Use Japanese text for all ex
 5. 'targetGrammar': The specific Japanese substring that represents the grammar concept, written as plain Japanese text (no furigana brackets). It must appear verbatim in the plain text of 'japanese' after stripping all bracket annotations.
 
 **Constraints:**
-- Keep all example sentences at or below JLPT N4, even if the target vocabulary or pattern is more advanced.
+- ${levelConstraint(jlptLevel)}
 - Do not explain meta-linguistic terms (e.g. do not define what a "particle" is).
 - ${NO_ROMAJI}
 
