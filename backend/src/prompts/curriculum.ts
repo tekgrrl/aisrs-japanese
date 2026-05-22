@@ -105,10 +105,10 @@ export function getCumulativeGrammar(upToLevel: JlptLevel): CurriculumLevelEntry
 export const GET_USER_LEVEL_DECLARATION: FunctionDeclaration = {
   name: 'get_user_level',
   description:
-    'Returns the learner\'s current JLPT level and the complete cumulative grammar schema ' +
-    'covering everything they have studied up to that level. ' +
+    'Returns the learner\'s current JLPT level and the exact grammar patterns they have enrolled in. ' +
     'Call this before writing any question so that surrounding sentence grammar and vocabulary ' +
-    'stays within what the learner already knows.',
+    'stays within what the learner has actually studied. ' +
+    'Use allowedGrammar (not any assumed JLPT schema) as the constraint for surrounding sentences.',
   parameters: {
     type: Type.OBJECT,
     properties: {},

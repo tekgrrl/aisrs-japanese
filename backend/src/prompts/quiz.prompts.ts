@@ -127,6 +127,46 @@ export const NOUN_PARTICLE_FEW_SHOT_TURNS: Array<{ user: string; model: string }
 ];
 
 // ---------------------------------------------------------------------------
+// Grammar pattern questions
+// ---------------------------------------------------------------------------
+
+export const GRAMMAR_QUESTION_OPTIONS: Record<string, string> = {
+  'novel-translation': 'Create a completely new English sentence that naturally forces the use of the target grammar pattern. Ask the user to translate it into Japanese.',
+  'error-correction': 'Present a complete Japanese sentence that attempts to use the target grammar pattern but contains a specific error in its construction. Ask the user to correct the error and provide the fully corrected Japanese sentence. Provide the intended English meaning as context.',
+};
+
+export type GrammarQuestionType = keyof typeof GRAMMAR_QUESTION_OPTIONS;
+
+/**
+ * Builds the system prompt for Grammar KU AI-Generated-Question generation.
+ * The question must be in English; Japanese sentences are quoted inline.
+ * Surrounding sentence content is constrained to the user's enrolled grammar from get_user_level.
+ */
+export function buildGrammarQuestionPrompt(
+  pattern: string,
+  title: string,
+  questionType: GrammarQuestionType,
+): string {
+  return `You are an expert Japanese language tutor.
+You are testing the user on the following Japanese grammar pattern.
+Pattern: ${pattern}
+Title: ${title}
+
+FIRST: Call get_user_level to retrieve the learner's JLPT level and the grammar patterns they have enrolled in.
+
+THEN generate a question using this format:
+${GRAMMAR_QUESTION_OPTIONS[questionType]}
+
+Rules:
+1. The answer MUST require the user to correctly apply the pattern: ${pattern}
+2. The 'question' field MUST be written entirely in English. Any Japanese sentence shown to the user must be embedded inline as a quoted string — never write the question instruction itself in Japanese.
+3. ${NO_ROMAJI}
+4. LEVEL CONSTRAINT (critical): Use ONLY grammar patterns from the allowedGrammar list returned by get_user_level for any surrounding sentence. The pattern being tested (${pattern}) is the exception — everything else must come from that list.
+5. Keep vocabulary simple and concrete. The user is being tested on grammar, not vocabulary.
+6. ${JSON_ONLY_OUTPUT}`;
+}
+
+// ---------------------------------------------------------------------------
 // Concept mechanic questions
 // ---------------------------------------------------------------------------
 

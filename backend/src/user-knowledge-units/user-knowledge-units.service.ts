@@ -4,6 +4,16 @@ import { FIRESTORE_CONNECTION, KNOWLEDGE_UNITS_COLLECTION, USER_KUS_SUBCOLLECTIO
 import { KnowledgeUnit, UserKnowledgeUnit } from '../types';
 import { StatsService } from '../stats/stats.service';
 
+const JLPT_DIFFICULTY: Record<string, number> = { N5: 5, N4: 4, N3: 3, N2: 2, N1: 1 };
+
+function isAboveLevel(kuJlptLevel: string | undefined | null, userJlptLevel: string | undefined | null): boolean {
+  if (!kuJlptLevel || !userJlptLevel) return false;
+  const kuDiff = JLPT_DIFFICULTY[kuJlptLevel];
+  const userDiff = JLPT_DIFFICULTY[userJlptLevel];
+  if (kuDiff === undefined || userDiff === undefined) return false;
+  return kuDiff < userDiff; // lower number = harder level
+}
+
 @Injectable()
 export class UserKnowledgeUnitsService {
   private readonly logger = new Logger(UserKnowledgeUnitsService.name);
@@ -112,17 +122,25 @@ export class UserKnowledgeUnitsService {
     const ref = await this.userKusRef(uid).add(payload);
     this.logger.log(`Created UKU id=${ref.id} for uid=${uid} kuId=${kuId} source=${source?.type ?? 'none'}`);
 
-    // Non-blocking: update stats and tutorContext on enrollment
+    // Non-blocking: update stats, tutorContext, and aboveLevel flag on enrollment
     void (async () => {
       try {
-        const kuDoc = await this.db.collection(KNOWLEDGE_UNITS_COLLECTION).doc(kuId).get();
+        const [kuDoc, userDoc] = await Promise.all([
+          this.db.collection(KNOWLEDGE_UNITS_COLLECTION).doc(kuId).get(),
+          this.db.collection('users').doc(uid).get(),
+        ]);
         const kuData = kuDoc.data();
+        const userPrefs = userDoc.data()?.preferences;
         const jlptLevel = kuData?.data?.jlptLevel;
-        if (jlptLevel) {
+
+        const aboveLevel = isAboveLevel(jlptLevel, userPrefs?.jlptLevel);
+        await this.userKusRef(uid).doc(ref.id).update({ aboveLevel });
+
+        if (jlptLevel && !aboveLevel) {
           await this.statsService.recordKuEnrolled(uid, jlptLevel);
           await this.statsService.updateCurriculumNode(uid, jlptLevel);
         }
-        if (kuData?.type === 'Grammar' && kuData?.content) {
+        if (kuData?.type === 'Grammar' && kuData?.content && !aboveLevel) {
           await this.statsService.addToAllowedGrammar(uid, kuData.content);
         }
       } catch (e) {

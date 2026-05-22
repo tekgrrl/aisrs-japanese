@@ -4,18 +4,19 @@
  */
 
 import { GrammarKnowledgeUnit } from '../types';
-import { USER_TARGET_LEVEL, FRAGMENT_CONTRACT, ACCEPTED_ALTERNATIVES_DEF } from './fragments';
+import { levelConstraint, FRAGMENT_CONTRACT, ACCEPTED_ALTERNATIVES_DEF } from './fragments';
 
 // ---------------------------------------------------------------------------
 // Grammar lesson instructions (static)
 // ---------------------------------------------------------------------------
 
-/** Static schema and rules appended to every grammar lesson user message. */
-export const GRAMMAR_INSTRUCTIONS = `
+/** Builds schema and rules for grammar lesson generation, scoped to the user's JLPT level. */
+export function buildGrammarInstructions(jlptLevel: string): string {
+  return `
 Instructions:
  - The lesson should be in English. The use of Romaji anywhere in the lesson is forbidden.
  - Avoid using the following terminology: "copula", "predicate". Use of "particle" and "modifier" is acceptable.
- 
+
 Generate a complete grammar lesson matching this JSON schema exactly:
 {
   "type": "Grammar",
@@ -43,8 +44,9 @@ Rules:
 - ${FRAGMENT_CONTRACT} The final fragment MUST include the sentence-ending punctuation (。). Each example must have different fragments matching its own sentence.
 - ${ACCEPTED_ALTERNATIVES_DEF}
 - NEVER copy fragments from one example to another
-- Keep all example sentences at or below JLPT ${USER_TARGET_LEVEL}, even if the target grammar pattern is at a higher level
+- ${levelConstraint(jlptLevel)}
 `;
+}
 
 // ---------------------------------------------------------------------------
 // Grammar lesson user message (parameterized)
@@ -55,10 +57,10 @@ Rules:
  * Embeds the KU data and verbatim context example, then appends GRAMMAR_INSTRUCTIONS.
  * Source: lessons.service.ts:generateLesson (Grammar branch)
  */
-export function buildGrammarLessonMessage(ku: GrammarKnowledgeUnit): string {
+export function buildGrammarLessonMessage(ku: GrammarKnowledgeUnit, jlptLevel: string): string {
   const ctxExample = ku.data.exampleInContext;
-  return `You are an expert Japanese grammar tutor for the Japanese Language learning app: AIGENKI. AIGENKI uses AI generate lessons for Japanese Grammar, Vocab and Concepts along with SRS based reviews with a mix of questions types designed to advance users through their Japanese learning experience. The "Corpus context" section provides additional information about the Grammar pattern being taught and how it exists within the context of the knowledge corpus within AIGENKI 
-  
+  return `You are an expert Japanese grammar tutor for the Japanese Language learning app: AIGENKI. AIGENKI uses AI generate lessons for Japanese Grammar, Vocab and Concepts along with SRS based reviews with a mix of questions types designed to advance users through their Japanese learning experience. The "Corpus context" section provides additional information about the Grammar pattern being taught and how it exists within the context of the knowledge corpus within AIGENKI
+
 Your Task: Generate a complete AIGENKI lesson at the user's current level, for the grammar pattern: ${ku.content}
 
 Grammar title: ${ku.data.title}
@@ -69,5 +71,5 @@ Example from context (USE AS examples[0] VERBATIM):
   fragments: ${JSON.stringify(ctxExample?.fragments ?? [])}
   accepted_alternatives: ${JSON.stringify(ctxExample?.accepted_alternatives ?? [])}
 
-${GRAMMAR_INSTRUCTIONS}`;
+${buildGrammarInstructions(jlptLevel)}`;
 }

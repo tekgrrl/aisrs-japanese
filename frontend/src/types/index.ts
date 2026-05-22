@@ -104,6 +104,12 @@ export interface UserRoot {
   };
 }
 
+export interface LessonValidation {
+  status: 'pending' | 'pass' | 'fail';
+  checkedAt?: Timestamp;
+  violations?: Array<{ segment: string; detectedLevel: string; type: 'vocab' | 'grammar' }>;
+}
+
 export interface VocabLesson {
   kuId?: string;
   type: "Vocab";
@@ -116,6 +122,7 @@ export interface VocabLesson {
   meaning_explanation: string;
   reading_explanation: string;
   context_examples?: { sentence: string; translation: string }[];
+  validation?: LessonValidation;
   component_kanji?: {
     kanji: string;
     reading: string;
@@ -234,6 +241,7 @@ export interface GrammarLesson {
   meaning: string;
   formation: string | string[];
   notes: string;
+  validation?: LessonValidation;
   examples: {
     japanese: string;
     english: string;
@@ -482,6 +490,8 @@ export interface UserKnowledgeUnit {
   facet_count: number;
   history?: any[];
   currentStage?: number;
+  /** True if ku.data.jlptLevel > user.preferences.jlptLevel at enrollment time. Above-level items are excluded from ambient generation context. */
+  aboveLevel?: boolean;
 }
 
 export interface FacetStageEntry {
@@ -578,4 +588,21 @@ export interface UserQuestionState {
   questionId: string;
   rejected: boolean;
   consecutiveFailures: number;
+}
+
+// ─── Content validation ───────────────────────────────────────────────────────
+
+export interface ContentFlag {
+  id?: string;
+  kuId?: string;
+  sourceType: 'lesson' | 'facet' | 'scenario';
+  sourceId: string;
+  kuContent: string;
+  userLevel: string;
+  violations: Array<{ segment: string; detectedLevel: string; type: 'vocab' | 'grammar' }>;
+  status: 'open' | 'resolved' | 'dismissed';
+  manualNote?: string;
+  dismissNote?: string;
+  resolvedAt?: Timestamp;
+  createdAt: Timestamp;
 }
