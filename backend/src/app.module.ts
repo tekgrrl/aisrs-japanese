@@ -22,9 +22,10 @@ import { LearningProgressModule } from './learning-progress/learning-progress.mo
 import { ReviewProgressModule } from './review-progress/review-progress.module';
 import { TutorModule } from './tutor/tutor.module';
 import { DailyPlanModule } from './daily-plan/daily-plan.module';
+import { ValidationModule } from './validation/validation.module';
 
 @Module({
-  imports: [ReviewsModule, FirebaseModule, GeminiModule, ConfigModule.forRoot(), QuestionsModule, ApilogModule, LessonsModule, KnowledgeUnitsModule, StatsModule, KanjiModule, ScenariosModule, AudioModule, AuthModule, UserModule, UserKnowledgeUnitsModule, ConceptsModule, LearningProgressModule, ReviewProgressModule, TutorModule, DailyPlanModule],
+  imports: [ValidationModule, ReviewsModule, FirebaseModule, GeminiModule, ConfigModule.forRoot(), QuestionsModule, ApilogModule, LessonsModule, KnowledgeUnitsModule, StatsModule, KanjiModule, ScenariosModule, AudioModule, AuthModule, UserModule, UserKnowledgeUnitsModule, ConceptsModule, LearningProgressModule, ReviewProgressModule, TutorModule, DailyPlanModule],
   controllers: [AppController],
   providers: [AppService, QuestionsService],
 })

@@ -6,8 +6,9 @@ import { QuestionsService } from '../questions/questions.service';
 import { KnowledgeUnit, Lesson, VocabLesson, KanjiLesson, GrammarLesson, GrammarKnowledgeUnit, UserGrammarLesson, UserRoot } from '../types';
 import { performance } from 'perf_hooks';
 import { KnowledgeUnitsService } from '../knowledge-units/knowledge-units.service';
+import { ValidationService } from '../validation/validation.service';
 import { buildVocabLessonMessage, buildVocabCacheContext, buildKanjiLessonPrompt } from '../prompts/vocab.prompts';
-import { GRAMMAR_INSTRUCTIONS, buildGrammarLessonMessage } from '../prompts/grammar.prompts';
+import { buildGrammarLessonMessage } from '../prompts/grammar.prompts';
 import { ADMIN_USER_ID } from '../lib/constants';
 
 function applyKuOverrides(lesson: Lesson, ku: KnowledgeUnit): Lesson {
@@ -25,6 +26,7 @@ export class LessonsService {
     @Inject(FIRESTORE_CONNECTION) private readonly db: Firestore,
     private readonly geminiService: GeminiService,
     private readonly knowledgeUnitsService: KnowledgeUnitsService,
+    private readonly validationService: ValidationService,
   ) { }
 
   async generateLesson(uid: string, kuId: string, cachedContentName?: string) {
@@ -38,6 +40,9 @@ export class LessonsService {
     }
 
     const ku = kuDoc.data() as KnowledgeUnit;
+
+    const userDoc = await this.db.collection('users').doc(uid).get();
+    const jlptLevel: string = (userDoc.data() as any)?.preferences?.jlptLevel ?? 'N5';
 
     const content = ku.content;
 
@@ -64,7 +69,7 @@ export class LessonsService {
 
     if (ku.type === "Grammar") {
       const grammarKu = ku as GrammarKnowledgeUnit;
-      userMessage = buildGrammarLessonMessage(grammarKu);
+      userMessage = buildGrammarLessonMessage(grammarKu, jlptLevel);
 
       const lessonString = await this.geminiService.generateLesson(userMessage, { content: grammarKu.content, kuId }, undefined);
       if (!lessonString) throw new Error('AI response was empty.');
@@ -79,6 +84,9 @@ export class LessonsService {
       }
 
       await lessonDbRef.set(lessonJson);
+
+      void this.validateAndFlagLesson(uid, kuId, 'Grammar', ku.content, lessonJson, jlptLevel);
+
       return applyKuOverrides(lessonJson, ku);
     }
 
@@ -87,7 +95,7 @@ export class LessonsService {
     } else {
       // TODO: pass ku.data.corpusNotes into buildVocabLessonMessage so Vocab/Kanji corpus
       // notes are injected into the prompt, mirroring how Grammar uses corpusNotes.
-      userMessage = buildVocabLessonMessage(ku.content, !!cachedContentName);
+      userMessage = buildVocabLessonMessage(ku.content, !!cachedContentName, jlptLevel);
     }
 
     const lessonString = await this.geminiService.generateLesson(
@@ -148,6 +156,8 @@ export class LessonsService {
 
     // --- SAVE TO 'lessons' collection ---
     await lessonDbRef.set(lessonJson);
+
+    void this.validateAndFlagLesson(uid, kuId, ku.type, ku.content, lessonJson, jlptLevel);
 
     // --- UPDATE KU WITH LESSON DATA ---
     if (ku.type === 'Vocab') {
@@ -332,8 +342,11 @@ export class LessonsService {
   }
 
   async processBatch(uid: string, vocabValues: { id: string; content: string }[]) {
+    const userDoc = await this.db.collection('users').doc(uid).get();
+    const batchJlptLevel: string = (userDoc.data() as any)?.preferences?.jlptLevel ?? 'N5';
+
     const cacheName = await this.geminiService.createContextCache(
-      buildVocabCacheContext(),
+      buildVocabCacheContext(batchJlptLevel),
       3600
     );
 
@@ -411,6 +424,41 @@ export class LessonsService {
       } catch (cacheError) {
         this.logger.error(`Failed to delete Context Cache: ${cacheName}`, cacheError);
       }
+    }
+  }
+
+  async regenerateLesson(uid: string, kuId: string): Promise<Lesson> {
+    const lessonRef = this.db.collection(LESSONS_COLLECTION).doc(kuId);
+    await lessonRef.set({ status: 'failed' }, { merge: true });
+    return this.generateLesson(uid, kuId) as Promise<Lesson>;
+  }
+
+  private async validateAndFlagLesson(
+    uid: string,
+    kuId: string,
+    kuType: string,
+    kuContent: string,
+    lesson: Lesson,
+    jlptLevel: string,
+  ): Promise<void> {
+    try {
+      let segments: string[] = [];
+      if (kuType === 'Vocab') {
+        segments = ((lesson as VocabLesson).context_examples ?? [])
+          .map(e => e.sentence)
+          .filter(Boolean);
+      } else if (kuType === 'Grammar') {
+        segments = ((lesson as GrammarLesson).examples ?? [])
+          .map(e => e.japanese)
+          .filter(Boolean);
+      }
+
+      if (segments.length === 0) return;
+
+      const result = await this.validationService.validateContent(segments, jlptLevel, uid);
+      await this.validationService.flagLesson(kuId, kuContent, jlptLevel, result);
+    } catch (err) {
+      this.logger.error(`Lesson validation failed for kuId=${kuId}`, err);
     }
   }
 }

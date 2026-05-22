@@ -14,6 +14,7 @@ import { UserService } from '../users/user.service';
 import { FIRESTORE_CONNECTION, SCENARIOS_COLLECTION, REVIEW_FACETS_COLLECTION } from '../firebase/firebase.module';
 import { ADMIN_USER_ID } from '../lib/constants';
 import { GeminiService } from '../gemini/gemini.service';
+import { ValidationService } from '../validation/validation.service';
 import { ALLOWED_USER_ROLES, ALLOWED_AI_ROLES, buildArchitectPrompt, buildImportPrompt, buildChatSystemPrompt } from '../prompts/scenario.prompts';
 import { GET_GRAMMAR_PATTERNS_DECLARATION } from '../prompts/curriculum';
 import { GrammarMatch } from '../types/scenario';
@@ -33,6 +34,7 @@ export class ScenariosService {
     private readonly userKnowledgeUnitsService: UserKnowledgeUnitsService,
     private readonly lessonsService: LessonsService,
     private readonly userService: UserService,
+    private readonly validationService: ValidationService,
   ) {}
 
   private scenariosColRef(uid: string): CollectionReference {
@@ -42,28 +44,45 @@ export class ScenariosService {
     return this.db.collection('users').doc(uid).collection(SCENARIOS_COLLECTION);
   }
 
-  private buildGrammarToolHandlers() {
+  private buildGrammarToolHandlers(uid: string) {
     return {
       get_grammar_patterns: async (args: Record<string, unknown>) => {
         const jlptLevel = (args.jlptLevel as string) || 'N4';
-        const snap = await this.db
-          .collection('knowledge-units')
-          .where('type', '==', 'Grammar')
-          .where('data.jlptLevel', '==', jlptLevel)
-          .limit(60)
+
+        // Fetch only grammar KUs the user has enrolled (and are not above their level)
+        const ukuSnap = await this.db
+          .collection('users').doc(uid)
+          .collection('user-kus')
+          .where('aboveLevel', '!=', true)
           .get();
 
-        const patterns = snap.docs.map(doc => {
-          const d = doc.data();
-          return {
-            kuId: doc.id,
-            content: d.content as string,
-            title: (d.data as any)?.title ?? '',
-            corpusNotes: (d.data as any)?.corpusNotes ?? '',
-          };
-        });
+        const enrolledKuIds = ukuSnap.docs.map(d => d.data().kuId as string);
+        if (enrolledKuIds.length === 0) {
+          this.logger.log(`get_grammar_patterns(${jlptLevel}) → 0 enrolled patterns for uid=${uid}`);
+          return { patterns: [] };
+        }
 
-        this.logger.log(`get_grammar_patterns(${jlptLevel}) → ${patterns.length} patterns`);
+        // Batch-fetch global KUs for enrolled IDs, filter to Grammar at the requested level
+        const kuRefs = enrolledKuIds.map(id => this.db.collection('knowledge-units').doc(id));
+        const kuDocs = await this.db.getAll(...kuRefs);
+
+        const patterns = kuDocs
+          .filter(doc => {
+            if (!doc.exists) return false;
+            const d = doc.data()!;
+            return d.type === 'Grammar' && (d.data as any)?.jlptLevel === jlptLevel;
+          })
+          .map(doc => {
+            const d = doc.data()!;
+            return {
+              kuId: doc.id,
+              content: d.content as string,
+              title: (d.data as any)?.title ?? '',
+              corpusNotes: (d.data as any)?.corpusNotes ?? '',
+            };
+          });
+
+        this.logger.log(`get_grammar_patterns(${jlptLevel}) → ${patterns.length} enrolled patterns for uid=${uid}`);
         return { patterns };
       },
     };
@@ -127,7 +146,7 @@ export class ScenariosService {
       const data = await this.geminiService.generateScenario(
         prompt,
         [GET_GRAMMAR_PATTERNS_DECLARATION],
-        this.buildGrammarToolHandlers(),
+        this.buildGrammarToolHandlers(userId),
       );
 
       const docRef = this.scenariosColRef(userId).doc();
@@ -177,6 +196,7 @@ export class ScenariosService {
       );
 
       await docRef.set(cleanData);
+      void this.validateScenario(newScenario, resolvedDto.difficulty!);
       return id;
 
     } catch (error) {
@@ -230,6 +250,7 @@ export class ScenariosService {
 
     await docRef.set(cleanData);
     this.logger.log(`saveFromTutor: created scenario ${id} for uid=${uid}`);
+    void this.validateScenario(newScenario, newScenario.difficultyLevel);
     return { id, success: true };
   }
 
@@ -249,7 +270,7 @@ export class ScenariosService {
       const data = await this.geminiService.generateScenario(
         prompt,
         [GET_GRAMMAR_PATTERNS_DECLARATION],
-        this.buildGrammarToolHandlers(),
+        this.buildGrammarToolHandlers(uid),
       );
 
       const docRef = this.scenariosColRef(uid).doc();
@@ -749,5 +770,19 @@ export class ScenariosService {
     }));
 
     return result;
+  }
+
+  private async validateScenario(scenario: Scenario, jlptLevel: string): Promise<void> {
+    try {
+      const segments = scenario.dialogue
+        .map(line => line.text)
+        .filter(Boolean);
+      if (segments.length === 0) return;
+
+      const result = await this.validationService.validateContent(segments, jlptLevel, scenario.userId);
+      await this.validationService.flagScenario(scenario.id, scenario.title, jlptLevel, result);
+    } catch (err) {
+      this.logger.error(`Scenario validation failed for id=${scenario.id}`, err);
+    }
   }
 }

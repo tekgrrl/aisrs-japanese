@@ -8,8 +8,9 @@
 export const NO_ROMAJI =
   `Do not include Romaji anywhere in your response.`;
 
-export const USER_TARGET_LEVEL =
-  `Keep all example sentences at or below JLPT N4 complexity, even if the target vocabulary or pattern is more advanced.`;
+export function levelConstraint(jlptLevel: string): string {
+  return `Keep all example sentences at or below JLPT ${jlptLevel}, even if the target vocabulary or pattern is more advanced.`;
+}
 
 export const JSON_ONLY_OUTPUT =
   `Return ONLY a valid JSON object. Do NOT output any text before or after it. Do NOT use markdown code blocks or backticks.`;

@@ -3,6 +3,8 @@
  * Sources: backend/src/lessons/lessons.service.ts, backend/src/gemini/gemini.service.ts
  */
 
+import { levelConstraint } from './fragments';
+
 // ---------------------------------------------------------------------------
 // Vocab lesson
 // ---------------------------------------------------------------------------
@@ -20,7 +22,7 @@ The lesson should be in English. Where you want to use Japanese text for example
 **Task 2: Lesson Generation**
 * Generate detailed explanations for meaning and reading.
 * If a word is a "suru noun", include explanations of the meaning of the suru form.
-* Generate context examples that are no more complex that JLPT N4 even if the vocabulary itself is more advanced.
+* Generate context examples appropriate for the user's current JLPT level even if the vocabulary itself is more advanced. (Level constraint is injected at call time.)
 * Analyze component Kanji. If the word is normally or almost always written in kana alone in modern Japanese (e.g. もらう, くれる, いる, ある, すごい, かわいい), set \`component_kanji\` to an empty array — do not include the kanji breakdown even if kanji exist for it.
 * Do not explain what "rendaku" means.
 
@@ -234,12 +236,13 @@ Output:
  * VOCAB_INSTRUCTIONS is already loaded into the cache as the system instruction.
  * Source: lessons.service.ts:generateLesson (Vocab branch)
  */
-export function buildVocabLessonMessage(content: string, useCached: boolean): string {
+export function buildVocabLessonMessage(content: string, useCached: boolean, jlptLevel: string): string {
   if (useCached) {
     return `Generate a lesson for the Japanese word: ${content}`;
   }
   return `You are an expert Japanese tutor. You will be asked to generate a lesson for the Japanese word: ${content}.
-${VOCAB_INSTRUCTIONS}`;
+${VOCAB_INSTRUCTIONS}
+${levelConstraint(jlptLevel)}`;
 }
 
 /**
@@ -247,8 +250,8 @@ ${VOCAB_INSTRUCTIONS}`;
  * Combines VOCAB_INSTRUCTIONS and VOCAB_EXAMPLES so individual batch requests can be short.
  * Source: lessons.service.ts:processBatch
  */
-export function buildVocabCacheContext(): string {
-  return `You are an expert Japanese tutor. You will be asked to generate a lesson for a Japanese word.\n${VOCAB_INSTRUCTIONS}\n\n${VOCAB_EXAMPLES}`;
+export function buildVocabCacheContext(jlptLevel: string): string {
+  return `You are an expert Japanese tutor. You will be asked to generate a lesson for a Japanese word.\n${VOCAB_INSTRUCTIONS}\n${levelConstraint(jlptLevel)}\n\n${VOCAB_EXAMPLES}`;
 }
 
 // ---------------------------------------------------------------------------

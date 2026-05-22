@@ -52,7 +52,22 @@ erDiagram
         array  definitions   "Vocab"
         array  context_examples "Vocab"
         array  component_kanji  "Vocab"
-        string classification "Grammar — should NOT be here; classification is KU-level only"
+        object validation    "status: pending|pass|fail, checkedAt, violations[]"
+    }
+
+    ContentFlag {
+        string id PK
+        string sourceType    "lesson | facet | scenario"
+        string sourceId      "FK → lesson kuId OR scenario id"
+        string kuId          "FK → KnowledgeUnit.id (optional — absent for scenario flags)"
+        string kuContent     "human-readable label (word, pattern, or scenario title)"
+        string userLevel     "user's jlptLevel at generation time"
+        array  violations    "segment, detectedLevel, type (vocab|grammar)"
+        string status        "open | resolved | dismissed"
+        string manualNote    "set when created manually (no AI call)"
+        string dismissNote   "set when dismissed"
+        timestamp resolvedAt
+        timestamp createdAt
     }
 
     Question {
@@ -80,6 +95,8 @@ erDiagram
         string kuId PK       "= KnowledgeUnit.id"
         string status        "learning | reviewing | mastered — owned by LearningProgressService"
         number facet_count
+        number currentStage  "current facet sequence stage — owned by ReviewProgressService"
+        boolean aboveLevel   "true if ku.data.jlptLevel > user.preferences.jlptLevel at enrollment time"
         string source_type   "scenario | lesson"
         string source_id     "FK → Scenario.id OR Lesson.kuId"
     }
@@ -153,6 +170,8 @@ erDiagram
     %% ═══════════════════════════════════════════════════════
 
     KnowledgeUnit ||--o| Lesson : "generates (keyed by kuId)"
+    Lesson o|--o{ ContentFlag : "flagged by validation"
+    Scenario o|--o{ ContentFlag : "flagged by validation"
     KnowledgeUnit ||--o| UserLessonOverlay : "overlay (keyed by kuId)"
     KnowledgeUnit ||--o{ UserKnowledgeUnit : "enrolled as"
     KnowledgeUnit ||--o{ ReviewFacet : "drilled by (Vocab/Kanji/Grammar facets)"

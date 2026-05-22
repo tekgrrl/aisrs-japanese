@@ -135,6 +135,12 @@ export interface UserRoot {
   };
 }
 
+export interface LessonValidation {
+  status: 'pending' | 'pass' | 'fail';
+  checkedAt?: Timestamp;
+  violations?: Array<{ segment: string; detectedLevel: string; type: 'vocab' | 'grammar' }>;
+}
+
 export interface VocabLesson {
   kuId?: string;
   type: "Vocab";
@@ -147,6 +153,7 @@ export interface VocabLesson {
   meaning_explanation: string;
   reading_explanation: string;
   context_examples?: { sentence: string; translation: string }[];
+  validation?: LessonValidation;
   component_kanji?: {
     kanji: string;
     reading: string;
@@ -217,6 +224,7 @@ export interface GrammarLesson {
   meaning: string;       // one-line summary
   formation: string | string[];
   notes: string;         // nuance, pitfalls
+  validation?: LessonValidation;
   examples: {
     japanese: string;
     english: string;
@@ -378,6 +386,8 @@ export interface UserKnowledgeUnit {
   };
   /** Current position in the facet unlock sequence. 0 = not yet initialized. */
   currentStage?: number;
+  /** True if ku.data.jlptLevel > user.preferences.jlptLevel at enrollment time. Above-level items are excluded from ambient generation context. */
+  aboveLevel?: boolean;
 }
 
 // ─── Facet sequence types ────────────────────────────────────────────────────
@@ -664,6 +674,29 @@ export interface GrammarClassification {
    * questions and by SRS to schedule contrasting reviews.
    */
   confusableWith?: string[];
+}
+
+// ─── Content validation ───────────────────────────────────────────────────────
+
+export interface ValidationResult {
+  valid: boolean;
+  violations: Array<{ segment: string; detectedLevel: string; type: 'vocab' | 'grammar' }>;
+}
+
+export interface ContentFlag {
+  id?: string;
+  kuId?: string;
+  sourceType: 'lesson' | 'facet' | 'scenario';
+  sourceId: string;
+  kuContent: string;
+  userLevel: string;
+  violations: Array<{ segment: string; detectedLevel: string; type: 'vocab' | 'grammar' }>;
+  status: 'open' | 'resolved' | 'dismissed';
+  /** Set when the flag was created manually rather than by the automated validator. */
+  manualNote?: string;
+  dismissNote?: string;
+  resolvedAt?: Timestamp;
+  createdAt: Timestamp;
 }
 
 export * from './scenario';

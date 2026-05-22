@@ -140,7 +140,10 @@ export class ConceptsService {
   async generate(uid: string, topic: string, notes?: string): Promise<ConceptKnowledgeUnit & { id: string }> {
     this.logger.log(`Generating concept for topic="${topic}" uid=${uid}`);
 
-    const prompt = buildConceptPrompt(topic, notes);
+    const userDoc = await this.db.collection('users').doc(uid).get();
+    const jlptLevel: string = (userDoc.data() as any)?.preferences?.jlptLevel ?? 'N5';
+
+    const prompt = buildConceptPrompt(topic, jlptLevel, notes);
     this.logger.log(`Prompt length: ${prompt.length} chars`);
 
     const jsonString = await this.geminiService.generateConcept(prompt, { topic });

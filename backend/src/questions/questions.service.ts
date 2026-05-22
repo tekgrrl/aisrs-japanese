@@ -23,8 +23,11 @@ import {
   CONCEPT_QUESTION_OPTIONS,
   buildConceptQuestionPrompt,
   ConceptMechanic,
+  GRAMMAR_QUESTION_OPTIONS,
+  buildGrammarQuestionPrompt,
+  GrammarQuestionType,
 } from '../prompts/quiz.prompts';
-import { GET_USER_LEVEL_DECLARATION, getCumulativeGrammar, JlptLevel } from '../prompts/curriculum';
+import { GET_USER_LEVEL_DECLARATION, JlptLevel } from '../prompts/curriculum';
 
 const SUITABLE_RANK_THRESHOLD = 30;
 const RANK_CORRECT_DELTA = 5;
@@ -165,6 +168,10 @@ export class QuestionsService {
       // Check knowledge-units collection first
       try {
         const kuData = await this.knowledgeUnitsService.findOne(kuId);
+        if (kuData.type === 'Grammar') {
+          this.logger.log(`Routing Grammar KU ${kuId} to grammar question path`);
+          return this.generateGrammarQuestion(uid, kuData.content, kuData.data.title ?? kuData.content, kuId, facetId);
+        }
         if (kuData.type === 'Concept' && kuData.data.mechanics?.length > 0) {
           const mechanic = kuData.data.mechanics[Math.floor(Math.random() * kuData.data.mechanics.length)];
           this.logger.log(`Routing concept KU ${kuId} to concept question path (mechanic: "${mechanic.goalTitle}")`);
@@ -193,11 +200,10 @@ export class QuestionsService {
     return {
       get_user_level: async () => {
         const userDoc = await this.db.collection('users').doc(uid).get();
-        const level = ((userDoc.data() as any)?.preferences?.jlptLevel ?? 'N5') as JlptLevel;
-        return {
-          jlptLevel: level,
-          cumulativeGrammar: getCumulativeGrammar(level),
-        };
+        const userData = userDoc.data() as any;
+        const level = (userData?.preferences?.jlptLevel ?? 'N5') as JlptLevel;
+        const allowedGrammar: string[] = userData?.tutorContext?.allowedGrammar ?? [];
+        return { jlptLevel: level, allowedGrammar };
       },
     };
   }
@@ -292,6 +298,60 @@ export class QuestionsService {
 
     await ref.set(newQuestion);
     this.logger.log(`Saved new question ${ref.id} for KU ${kuId} (level: ${capturedLevel})`);
+
+    if (facetId) {
+      await this.reviewsService.updateFacetQuestion(uid, facetId, ref.id);
+    }
+
+    return this.toResponse(newQuestion, true);
+  }
+
+  private async generateGrammarQuestion(uid: string, pattern: string, title: string, kuId: string, facetId?: string): Promise<QuestionResponse> {
+    const questionType = pickRandomQuestionType(GRAMMAR_QUESTION_OPTIONS) as GrammarQuestionType;
+    const systemPrompt = buildGrammarQuestionPrompt(pattern, title, questionType);
+
+    let capturedLevel = 'N5';
+    const toolHandlers = {
+      get_user_level: async (args: Record<string, unknown>) => {
+        const result = await this.buildLevelToolHandler(uid).get_user_level(args);
+        capturedLevel = result.jlptLevel as string;
+        return result;
+      },
+    };
+
+    const parsed = await this.geminiService.generateWithTools<{
+      question: string;
+      answer: string;
+      context?: string;
+      accepted_alternatives?: string[];
+    }>(
+      '',
+      systemPrompt,
+      [GET_USER_LEVEL_DECLARATION],
+      toolHandlers,
+      this.questionResponseSchema,
+      { route: '/questions/generate', topic: pattern, kuId },
+    );
+
+    const ref = this.db.collection(QUESTIONS_COLLECTION).doc();
+    const newQuestion: QuestionItem = {
+      id: ref.id,
+      kuId,
+      sourceCollection: 'knowledge-units',
+      data: {
+        question: parsed.question,
+        context: parsed.context,
+        answer: parsed.answer,
+        acceptedAlternatives: parsed.accepted_alternatives,
+        difficulty: `JLPT-${capturedLevel}` as import('@/types').LessonDifficulty,
+      },
+      rank: 50,
+      rejectionCount: 0,
+      createdAt: Timestamp.now(),
+    };
+
+    await ref.set(newQuestion);
+    this.logger.log(`Saved new grammar question ${ref.id} for KU ${kuId} (pattern: ${pattern}, level: ${capturedLevel})`);
 
     if (facetId) {
       await this.reviewsService.updateFacetQuestion(uid, facetId, ref.id);
