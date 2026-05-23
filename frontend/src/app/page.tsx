@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import Lessons from "@/components/Lessons";
-import Reviews from "@/components/Reviews";
-import ReviewSchedule from "@/components/ReviewSchedule";
+import { useCallback, useEffect, useState } from "react";
 import DailyCheckInDialog from "@/components/DailyCheckInDialog";
+import Lessons from "@/components/Lessons";
+import ReviewSchedule from "@/components/ReviewSchedule";
+import Reviews from "@/components/Reviews";
+import StrugglingItemsWidget from "@/components/StrugglingItemsWidget";
 import { apiFetch } from "@/lib/api-client";
 
 interface DashboardStats {
@@ -139,6 +140,10 @@ export default function DashboardPage() {
             schedule={stats.schedule}
             reviewsDue={stats.reviewsDue}
           />
+        </div>
+
+        <div className="h-full">
+          <StrugglingItemsWidget />
         </div>
       </div>
     </div>
