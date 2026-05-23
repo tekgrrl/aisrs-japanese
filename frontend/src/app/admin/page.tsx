@@ -88,8 +88,8 @@ export default function AdminPage() {
     .filter((ku) => ku.content.toLowerCase().includes(kuSearch.toLowerCase()))
     .sort((a, b) => {
       if (kuSortBy === "status") {
-        const statusA = a.status || "";
-        const statusB = b.status || "";
+        const statusA = (a as any).status || "";
+        const statusB = (b as any).status || "";
         return kuSortOrder === "asc"
           ? statusA.localeCompare(statusB)
           : statusB.localeCompare(statusA);
@@ -300,7 +300,7 @@ export default function AdminPage() {
                     <td className="py-2 px-6 whitespace-nowrap">
                       {ku.content}
                     </td>
-                    <td className="py-2 px-6 whitespace-nowrap">{ku.status}</td>
+                    <td className="py-2 px-6 whitespace-nowrap">{(ku as any).status}</td>
                     <td className="py-2 px-6 whitespace-nowrap">
                       {new Date(ku.createdAt).toLocaleString()}
                     </td>

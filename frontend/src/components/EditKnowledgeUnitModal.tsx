@@ -125,7 +125,7 @@ export default function EditKnowledgeUnitModal({
         setClassification(emptyClassification());
         setHasClassification(false);
       }
-      setCorpusNotes(knowledgeUnit.data?.corpusNotes || "");
+      setCorpusNotes((knowledgeUnit.data as any)?.corpusNotes || "");
     }
   }, [knowledgeUnit]);
 

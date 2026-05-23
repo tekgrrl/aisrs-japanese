@@ -83,6 +83,46 @@ export class StatsService {
         this.logger.log(`Reviews due for user ${uid}: ${reviewsDueCount}`);
 
         const userStats = userStatsDoc.data()?.stats ?? {};
+        const tutorContext = userStatsDoc.data()?.tutorContext ?? {};
+        const leechVocab = tutorContext.leechVocab ?? [];
+        const weakGrammarPoints = tutorContext.weakGrammarPoints ?? [];
+        const storedLeechItems = tutorContext.leechItems ?? [];
+
+        const mapToLeechItem = (item: any, type: 'vocab' | 'grammar') => {
+            if (typeof item === 'string') {
+                return { content: item, type, facetTypes: [] };
+            }
+            return {
+                content: item?.content || '',
+                facetTypes: item?.facetTypes || [],
+                type: item?.type || type,
+            };
+        };
+
+        const leechItems = [
+            ...leechVocab.map((item: any) => mapToLeechItem(item, 'vocab')),
+            ...weakGrammarPoints.map((item: any) => mapToLeechItem(item, 'grammar')),
+            ...storedLeechItems.map((item: any) => {
+                if (typeof item === 'string') {
+                    return { content: item, type: 'vocab', facetTypes: [] };
+                }
+                return {
+                    content: item?.content || '',
+                    facetTypes: item?.facetTypes || [],
+                    type: item?.type || 'vocab',
+                };
+            }),
+        ];
+
+        const seen = new Set<string>();
+        const uniqueLeechItems: any[] = [];
+        for (const item of leechItems) {
+            const key = `${item.type}:${item.content}`;
+            if (!seen.has(key) && item.content) {
+                seen.add(key);
+                uniqueLeechItems.push(item);
+            }
+        }
 
         const rawReviewForecast = userStats.reviewForecast || {};
         const rawHourlyForecast = userStats.hourlyForecast || {};
@@ -145,6 +185,7 @@ export class StatsService {
             // New Widget Data
             next24HoursCount: next24HoursCount,
             schedule: schedule,
+            leechItems: uniqueLeechItems,
 
             // Legacy/Other support
             srsCounts: userStats.levelProgress || {},

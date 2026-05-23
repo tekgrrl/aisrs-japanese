@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import Lessons from "@/components/Lessons";
 import Reviews from "@/components/Reviews";
 import ReviewSchedule from "@/components/ReviewSchedule";
+import LeechWidget from "@/components/LeechWidget";
 import DailyCheckInDialog from "@/components/DailyCheckInDialog";
 import { apiFetch } from "@/lib/api-client";
 
@@ -24,6 +25,7 @@ interface DashboardStats {
   streak: number;
   hourlyForecast?: Record<string, number>;
   reviewForecast?: Record<string, number>;
+  leechItems?: any[];
 }
 
 export default function DashboardPage() {
@@ -41,6 +43,7 @@ export default function DashboardPage() {
     streak: 0,
     hourlyForecast: {},
     reviewForecast: {},
+    leechItems: [],
   });
 
   const fetchStats = useCallback(async () => {
@@ -132,13 +135,16 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-8">
-        <div className="h-full">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+        <div className="md:col-span-2 h-full">
           <ReviewSchedule
             next24HoursCount={stats.next24HoursCount}
             schedule={stats.schedule}
             reviewsDue={stats.reviewsDue}
           />
+        </div>
+        <div className="h-full">
+          <LeechWidget leechItems={stats.leechItems} />
         </div>
       </div>
     </div>
