@@ -94,7 +94,7 @@ export class ClaudeProvider extends AiProvider implements OnModuleInit {
       };
 
       this.logger.debug(`tool_use: ${calls.map(c => c.name).join(', ')}`);
-      return { type: 'tool_use', calls, modelTurn };
+      return { type: 'tool_use', calls, modelTurn, costUsd: cost.totalCostUsd };
     }
 
     const text = response.content
@@ -103,7 +103,7 @@ export class ClaudeProvider extends AiProvider implements OnModuleInit {
       .join('\n');
 
     this.logger.debug(`end_turn: ${text.length} chars`);
-    return { type: 'end_turn', content: text };
+    return { type: 'end_turn', content: text, costUsd: cost.totalCostUsd };
   }
 
   private toMessageParam(msg: AiMessage): Anthropic.MessageParam {

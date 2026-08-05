@@ -95,7 +95,7 @@ export class TutorService {
     dto: TutorGenerateScenarioDto = {},
   ): Promise<string> {
     const start = performance.now();
-    const iterationLog: { tools: string[]; results: Record<string, string> }[] = [];
+    const iterationLog: { tools: string[]; results: Record<string, string>; costUsd?: number }[] = [];
 
     const logRef = await this.apilogService.startLog({
       timestamp: Timestamp.now(),
@@ -113,6 +113,7 @@ export class TutorService {
     const turnCache = new Map<string, unknown>();
     const messages: AiMessage[] = [...initialMessages];
     let scenarioId: string | null = null;
+    let totalCostUsd = 0;
 
     try {
       for (let iteration = 0; iteration < MAX_ITERATIONS; iteration++) {
@@ -123,6 +124,7 @@ export class TutorService {
           messages,
           tools: TOOL_REGISTRY,
         });
+        totalCostUsd += response.costUsd ?? 0;
 
         if (response.type === 'end_turn') {
           if (scenarioId) {
@@ -133,6 +135,7 @@ export class TutorService {
                 scenarioId,
                 iterationCount: iteration + 1,
                 iterations: iterationLog,
+                costUsd: totalCostUsd,
               } as any,
             });
             return scenarioId;
@@ -169,6 +172,7 @@ export class TutorService {
           results: Object.fromEntries(
             results.map(r => [r.name, summariseResult(r.result)]),
           ),
+          costUsd: response.costUsd,
         });
 
         // Build user reply with tool results
@@ -193,6 +197,7 @@ export class TutorService {
             messages,
             tools: TOOL_REGISTRY,
           });
+          totalCostUsd += confirm.costUsd ?? 0;
           if (confirm.type !== 'end_turn') {
             this.logger.warn('AI called more tools after create_scenario — ignoring');
           }
@@ -203,6 +208,7 @@ export class TutorService {
               scenarioId,
               iterationCount: iteration + 1,
               iterations: iterationLog,
+              costUsd: totalCostUsd,
             } as any,
           });
           return scenarioId;
