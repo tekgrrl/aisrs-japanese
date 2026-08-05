@@ -24,6 +24,7 @@ export interface ApiLog {
     rawText?: string;
     parsedJson?: any;
     toolCalls?: Array<{ fn: string; args: Record<string, unknown>; response: Record<string, unknown> }>;
+    costUsd?: number;
   };
   errorData?: {
     message?: string;

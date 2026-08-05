@@ -4,6 +4,7 @@ import { AppService } from './app.service';
 import { ReviewsModule } from './reviews/reviews.module';
 import { FirebaseModule } from './firebase/firebase.module';
 import { GeminiModule } from './gemini/gemini.module';
+import { ClaudeModule } from './claude/claude.module';
 import { ConfigModule } from '@nestjs/config';
 import { QuestionsService } from './questions/questions.service';
 import { QuestionsModule } from './questions/questions.module';
@@ -25,7 +26,7 @@ import { DailyPlanModule } from './daily-plan/daily-plan.module';
 import { ValidationModule } from './validation/validation.module';
 
 @Module({
-  imports: [ValidationModule, ReviewsModule, FirebaseModule, GeminiModule, ConfigModule.forRoot(), QuestionsModule, ApilogModule, LessonsModule, KnowledgeUnitsModule, StatsModule, KanjiModule, ScenariosModule, AudioModule, AuthModule, UserModule, UserKnowledgeUnitsModule, ConceptsModule, LearningProgressModule, ReviewProgressModule, TutorModule, DailyPlanModule],
+  imports: [ValidationModule, ReviewsModule, FirebaseModule, GeminiModule, ClaudeModule, ConfigModule.forRoot(), QuestionsModule, ApilogModule, LessonsModule, KnowledgeUnitsModule, StatsModule, KanjiModule, ScenariosModule, AudioModule, AuthModule, UserModule, UserKnowledgeUnitsModule, ConceptsModule, LearningProgressModule, ReviewProgressModule, TutorModule, DailyPlanModule],
   controllers: [AppController],
   providers: [AppService, QuestionsService],
 })

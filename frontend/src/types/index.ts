@@ -18,6 +18,8 @@ export interface ApiLog {
   responseData?: {
     rawText?: string; // The raw text from the AI
     parsedJson?: any; // The parsed JSON object (if applicable)
+    toolCalls?: Array<{ fn: string; args: Record<string, unknown>; response: Record<string, unknown> }>;
+    costUsd?: number;
   };
   errorData?: {
     message?: string;
