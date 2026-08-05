@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import Lessons from "@/components/Lessons";
 import Reviews from "@/components/Reviews";
 import ReviewSchedule from "@/components/ReviewSchedule";
+import StrugglesWidget from "@/components/StrugglesWidget";
 import DailyCheckInDialog from "@/components/DailyCheckInDialog";
 import { apiFetch } from "@/lib/api-client";
 
@@ -24,6 +25,8 @@ interface DashboardStats {
   streak: number;
   hourlyForecast?: Record<string, number>;
   reviewForecast?: Record<string, number>;
+  weakGrammarPoints?: { content: string; facetTypes: string[] }[];
+  leechVocab?: { content: string; facetTypes: string[] }[];
 }
 
 export default function DashboardPage() {
@@ -41,6 +44,8 @@ export default function DashboardPage() {
     streak: 0,
     hourlyForecast: {},
     reviewForecast: {},
+    weakGrammarPoints: [],
+    leechVocab: [],
   });
 
   const fetchStats = useCallback(async () => {
@@ -132,7 +137,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-8">
+      <div className="grid grid-cols-1 gap-8 mb-8">
         <div className="h-full">
           <ReviewSchedule
             next24HoursCount={stats.next24HoursCount}
@@ -141,6 +146,18 @@ export default function DashboardPage() {
           />
         </div>
       </div>
+
+      {((stats.leechVocab && stats.leechVocab.length > 0) || 
+        (stats.weakGrammarPoints && stats.weakGrammarPoints.length > 0)) && (
+        <div className="grid grid-cols-1 gap-8 mb-8">
+          <div className="h-full">
+            <StrugglesWidget 
+              leechVocab={stats.leechVocab} 
+              weakGrammarPoints={stats.weakGrammarPoints} 
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
