@@ -20,18 +20,28 @@ import { TutorToolExecutor } from '../src/tutor/tutor-tool.executor';
 import { ApilogService } from '../src/apilog/apilog.service';
 import { ClaudeProvider } from '../src/tutor/providers/claude.provider';
 import { GeminiProvider } from '../src/tutor/providers/gemini.provider';
-import { FIRESTORE_CONNECTION } from '../src/firebase/firebase.module';
+import { FIRESTORE_CONNECTION, SCENARIOS_COLLECTION } from '../src/firebase/firebase.module';
+import { ADMIN_USER_ID } from '../src/lib/constants';
 import type { Firestore } from 'firebase-admin/firestore';
 
 const ORCHESTRATOR_MODEL = 'claude-opus-5';
 const JUDGE_MODEL = 'claude-opus-5';
 const MAX_GENERATIONS = 8;
-const TEST_UID = 'user_default';
+const TEST_UID = 'T6UtoM95CqVupa8zyIoSY6jR1L52'; // +aigenki1@ test account
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 function fakeConfig(values: Record<string, string>) {
   return { get: (key: string) => values[key] };
+}
+
+// Scenarios live in a per-user sub-collection for every uid except the
+// admin/default account, which uses a flat top-level collection instead.
+function scenariosColRef(db: Firestore, uid: string) {
+  if (uid === ADMIN_USER_ID) {
+    return db.collection(SCENARIOS_COLLECTION);
+  }
+  return db.collection('users').doc(uid).collection(SCENARIOS_COLLECTION);
 }
 
 async function main() {
@@ -132,7 +142,7 @@ async function main() {
       required: ['scenarioId'],
     },
     run: async (input) => {
-      const doc = await db.collection('scenarios').doc(input.scenarioId).get();
+      const doc = await scenariosColRef(db, TEST_UID).doc(input.scenarioId).get();
       if (!doc.exists) return JSON.stringify({ error: 'Scenario not found' });
 
       const judgeResponse = await anthropic.messages.create({
