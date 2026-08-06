@@ -24,6 +24,7 @@ export interface ApiLog {
     rawText?: string;
     parsedJson?: any;
     toolCalls?: Array<{ fn: string; args: Record<string, unknown>; response: Record<string, unknown> }>;
+    costUsd?: number;
   };
   errorData?: {
     message?: string;
@@ -238,7 +239,7 @@ export interface UserGrammarLesson {
   id: string;
   kuId: string;
   lessonId: string;      // = kuId (Grammar lessons stored at lessons/{kuId})
-  sourceType: 'scenario' | 'concept';
+  sourceType: 'scenario' | 'concept' | 'scenario-live';
   sourceId: string;
   sourceTitle: string;
   contextExample: {

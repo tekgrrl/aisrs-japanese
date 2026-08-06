@@ -31,8 +31,8 @@ export interface AiToolCall {
 }
 
 export type AiResponse =
-  | { type: 'tool_use'; calls: AiToolCall[]; modelTurn: AiMessage }
-  | { type: 'end_turn'; content: string };
+  | { type: 'tool_use'; calls: AiToolCall[]; modelTurn: AiMessage; costUsd?: number }
+  | { type: 'end_turn'; content: string; costUsd?: number };
 
 // Abstract class (not interface) so NestJS can emit decorator metadata for it
 export abstract class AiProvider {

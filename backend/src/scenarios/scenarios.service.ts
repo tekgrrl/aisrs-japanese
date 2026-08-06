@@ -15,7 +15,7 @@ import { FIRESTORE_CONNECTION, SCENARIOS_COLLECTION, REVIEW_FACETS_COLLECTION } 
 import { ADMIN_USER_ID } from '../lib/constants';
 import { GeminiService } from '../gemini/gemini.service';
 import { ValidationService } from '../validation/validation.service';
-import { ALLOWED_USER_ROLES, ALLOWED_AI_ROLES, buildArchitectPrompt, buildImportPrompt, buildChatSystemPrompt } from '../prompts/scenario.prompts';
+import { ALLOWED_USER_ROLES, ALLOWED_AI_ROLES, buildArchitectPrompt, buildImportPrompt, buildChatSystemPrompt, buildLiveExtractionPrompt } from '../prompts/scenario.prompts';
 import { GET_GRAMMAR_PATTERNS_DECLARATION } from '../prompts/curriculum';
 import { GrammarMatch } from '../types/scenario';
 
@@ -86,6 +86,61 @@ export class ScenariosService {
         return { patterns };
       },
     };
+  }
+
+  /** Find-or-create the global Vocab KU for an extracted KU and enroll it for this user. Idempotent. */
+  private async linkVocabKu(uid: string, scenario: Scenario, ku: ExtractedKU): Promise<ExtractedKU> {
+    try {
+      let kuId = ku.kuId;
+
+      if (!kuId) {
+        const globalKu = await this.knowledgeUnitsService.findByContent(ku.content, 'Vocab');
+
+        if (globalKu) {
+          this.logger.log(`Linking "${ku.content}" to existing global KU ${globalKu.id}`);
+          kuId = globalKu.id;
+        } else {
+          this.logger.log(`No global KU found for "${ku.content}" — creating new KU with level hint ${ku.jlptLevel ?? 'none'}`);
+          kuId = await this.knowledgeUnitsService.ensureVocab(ku.content, {
+            reading: ku.reading,
+            definition: ku.meaning,
+            jlptLevel: ku.jlptLevel,
+          });
+        }
+      }
+
+      // Always ensure enrollment, even when kuId was already known — create() is
+      // idempotent, and this is what makes the "known globally, new to this user"
+      // case (the whole point of live-chat extraction's new-to-user filter) actually
+      // enroll a UserKnowledgeUnit instead of silently no-op-ing.
+      await this.userKnowledgeUnitsService.create(uid, kuId, { type: 'scenario', id: scenario.id });
+      return { ...ku, kuId, status: 'learning' };
+    } catch (error) {
+      this.logger.error(`Failed to process KU "${ku.content}" during linking`, error);
+      return ku;
+    }
+  }
+
+  /** Enroll a matched Grammar KU and write its context-example lesson. Idempotent (deterministic doc id). */
+  private async linkGrammarMatch(
+    uid: string,
+    scenario: Scenario,
+    match: GrammarMatch,
+    sourceType: 'scenario' | 'scenario-live' = 'scenario',
+  ): Promise<boolean> {
+    try {
+      await this.userKnowledgeUnitsService.create(uid, match.kuId, { type: 'scenario', id: scenario.id });
+      await this.lessonsService.createUserGrammarLesson(
+        uid,
+        match.kuId,
+        { sourceType, sourceId: scenario.id, sourceTitle: scenario.title },
+        match.exampleFromConversation,
+      );
+      return true;
+    } catch (err) {
+      this.logger.error(`Failed to link grammar match kuId="${match.kuId}"`, err);
+      return false;
+    }
   }
 
   async getAllScenarios(userId: string, limitDays?: number, state?: string): Promise<Scenario[]> {
@@ -340,36 +395,9 @@ export class ScenariosService {
         // Link each extracted KU to its global KU and create a UserKnowledgeUnit.
         if (scenario.extractedKUs && scenario.extractedKUs.length > 0) {
           const updatedKUs: ExtractedKU[] = [];
-
           for (const ku of scenario.extractedKUs) {
-            if (ku.kuId) {
-              updatedKUs.push(ku);
-              continue;
-            }
-
-            try {
-              const globalKu = await this.knowledgeUnitsService.findByContent(ku.content, 'Vocab');
-
-              if (globalKu) {
-                this.logger.log(`Linking "${ku.content}" to existing global KU ${globalKu.id}`);
-                await this.userKnowledgeUnitsService.create(uid, globalKu.id, { type: 'scenario', id: scenario.id });
-                updatedKUs.push({ ...ku, kuId: globalKu.id, status: 'learning' });
-              } else {
-                this.logger.log(`No global KU found for "${ku.content}" — creating new KU with level hint ${ku.jlptLevel ?? 'none'}`);
-                const newKuId = await this.knowledgeUnitsService.ensureVocab(ku.content, {
-                  reading: ku.reading,
-                  definition: ku.meaning,
-                  jlptLevel: ku.jlptLevel,
-                });
-                await this.userKnowledgeUnitsService.create(uid, newKuId, { type: 'scenario', id: scenario.id });
-                updatedKUs.push({ ...ku, kuId: newKuId, status: 'learning' });
-              }
-            } catch (error) {
-              this.logger.error(`Failed to process KU "${ku.content}" during advanceState`, error);
-              updatedKUs.push(ku);
-            }
+            updatedKUs.push(await this.linkVocabKu(uid, scenario, ku));
           }
-
           updateData.extractedKUs = updatedKUs;
         }
 
@@ -377,18 +405,7 @@ export class ScenariosService {
         if (scenario.grammarMatches && scenario.grammarMatches.length > 0) {
           let linked = 0;
           for (const match of scenario.grammarMatches) {
-            try {
-              await this.userKnowledgeUnitsService.create(uid, match.kuId, { type: 'scenario', id: scenario.id });
-              await this.lessonsService.createUserGrammarLesson(
-                uid,
-                match.kuId,
-                { sourceType: 'scenario', sourceId: scenario.id, sourceTitle: scenario.title },
-                match.exampleFromConversation,
-              );
-              linked++;
-            } catch (err) {
-              this.logger.error(`Failed to link grammar match kuId="${match.kuId}"`, err);
-            }
+            if (await this.linkGrammarMatch(uid, scenario, match, 'scenario')) linked++;
           }
           this.logger.log(`Grammar matches: linked ${linked}/${scenario.grammarMatches.length} for scenarioId=${scenario.id}`);
         } else if (scenario.grammarNotes && scenario.grammarNotes.length > 0) {
@@ -398,14 +415,8 @@ export class ScenariosService {
             try {
               const kuId = await this.knowledgeUnitsService.ensureGrammarKU(note);
               if (!kuId) continue;
-              await this.userKnowledgeUnitsService.create(uid, kuId, { type: 'scenario', id: scenario.id });
-              await this.lessonsService.createUserGrammarLesson(
-                uid,
-                kuId,
-                { sourceType: 'scenario', sourceId: scenario.id, sourceTitle: scenario.title },
-                note.exampleInContext,
-              );
-              matched++;
+              const synthetic: GrammarMatch = { kuId, exampleFromConversation: note.exampleInContext };
+              if (await this.linkGrammarMatch(uid, scenario, synthetic, 'scenario')) matched++;
             } catch (err) {
               this.logger.error(`Failed to process grammar note "${note.title}"`, err);
             }
@@ -440,6 +451,14 @@ export class ScenariosService {
           if (evaluation) {
             updateData.evaluation = evaluation;
             this.writeProgressUpdate(scenario, evaluation.rating, updateData);
+          }
+
+          try {
+            const { extractedKUs, grammarMatches } = await this.extractLiveChatKnowledge(uid, scenario, evaluation);
+            updateData.liveExtractedKUs = extractedKUs;
+            updateData.liveGrammarMatches = grammarMatches;
+          } catch (e) {
+            this.logger.error('Failed to extract live-chat knowledge', e);
           }
         } catch (e) {
           this.logger.error("Failed to generate scenario evaluation", e);
@@ -574,6 +593,24 @@ export class ScenariosService {
 
     const firstLine = scenario.dialogue[0];
 
+    // Primary signal: explicit speakerRole, set directly by the generation
+    // prompt — unambiguous regardless of what language/name the model chose
+    // for the free-text `speaker` label. Fixes GitHub #213 (fuzzy string
+    // matching between `speaker` and `roles.ai`/`roles.user` failed silently
+    // whenever the two were in different languages, e.g. "店員" vs "Shop Assistant").
+    if (firstLine.speakerRole) {
+      if (firstLine.speakerRole === 'user') return [];
+      return [{
+        speaker: 'ai',
+        text: firstLine.text,
+        timestamp: Date.now(),
+        roleName: firstLine.speaker,
+      }];
+    }
+
+    // Fallback for scenarios generated before speakerRole existed.
+    this.logger.warn(`getInitialChatHistory: dialogue[0] has no speakerRole (scenario ${scenario.id}, predates #213 fix) — falling back to fuzzy speaker-name matching`);
+
     let userRole: string;
     let aiRolesRaw: string | string[];
 
@@ -657,6 +694,63 @@ export class ScenariosService {
     return evaluation;
   }
 
+  /**
+   * Mines new vocab/grammar from what the user actually said during the live
+   * 'simulate' chat (as opposed to the AI-scripted 'encounter' dialogue), and
+   * enrolls anything genuinely new via the same linking helpers 'encounter'
+   * uses. Deliberately conservative: does not touch SRS/leech state, does not
+   * create review facets — stops at the same enrollment depth 'encounter'
+   * already stops at (UserKnowledgeUnit + UserGrammarLesson).
+   */
+  private async extractLiveChatKnowledge(
+    uid: string,
+    scenario: Scenario,
+    evaluation: ScenarioEvaluation,
+  ): Promise<{ extractedKUs: ExtractedKU[]; grammarMatches: GrammarMatch[] }> {
+    const userLines = (scenario.chatHistory || [])
+      .filter(msg => msg.speaker === 'user')
+      .map(msg => msg.text);
+
+    if (userLines.length === 0) {
+      return { extractedKUs: [], grammarMatches: [] };
+    }
+
+    const prompt = buildLiveExtractionPrompt(scenario, userLines, evaluation.corrections ?? []);
+
+    const data = await this.geminiService.generateWithTools<{ extractedKUs?: any[]; grammarMatches?: any[] }>(
+      prompt,
+      '',
+      [GET_GRAMMAR_PATTERNS_DECLARATION],
+      this.buildGrammarToolHandlers(uid),
+      undefined,
+      { route: '/scenarios/extract-live', topic: scenario.title },
+    );
+
+    const candidateKUs: ExtractedKU[] = Array.isArray(data.extractedKUs) ? data.extractedKUs : [];
+    const candidateMatches: GrammarMatch[] = Array.isArray(data.grammarMatches) ? data.grammarMatches : [];
+
+    // "New to this user" filter — grammar is already scoped to the user's own
+    // enrolled pool by get_grammar_patterns, but vocab has no such scoping, so
+    // skip anything the user already has a UserKnowledgeUnit for.
+    const extractedKUs: ExtractedKU[] = [];
+    for (const ku of candidateKUs) {
+      const globalKu = await this.knowledgeUnitsService.findByContent(ku.content, 'Vocab');
+      if (globalKu) {
+        const existingUku = await this.userKnowledgeUnitsService.findByKuId(uid, globalKu.id);
+        if (existingUku) continue;
+      }
+      extractedKUs.push(await this.linkVocabKu(uid, scenario, { ...ku, kuId: globalKu?.id }));
+    }
+
+    const grammarMatches: GrammarMatch[] = [];
+    for (const match of candidateMatches) {
+      if (await this.linkGrammarMatch(uid, scenario, match, 'scenario-live')) {
+        grammarMatches.push(match);
+      }
+    }
+
+    return { extractedKUs, grammarMatches };
+  }
 
   private progressStatusFromStars(stars: number): ProgressStatus {
     if (stars <= 0) return 'reviewing';

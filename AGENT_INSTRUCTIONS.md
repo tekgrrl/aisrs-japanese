@@ -13,6 +13,7 @@
 - **Package Management**: Use `yarn` exclusively (`yarn add`, `yarn remove`). NEVER run `npm install`.
 - **Git Flow**: **NEVER push directly to the `main` branch.** Always create a new branch for every feature or fix (e.g., `feat/my-feature`, `fix/my-bug`) and use Pull Requests.
 - **Commits**: Format commits to reference issue numbers (e.g., `feat: update prompt logic, fixes #12`).
+- **GitHub identity**: All AI-agent GitHub activity (issues, PR/issue comments, commits, pushes) MUST be attributed to the `claude-reviewer-aigenki` GitHub App bot, never the human user's own account. Mint a short-lived installation token with `node scripts/github-app-token.js` (config in `scripts/.env.github-app`, gitignored) and use it via `GH_TOKEN=$(node scripts/github-app-token.js) gh <command>`, or as the password in an `https://x-access-token:<token>@github.com/...` remote URL for `git push`. Never use the ambient `gh auth login` session for agent-initiated GitHub actions.
 - **Editing Tool**: Always use standard code block edits with atomic, idempotent approaches. Avoid massive raw rewrites where localized modifications are sufficient.
 
 ## Development "Gotchas"

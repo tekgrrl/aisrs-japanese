@@ -121,6 +121,7 @@ export default function ScenarioPage({
       } else {
         setChatHistory([]);
       }
+      return data;
     } catch (err) {
       setError("Could not load scenario");
       console.error(err);
@@ -272,15 +273,20 @@ export default function ScenarioPage({
       if (!res.ok) throw new Error("Failed to advance scenario");
 
       // Refresh scenario data to reflect new state
-      await fetchScenario();
+      const updated = await fetchScenario();
       if (scenario.state === "encounter") {
         window.dispatchEvent(new CustomEvent("refreshStats"));
         setToast(`${scenario.extractedKUs.length} items added to your learning queue`);
         setTimeout(() => setToast(null), 4000);
       } else if (scenario.state === "drill") {
         // Moved to simulate
-      } else if (scenario.state === "simulate") {
-        // alert("Session Completed!");
+      } else if (scenario.state === "simulate" && updated) {
+        const liveCount = (updated.liveExtractedKUs?.length ?? 0) + (updated.liveGrammarMatches?.length ?? 0);
+        if (liveCount > 0) {
+          window.dispatchEvent(new CustomEvent("refreshStats"));
+          setToast(`${liveCount} new item${liveCount === 1 ? '' : 's'} added from your conversation`);
+          setTimeout(() => setToast(null), 4000);
+        }
       }
     } catch (err) {
       console.error(err);

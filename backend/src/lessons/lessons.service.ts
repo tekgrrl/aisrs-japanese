@@ -237,7 +237,7 @@ export class LessonsService {
   async createUserGrammarLesson(
     uid: string,
     kuId: string,
-    source: { sourceType: 'scenario' | 'concept'; sourceId: string; sourceTitle: string },
+    source: { sourceType: 'scenario' | 'concept' | 'scenario-live'; sourceId: string; sourceTitle: string },
     contextExample: { japanese: string; english: string; fragments: string[]; accepted_alternatives: string[] },
   ): Promise<UserGrammarLesson> {
     const docId = `${kuId}_${source.sourceType}_${source.sourceId}`;

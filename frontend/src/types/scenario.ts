@@ -18,6 +18,8 @@ export interface ChatMessage {
 
 export interface ScenarioDialogueLine {
   speaker: string;
+  /** Unambiguous who's-speaking signal, independent of the free-text `speaker` label's language/wording. See GitHub #213. */
+  speakerRole?: "user" | "ai";
   text: string;
   translation: string;
   audioUrl?: string;
@@ -39,6 +41,16 @@ export interface GrammarNote {
   title: string;
   explanation: string;
   exampleInContext: {
+    japanese: string;
+    english: string;
+    fragments: string[];
+    accepted_alternatives: string[];
+  };
+}
+
+export interface GrammarMatch {
+  kuId: string;
+  exampleFromConversation: {
     japanese: string;
     english: string;
     fragments: string[];
@@ -78,6 +90,12 @@ export interface Scenario {
   dialogue: ScenarioDialogueLine[];
   extractedKUs: ExtractedKU[];
   grammarNotes: GrammarNote[];
+  grammarMatches?: GrammarMatch[];
+
+  /** Vocab mined from the user's OWN chatHistory turns at simulate->completed (not AI-scripted). */
+  liveExtractedKUs?: ExtractedKU[];
+  /** Grammar matches mined the same way. */
+  liveGrammarMatches?: GrammarMatch[];
 
   /** @deprecated - migrating to User state models */
   state: ScenarioState;
