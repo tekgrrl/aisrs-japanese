@@ -239,7 +239,7 @@ export interface UserGrammarLesson {
   id: string;
   kuId: string;
   lessonId: string;      // = kuId (Grammar lessons stored at lessons/{kuId})
-  sourceType: 'scenario' | 'concept';
+  sourceType: 'scenario' | 'concept' | 'scenario-live';
   sourceId: string;
   sourceTitle: string;
   contextExample: {

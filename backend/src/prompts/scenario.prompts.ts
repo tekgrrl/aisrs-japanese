@@ -59,6 +59,7 @@ ${dto.userRole && dto.aiRole
 6. **Data Formatting (CRITICAL):**
    - \`title\`, \`description\` and all \`setting\` object fields should be in English
    - **NO ROMAJI**. Never include Romaji in any field — including grammar explanations. Write Japanese words in Japanese script (e.g. です, の) not romanised text (e.g. 'desu', 'no').
+   - **\`dialogue[].speakerRole\` is REQUIRED on every line and MUST be either \`"user"\` or \`"ai"\`.** Set it based on who is actually speaking, independent of whatever name or language you chose for the \`speaker\` field on that same line (e.g. if \`speaker\` is "店員", a Japanese label, and that character is one of your AI role(s), \`speakerRole\` is still \`"ai"\`).
    - **Extracted KUs:**
      - \`content\`: Japanese text ONLY (e.g., "本屋"). No readings or definitions in this field.
      - \`reading\`: Kana reading ONLY (e.g., "ほんや"). No Romaji.
@@ -86,6 +87,7 @@ ${dto.userRole && dto.aiRole
   "dialogue": [
     {
       "speaker": "EXACT_NAME_FROM_PARTICIPANTS_ARRAY",
+      "speakerRole": "user or ai — MUST exactly match who is actually speaking this line, regardless of what name/language you used for 'speaker'",
       "text": "Japanese text",
       "translation": "English translation"
     }
@@ -176,6 +178,84 @@ export function buildChatSystemPrompt(
 }
 
 // ---------------------------------------------------------------------------
+// Live-chat knowledge extraction prompt
+// ---------------------------------------------------------------------------
+
+/**
+ * Builds the prompt for mining new vocab/grammar from what the user actually
+ * said during a live 'simulate' roleplay — as opposed to buildArchitectPrompt,
+ * which extracts from the AI's own pre-scripted dialogue.
+ *
+ * @param scenario - The completed scenario document.
+ * @param userLines - The user's own chatHistory turns, verbatim (never the AI's lines).
+ * @param corrections - The evaluation's corrections[] — things the user got wrong, so they
+ *                       must be EXCLUDED from credit (a correction proves the user did NOT
+ *                       produce that form correctly themselves).
+ */
+export function buildLiveExtractionPrompt(
+  scenario: Scenario,
+  userLines: string[],
+  corrections: { original: string; correction: string; explanation: string }[],
+): string {
+  const userLinesBlock = userLines.length > 0
+    ? userLines.map((line, i) => `${i + 1}. ${line}`).join('\n')
+    : '(no user lines)';
+
+  const correctionsBlock = corrections.length > 0
+    ? corrections.map(c => `- User said/wrote: "${c.original}" → should have been: "${c.correction}" (${c.explanation})`).join('\n')
+    : '(none — the user made no flagged mistakes this session)';
+
+  return `
+You are a Japanese language curriculum assistant. A learner just finished a LIVE roleplay conversation (not a scripted one) at level ${scenario.difficultyLevel}, titled "${scenario.title}".
+
+**What the learner actually said (their own turns, verbatim, in order):**
+${userLinesBlock}
+
+**Mistakes the learner was corrected on this session (EXCLUDE these — they prove the learner did NOT produce this form correctly themselves):**
+${correctionsBlock}
+
+**Your task:**
+Identify vocabulary and grammar the learner correctly and independently produced in their own lines above — real evidence of what they can actually use, not what the AI said to them. This is being used to update their personal knowledge tracking, so precision matters more than coverage.
+
+**Requirements:**
+1. **Vocabulary:** Extract 0-8 vocab words the learner used correctly and independently. Do NOT include anything from the corrections list above. Do NOT extract vocabulary that only appeared in the AI's lines. If nothing qualifies, return an empty array — do not force matches.
+2. **Grammar:** Call \`get_grammar_patterns("${scenario.difficultyLevel}")\` to see the pool of grammar patterns this learner is already enrolled in. Identify 0-3 patterns from those results that the learner actually used correctly in their own lines above (not merely patterns the AI used). For each, provide the learner's own sentence as the example (with fragments for the typing exercise). If none of the pool's patterns were used correctly by the learner, return an empty \`grammarMatches\` array — do not force matches.
+3. **Data Formatting (CRITICAL):**
+   - **NO ROMAJI**. Write Japanese words in Japanese script only.
+   - \`kuId\` in \`grammarMatches\` MUST be the exact id returned by \`get_grammar_patterns\`. Never invent an ID.
+   - \`exampleFromConversation.japanese\` MUST be the learner's own words from the "What the learner actually said" block above, not a rewritten or idealized version.
+
+**Output Schema (Return ONLY raw JSON):**
+{
+  "extractedKUs": [
+    {
+      "content": "Japanese text only",
+      "reading": "Kana reading only",
+      "meaning": "English definition",
+      "type": "vocab",
+      "jlptLevel": "N4"
+    }
+  ],
+  "grammarMatches": [
+    {
+      "kuId": "exact-ku-id-from-tool",
+      "exampleFromConversation": {
+        "japanese": "The learner's own sentence, verbatim",
+        "english": "English translation",
+        "fragments": ["minimal", "meaningful", "chunks"],
+        "accepted_alternatives": ["array of valid re-orderings, or empty array"]
+      }
+    }
+  ]
+}
+
+**Grammar Match Fragments Rules:**
+- ${FRAGMENT_CONTRACT}
+- ${ACCEPTED_ALTERNATIVES_DEF}
+`;
+}
+
+// ---------------------------------------------------------------------------
 // Manual conversation import prompt
 // ---------------------------------------------------------------------------
 
@@ -207,6 +287,7 @@ ${dto.conversationText}
    - If there are multiple partner roles, assign each line to the most appropriate one based on the conversation context.
    - If the conversation uses labels (A/B, names, numbers), map them to the correct role.
    - Add an accurate English translation for each line.
+   - Set \`speakerRole\` on every line to \`"user"\` if it's "${dto.userRole}" speaking, or \`"ai"\` if it's one of the partner role(s) speaking — this must be set independent of whatever label the conversation itself used.
 2. **Setting:** Infer location, participants, goal, timeOfDay, and visualPrompt from the conversation.${dto.sceneNotes ? ' Use the provided scene context as your primary guide.' : ''}
 3. **Vocabulary:** Extract 3-5 key vocabulary items the learner needs to participate in this conversation.
 4. **Grammar Matches:** Call \`get_grammar_patterns("${dto.difficulty ?? 'N4'}")\` to see the available grammar pool. Identify 1-3 patterns from those results that appear in the conversation. For each, provide a short example sentence from the conversation (with fragments for the typing exercise). If no patterns from the pool fit, return an empty \`grammarMatches\` array.
@@ -236,7 +317,7 @@ ${dto.conversationText}
     "ai": ${aiRolesJson}
   },
   "dialogue": [
-    { "speaker": "EXACT_ROLE_NAME", "text": "Japanese text verbatim", "translation": "English translation" }
+    { "speaker": "EXACT_ROLE_NAME", "speakerRole": "user or ai", "text": "Japanese text verbatim", "translation": "English translation" }
   ],
   "extractedKUs": [
     { "content": "本屋", "reading": "ほんや", "meaning": "Bookstore", "type": "vocab", "jlptLevel": "N4" }
