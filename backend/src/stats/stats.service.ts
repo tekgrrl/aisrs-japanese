@@ -90,10 +90,6 @@ export class StatsService {
         const now = new Date();
         const currentStreak = userStats.currentStreak || 0;
         const totalActive = reviewingSnapshot.data().count + reviewsDueCount;
-        
-        const tutorContext = userStatsDoc.data()?.tutorContext || {};
-        const weakGrammarPoints = tutorContext.weakGrammarPoints || [];
-        const leechVocab = tutorContext.leechVocab || [];
 
         // --- CALCULATION LOGIC ---
 
@@ -145,10 +141,6 @@ export class StatsService {
             reviewCount: totalActive,
             reviewsDue: reviewsDueCount,
             simulateCount: simulateScenariosSnapshot.data().count,
-
-            // Tutor context struggles
-            weakGrammarPoints: weakGrammarPoints,
-            leechVocab: leechVocab,
 
             // New Widget Data
             next24HoursCount: next24HoursCount,
