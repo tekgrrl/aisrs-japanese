@@ -33,6 +33,7 @@ Guidelines:
 - Use frontier_vocab items where natural; do not force them into the dialogue.
 - If the user has leech_vocab, weave repair opportunities into the content.
 - Keep output at the user's jlptLevel unless a specific difficulty is stated in the request.
+- Call get_grammar_patterns(jlptLevel) to see the grammar pool available for linking. Identify 1-2 patterns from those results that naturally appear in your dialogue and populate grammarMatches with a short example sentence taken directly from the conversation (with fragments for the typing exercise). Never invent a kuId — only use IDs returned by get_grammar_patterns. If no pool patterns fit the dialogue, return an empty grammarMatches array.
 - When you have gathered sufficient context, call create_scenario to produce and save the output.
 - You will be warned when you are on your final tool round. Heed that warning.
 

@@ -125,6 +125,22 @@ export const TOOL_REGISTRY: AiToolDefinition[] = [
     },
   },
   {
+    name: 'get_grammar_patterns',
+    description:
+      'Returns the available Grammar KUs in the learner pool for a given JLPT level. Call this to see which grammar patterns you can reference for grammarMatches. Your grammarMatches MUST only contain kuIds returned by this tool — never invent an ID.',
+    parameters: {
+      type: 'object',
+      properties: {
+        jlptLevel: {
+          type: 'string',
+          enum: ['N5', 'N4', 'N3', 'N2', 'N1'],
+          description: 'JLPT level to query (e.g. "N4"). Returns patterns at that level.',
+        },
+      },
+      required: ['jlptLevel'],
+    },
+  },
+  {
     name: 'create_scenario',
     description:
       'Validate and save a completed scenario. Call this once you have gathered sufficient context and assembled all scenario fields. The backend validates the schema before saving.',
@@ -243,6 +259,42 @@ export const TOOL_REGISTRY: AiToolDefinition[] = [
             required: ['title', 'exampleInContext'],
           },
         },
+        grammarMatches: {
+          type: 'array',
+          description:
+            'Grammar patterns from get_grammar_patterns that naturally appear in the dialogue. Preferred over grammarNotes — kuId must be an exact ID returned by get_grammar_patterns, never invented. Return an empty array if none of the pool patterns fit the dialogue.',
+          items: {
+            type: 'object',
+            properties: {
+              kuId: {
+                type: 'string',
+                description: 'Exact kuId from get_grammar_patterns.',
+              },
+              exampleFromConversation: {
+                type: 'object',
+                properties: {
+                  japanese: {
+                    type: 'string',
+                    description: 'Sentence from the dialogue in Japanese only, no furigana or Romaji.',
+                  },
+                  english: { type: 'string', description: 'English translation of the example.' },
+                  fragments: {
+                    type: 'array',
+                    items: { type: 'string' },
+                    description: 'Minimal, meaningful chunks of the sentence for the typing exercise.',
+                  },
+                  accepted_alternatives: {
+                    type: 'array',
+                    items: { type: 'string' },
+                    description: 'Valid re-orderings or omittable-particle variants, or empty array.',
+                  },
+                },
+                required: ['japanese', 'english', 'fragments', 'accepted_alternatives'],
+              },
+            },
+            required: ['kuId', 'exampleFromConversation'],
+          },
+        },
       },
       required: [
         'title',
@@ -252,7 +304,6 @@ export const TOOL_REGISTRY: AiToolDefinition[] = [
         'roles',
         'dialogue',
         'extractedKUs',
-        'grammarNotes',
       ],
     },
   },
