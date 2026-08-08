@@ -44,6 +44,10 @@ export class ScenariosService {
     return this.db.collection('users').doc(uid).collection(SCENARIOS_COLLECTION);
   }
 
+  async getGrammarPatterns(uid: string, jlptLevel: string): Promise<unknown> {
+    return this.buildGrammarToolHandlers(uid).get_grammar_patterns({ jlptLevel });
+  }
+
   private buildGrammarToolHandlers(uid: string) {
     return {
       get_grammar_patterns: async (args: Record<string, unknown>) => {

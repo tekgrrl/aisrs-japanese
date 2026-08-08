@@ -61,6 +61,8 @@ export class TutorToolExecutor {
         return this.searchKnowledgeUnits(call.args);
       case 'get_level_seed':
         return getLevelSeed(call.args.jlptLevel as string);
+      case 'get_grammar_patterns':
+        return this.scenariosService.getGrammarPatterns(uid, call.args.jlptLevel as string);
       case 'create_scenario':
         return this.scenariosService.saveFromTutor(uid, call.args);
       default:
