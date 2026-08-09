@@ -149,6 +149,25 @@ export class LessonsService {
         if ((lessonJson as any).definitions.length > 0) {
           (lessonJson as any).definition = (lessonJson as any).definitions.join(', ');
         }
+
+        // Safety net: the prompt already instructs the model to leave component_kanji
+        // empty for words normally written in kana (and even names examples), but it
+        // doesn't reliably comply — seen in practice for くれる, which got a component
+        // kanji (呉) that doesn't appear anywhere in the word's own kana spelling. Any
+        // listed "component" kanji that isn't actually a character in the vocab string
+        // is definitionally wrong, so filter those out regardless of what the model said.
+        const vocabText: string = (lessonJson as any).vocab ?? '';
+        const componentKanji = (lessonJson as any).component_kanji;
+        if (Array.isArray(componentKanji)) {
+          const filtered = componentKanji.filter((k: any) => k?.kanji && vocabText.includes(k.kanji));
+          if (filtered.length !== componentKanji.length) {
+            this.logger.warn(
+              `Dropping invalid component_kanji for "${vocabText}" (kuId=${kuId}): ` +
+              `${componentKanji.filter((k: any) => !filtered.includes(k)).map((k: any) => k?.kanji).join(', ')} not found in the word itself`,
+            );
+          }
+          (lessonJson as any).component_kanji = filtered;
+        }
       }
 
     } catch (parseError) {
