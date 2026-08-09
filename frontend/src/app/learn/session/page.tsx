@@ -65,11 +65,11 @@ async function fetchLessonWithRetry(item: QueueItem): Promise<Lesson> {
   }
 }
 
-async function enrollItem(item: QueueItem): Promise<void> {
+async function enrollItem(item: QueueItem, alreadyKnown = false): Promise<void> {
   await apiFetch("/api/reviews/initialize-sequence", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ kuId: item.kuId }),
+    body: JSON.stringify({ kuId: item.kuId, alreadyKnown }),
   });
 }
 
@@ -459,22 +459,16 @@ export default function LessonSessionPage() {
     })();
   }, []);
 
-  const triggerEnrollment = useCallback((item: QueueItem) => {
-    enrollmentPromises.current.push(enrollItem(item));
+  const triggerEnrollment = useCallback((item: QueueItem, alreadyKnown = false) => {
+    enrollmentPromises.current.push(enrollItem(item, alreadyKnown));
   }, []);
 
-  const advance = useCallback(async () => {
+  // Shared by both "finished the slides normally" and "I already know this" —
+  // both end the current item and move on, differing only in the SRS starting point.
+  const finishItem = useCallback(async (alreadyKnown: boolean) => {
     const loaded = loadedItems[currentItemIdx];
-    const slides = slideCount(loaded);
-    const isLastSlide = currentSlideIdx >= slides - 1;
+    triggerEnrollment(loaded.item, alreadyKnown);
     const isLastItem = currentItemIdx >= loadedItems.length - 1;
-
-    if (!isLastSlide) {
-      setCurrentSlideIdx(s => s + 1);
-      return;
-    }
-    // Finished this item — enroll it
-    triggerEnrollment(loaded.item);
 
     if (!isLastItem) {
       setCurrentItemIdx(i => i + 1);
@@ -487,7 +481,23 @@ export default function LessonSessionPage() {
     await Promise.allSettled(enrollmentPromises.current);
     window.dispatchEvent(new CustomEvent("refreshStats"));
     setEnrolling(false);
-  }, [currentItemIdx, currentSlideIdx, loadedItems, triggerEnrollment]);
+  }, [currentItemIdx, loadedItems, triggerEnrollment]);
+
+  const advance = useCallback(() => {
+    const loaded = loadedItems[currentItemIdx];
+    const slides = slideCount(loaded);
+    const isLastSlide = currentSlideIdx >= slides - 1;
+
+    if (!isLastSlide) {
+      setCurrentSlideIdx(s => s + 1);
+      return;
+    }
+    finishItem(false);
+  }, [currentItemIdx, currentSlideIdx, loadedItems, finishItem]);
+
+  const markKnown = useCallback(() => {
+    finishItem(true);
+  }, [finishItem]);
 
   const retreat = useCallback(() => {
     if (currentSlideIdx > 0) { setCurrentSlideIdx(s => s - 1); return; }
@@ -592,6 +602,15 @@ export default function LessonSessionPage() {
           >
             {loaded.item.type}
           </span>
+        </div>
+
+        <div className="flex justify-end -mt-4 mb-4">
+          <button
+            onClick={markKnown}
+            className="text-xs text-shodo-ink-faint hover:text-shodo-ink underline decoration-dotted underline-offset-2 transition-colors"
+          >
+            Already know this? Skip ahead →
+          </button>
         </div>
 
         {/* Slide content */}
