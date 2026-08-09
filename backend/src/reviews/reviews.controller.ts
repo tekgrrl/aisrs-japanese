@@ -3,6 +3,7 @@ import { ReviewsService } from './reviews.service';
 import { ReviewProgressService } from '../review-progress/review-progress.service';
 import { FirebaseAuthGuard } from '../auth/firebase-auth.guard';
 import { UserId } from '../auth/user-id.decorator';
+import { ALREADY_KNOWN_STAGE } from '../lib/constants';
 
 @Controller('reviews')
 @UseGuards(FirebaseAuthGuard)
@@ -64,10 +65,11 @@ export class ReviewsController {
   @Post('initialize-sequence')
   async initializeSequence(
     @UserId() uid: string,
-    @Body() body: { kuId: string },
+    @Body() body: { kuId: string; alreadyKnown?: boolean },
   ) {
     if (!body.kuId) throw new BadRequestException('Missing kuId');
-    return this.reviewProgressService.initializeSequence(uid, body.kuId);
+    const startAtSrsStage = body.alreadyKnown ? ALREADY_KNOWN_STAGE : 0;
+    return this.reviewProgressService.initializeSequence(uid, body.kuId, startAtSrsStage);
   }
 
   @Get('facets')

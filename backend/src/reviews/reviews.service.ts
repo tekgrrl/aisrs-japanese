@@ -11,7 +11,7 @@ import {
     REVIEW_FACETS_COLLECTION,
     USER_STATS_COLLECTION,
 } from '../firebase/firebase.module';
-import { ADMIN_USER_ID, MASTERED_STAGE, SELF_CERTIFIED_STAGE } from '../lib/constants';
+import { ADMIN_USER_ID, MASTERED_STAGE, SELF_CERTIFIED_STAGE, SRS_INTERVALS } from '../lib/constants';
 import { GeminiService } from '../gemini/gemini.service';
 import { QuestionsService } from '../questions/questions.service';
 import { FacetType, ReviewFacet } from '@/types';
@@ -39,30 +39,7 @@ export class ReviewsService {
     private readonly logger = new Logger(ReviewsService.name);
 
     // SRS intervals in hours (maps to srsStage).
-    // Set SRS_TEST_MODE=true in backend/.env to use the compressed testing schedule.
-    private readonly INTERVALS = process.env.SRS_TEST_MODE === 'true'
-        ? {
-            0: 10 / 60,   // 10 min
-            1: 10 / 60,   // 10 min
-            2: 10 / 60,   // 10 min
-            3: 10 / 60,   // 10 min
-            4: 10 / 60,   // 10 min
-            5: 10 / 60,   // 10 min
-            6: 730,
-            7: 2920,
-            8: 8760,
-        }
-        : {
-            0: 10 / 60,   // 10 min
-            1: 8,         // 8 h
-            2: 24,        // 1 day
-            3: 72,        // 3 days
-            4: 168,       // 1 week
-            5: 336,       // 2 weeks
-            6: 730,       // ~1 month
-            7: 2920,      // 4 months
-            8: 8760,      // 1 year
-        };
+    private readonly INTERVALS = SRS_INTERVALS;
 
     constructor(
         @Inject(FIRESTORE_CONNECTION) private readonly db: Firestore,

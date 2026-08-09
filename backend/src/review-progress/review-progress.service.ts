@@ -4,7 +4,7 @@ import {
   FIRESTORE_CONNECTION,
   REVIEW_FACETS_COLLECTION,
 } from '../firebase/firebase.module';
-import { ADMIN_USER_ID } from '../lib/constants';
+import { ADMIN_USER_ID, SRS_INTERVALS } from '../lib/constants';
 import { FACET_SEQUENCES } from '../lib/facet-sequences';
 import {
   FacetStageDefinition,
@@ -50,7 +50,19 @@ export class ReviewProgressService {
   async initializeSequence(
     uid: string,
     kuId: string,
+    startAtSrsStage = 0,
   ): Promise<{ stage: number; facetsCreated: number }> {
+    // Idempotent: if this KU's sequence was already initialized (e.g. a retried
+    // enrollment call, or the item briefly reappearing in the learning queue),
+    // creating facets again would silently duplicate the whole first stage.
+    const existingUku = await this.userKnowledgeUnitsService.findByKuId(uid, kuId);
+    if (existingUku?.currentStage) {
+      this.logger.log(
+        `initializeSequence: already initialized for uid=${uid} kuId=${kuId} (currentStage=${existingUku.currentStage}), skipping`,
+      );
+      return { stage: existingUku.currentStage, facetsCreated: 0 };
+    }
+
     const ku = await this.knowledgeUnitsService.findOne(kuId);
     if (!ku) {
       this.logger.warn(`initializeSequence: KU not found kuId=${kuId}`);
@@ -76,13 +88,24 @@ export class ReviewProgressService {
     }
 
     await this.userKnowledgeUnitsService.create(uid, kuId);
-    const facetsCreated = await this.createFacetsForStage(uid, kuId, ku, lesson, firstStage);
+    const facetsCreated = await this.createFacetsForStage(uid, kuId, ku, lesson, firstStage, startAtSrsStage);
     await this.userKnowledgeUnitsService.update(uid, kuId, { currentStage: firstStage.stage });
     await this.learningProgressService.recomputeAndCache(uid, kuId);
 
     this.logger.log(
-      `Initialized sequence for uid=${uid} kuId=${kuId}: stage=${firstStage.stage} facets=${facetsCreated}`,
+      `Initialized sequence for uid=${uid} kuId=${kuId}: stage=${firstStage.stage} facets=${facetsCreated} startAtSrsStage=${startAtSrsStage}`,
     );
+
+    // If the caller front-loaded the SRS stage far enough to already satisfy this
+    // stage's unlock condition, cascade forward immediately rather than waiting
+    // for the (now distant) nextReviewAt to come due. Carry the same startAtSrsStage
+    // through the cascade so every unlocked stage is equally front-loaded — otherwise
+    // "I already know this" would front-load only stage 1 and dump the very next
+    // stage's facets in immediately-due at srsStage 0.
+    if (startAtSrsStage > 0) {
+      await this.checkAndAdvanceStage(uid, kuId, startAtSrsStage);
+    }
+
     return { stage: firstStage.stage, facetsCreated };
   }
 
@@ -90,8 +113,13 @@ export class ReviewProgressService {
    * Called after every facet SRS update. Checks whether the current stage's
    * unlock condition is met and if so creates the next stage's facets.
    * Non-blocking — caller should fire-and-forget.
+   *
+   * startAtSrsStage is only non-zero when cascading from an "already known"
+   * front-loaded enrollment (see initializeSequence) — it's carried through
+   * and re-checked recursively so the cascade keeps unlocking every stage the
+   * elevated SRS stage satisfies, rather than stopping after one hop.
    */
-  async checkAndAdvanceStage(uid: string, kuId: string): Promise<void> {
+  async checkAndAdvanceStage(uid: string, kuId: string, startAtSrsStage = 0): Promise<void> {
     const uku = await this.userKnowledgeUnitsService.findByKuId(uid, kuId);
     if (!uku?.currentStage) return; // 0 or missing = sequence not initialized
 
@@ -130,9 +158,13 @@ export class ReviewProgressService {
       `Advancing sequence uid=${uid} kuId=${kuId}: ${uku.currentStage} → ${nextStage.stage}`,
     );
 
-    await this.createFacetsForStage(uid, kuId, ku, lesson, nextStage);
+    await this.createFacetsForStage(uid, kuId, ku, lesson, nextStage, startAtSrsStage);
     await this.userKnowledgeUnitsService.update(uid, kuId, { currentStage: nextStage.stage });
     await this.learningProgressService.recomputeAndCache(uid, kuId);
+
+    if (startAtSrsStage > 0) {
+      await this.checkAndAdvanceStage(uid, kuId, startAtSrsStage);
+    }
   }
 
   // ─── Private helpers ────────────────────────────────────────────────────────
@@ -193,9 +225,13 @@ export class ReviewProgressService {
     ku: KnowledgeUnit,
     lesson: Lesson,
     stageDef: FacetStageDefinition,
+    startAtSrsStage = 0,
   ): Promise<number> {
     const batch = this.db.batch();
     const now = Timestamp.now();
+    const nextReviewAt = startAtSrsStage > 0
+      ? Timestamp.fromMillis(Date.now() + SRS_INTERVALS[startAtSrsStage] * 60 * 60 * 1000)
+      : now;
     let count = 0;
     const facetCountByKuId = new Map<string, number>();
 
@@ -226,27 +262,36 @@ export class ReviewProgressService {
       // parent's — ensure/create that per-character stub so "Review Lesson" and
       // other kuId-based lookups resolve to the Kanji itself instead of the parent.
       // source.id (below) keeps these attributed to the parent's sequence for gating.
-      const targetKuIds: string[] = entry.source === 'kanji-components'
+      // A kanji can be a component of many different Vocab words, so also skip
+      // creating a facet the Kanji KU already has (from a previously-enrolled word).
+      const targetKuIds: (string | null)[] = entry.source === 'kanji-components'
         ? await Promise.all(dataItems.map(async d => {
             const kanjiKuId = await this.knowledgeUnitsService.ensureKanjiStub(d.content, d);
             await this.userKnowledgeUnitsService.create(uid, kanjiKuId, { type: 'lesson', id: kuId });
-            return kanjiKuId;
+            const existing = await this.facetsColRef(uid)
+              .where('kuId', '==', kanjiKuId)
+              .where('facetType', '==', entry.type)
+              .limit(1)
+              .get();
+            return existing.empty ? kanjiKuId : null;
           }))
         : dataItems.map(() => kuId);
 
       for (let i = 0; i < dataItems.length; i++) {
-        const data = dataItems[i];
         const targetKuId = targetKuIds[i];
+        if (targetKuId === null) continue;
+        const data = dataItems[i];
         batch.set(this.facetsColRef(uid).doc(), {
           kuId: targetKuId,
           sourceCollection: targetKuId === kuId ? (ku.type === 'Concept' ? 'concepts' : 'knowledge-units') : 'knowledge-units',
           facetType: entry.type,
-          srsStage: 0,
-          nextReviewAt: now,
+          srsStage: startAtSrsStage,
+          nextReviewAt,
           createdAt: now,
           history: [],
           sequenceStage: stageDef.stage,
           source: { type: 'lesson', id: kuId },
+          ...(startAtSrsStage > 0 ? { selfCertified: true } : {}),
           ...(uid === ADMIN_USER_ID ? { userId: uid } : {}),
           data,
         });
