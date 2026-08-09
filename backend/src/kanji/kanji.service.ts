@@ -65,6 +65,14 @@ export class KanjiService {
             mnemonic_meaning: '', // TODO: Fetch from AI or DB?
             mnemonic_reading: '', // TODO: Fetch from AI or DB?
 
+            // Real example words from Kanji Alive — absent on the Gemini fallback path
+            // (its schema doesn't request them), so default to empty.
+            exampleWords: (apiData.examples ?? []).slice(0, 6).map((ex: any) => ({
+                japanese: ex.japanese,
+                meaning: ex.meaning?.english ?? '',
+                audioUrl: ex.audio?.mp3,
+            })),
+
             // Map DB results to the simplified context shape
             relatedVocab: relatedVocab.map(ku => ({
                 id: ku.id,
