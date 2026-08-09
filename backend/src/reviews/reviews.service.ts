@@ -172,12 +172,23 @@ export class ReviewsService {
             };
         });
 
-        // Post-transaction: recompute and cache UKU status from facet SRS data
+        // Post-transaction side effects below are not needed for the caller's immediate
+        // response (only success/facetId/newStage/nextReview are used by the review UI),
+        // so none of them block the response — each was previously awaited in sequence,
+        // turning one review answer into 4-7 serial Firestore round trips.
+
+        // Recompute and cache UKU status from facet SRS data
         if (txResult.kuId) {
-            await this.learningProgressService.recomputeAndCache(uid, txResult.kuId);
+            void (async () => {
+                try {
+                    await this.learningProgressService.recomputeAndCache(uid, txResult.kuId);
+                } catch (e) {
+                    this.logger.error(`recomputeAndCache failed uid=${uid} kuId=${txResult.kuId}`, e);
+                }
+            })();
         }
 
-        // Post-transaction: check if this SRS update unlocks the next facet stage
+        // Check if this SRS update unlocks the next facet stage
         if (txResult.kuId && txResult.newStage > txResult.prevStage) {
             void (async () => {
                 try {
@@ -188,16 +199,18 @@ export class ReviewsService {
             })();
         }
 
-        // Post-transaction: check if a linked scenario's vocab is now all drill-ready
+        // Check if a linked scenario's vocab is now all drill-ready
         if (txResult.newStage >= 1 && txResult.kuId) {
-            try {
-                const uku = await this.userKnowledgeUnitsService.findByKuId(uid, txResult.kuId);
-                if (uku?.source?.type === 'scenario') {
-                    await this.scenariosService.checkAndSetVocabReady(uid, uku.source.id);
+            void (async () => {
+                try {
+                    const uku = await this.userKnowledgeUnitsService.findByKuId(uid, txResult.kuId);
+                    if (uku?.source?.type === 'scenario') {
+                        await this.scenariosService.checkAndSetVocabReady(uid, uku.source.id);
+                    }
+                } catch (e) {
+                    this.logger.error(`Failed to check vocabReady for uid=${uid} kuId=${txResult.kuId}`, e);
                 }
-            } catch (e) {
-                this.logger.error(`Failed to check vocabReady for uid=${uid} kuId=${txResult.kuId}`, e);
-            }
+            })();
         }
 
         // Post-transaction: update tutorContext leech/weak-grammar tracking + record promotions
