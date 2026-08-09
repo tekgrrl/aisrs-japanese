@@ -24,7 +24,7 @@ Generate a complete grammar lesson matching this JSON schema exactly:
   "title": "Human-readable name (e.g. Making Requests with ～をお願いします)",
   "jlptLevel": "One of: N5, N4, N3, N2, N1",
   "meaning": "One-line summary of what this pattern expresses",
-  "formation": ["How to form it (e.g. noun + をお願いします)", "Add more entries for variant forms or multiple patterns"],
+  "formation": ["How to form it (e.g. noun + をお願いします)", "One entry per variant form or sub-pattern — NEVER combine multiple variants into a single string, even with a newline"],
   "notes": "Nuance, register, common mistakes, contrast with similar patterns",
   "examples": [
     {
