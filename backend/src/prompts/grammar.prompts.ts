@@ -41,6 +41,7 @@ Rules:
 - Provide exactly 3 examples
 - When provided, ALWAYS copy the 'Example from context' data VERBATIM into examples[0], including its exact fragments and accepted_alternatives
 - examples[1] and examples[2] MUST use completely different Japanese sentences with their own unique fragments
+- If the pattern bundles multiple related words/forms (e.g. "よく / あまり / ぜんぜん + verb"), examples[1] and examples[2] MUST each use a different one of those words so all of them get exercised across the lesson, not just one repeated
 - ${FRAGMENT_CONTRACT} The final fragment MUST include the sentence-ending punctuation (。). Each example must have different fragments matching its own sentence.
 - ${ACCEPTED_ALTERNATIVES_DEF}
 - NEVER copy fragments from one example to another
