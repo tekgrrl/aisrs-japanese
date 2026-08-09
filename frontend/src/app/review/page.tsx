@@ -685,7 +685,7 @@ export default function ReviewPage() {
 
     if (facet.facetType === "Kanji-Component-Meaning") {
       return (facet.data?.meaning || "")
-        .split(",")
+        .split(/[,;/]/)
         .map((s: string) => s.trim())
         .filter((s: string) => s);
     }
