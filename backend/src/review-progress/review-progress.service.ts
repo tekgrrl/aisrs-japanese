@@ -169,13 +169,18 @@ export class ReviewProgressService {
     return stageDef.facets.some(entry => this.buildFacetData(entry, lesson).length > 0);
   }
 
-  /** Returns all facets for a KU that belong to a given sequence stage. */
+  /**
+   * Returns all facets belonging to a given sequence stage of a KU's lesson.
+   * Queries by source.id (the lesson/sequence lineage), not kuId — some facets
+   * (e.g. Kanji-Component-*) target a different KU's content than the one whose
+   * sequence they gate, so kuId alone can't identify stage membership.
+   */
   private async getFacetsAtStage(
     uid: string,
     kuId: string,
     stage: number,
   ): Promise<ReviewFacet[]> {
-    const snapshot = await this.facetsColRef(uid).where('kuId', '==', kuId).get();
+    const snapshot = await this.facetsColRef(uid).where('source.id', '==', kuId).get();
     return snapshot.docs
       .map(d => ({ id: d.id, ...d.data() }) as ReviewFacet)
       .filter(f => f.sequenceStage === stage);
@@ -192,6 +197,7 @@ export class ReviewProgressService {
     const batch = this.db.batch();
     const now = Timestamp.now();
     let count = 0;
+    const facetCountByKuId = new Map<string, number>();
 
     for (const entry of stageDef.facets) {
       let dataItems = this.buildFacetData(entry, lesson);
@@ -216,10 +222,24 @@ export class ReviewProgressService {
         );
       }
 
-      for (const data of dataItems) {
+      // Kanji-component facets belong to the character's own Kanji KU, not the
+      // parent's — ensure/create that per-character stub so "Review Lesson" and
+      // other kuId-based lookups resolve to the Kanji itself instead of the parent.
+      // source.id (below) keeps these attributed to the parent's sequence for gating.
+      const targetKuIds: string[] = entry.source === 'kanji-components'
+        ? await Promise.all(dataItems.map(async d => {
+            const kanjiKuId = await this.knowledgeUnitsService.ensureKanjiStub(d.content, d);
+            await this.userKnowledgeUnitsService.create(uid, kanjiKuId, { type: 'lesson', id: kuId });
+            return kanjiKuId;
+          }))
+        : dataItems.map(() => kuId);
+
+      for (let i = 0; i < dataItems.length; i++) {
+        const data = dataItems[i];
+        const targetKuId = targetKuIds[i];
         batch.set(this.facetsColRef(uid).doc(), {
-          kuId,
-          sourceCollection: ku.type === 'Concept' ? 'concepts' : 'knowledge-units',
+          kuId: targetKuId,
+          sourceCollection: targetKuId === kuId ? (ku.type === 'Concept' ? 'concepts' : 'knowledge-units') : 'knowledge-units',
           facetType: entry.type,
           srsStage: 0,
           nextReviewAt: now,
@@ -231,15 +251,20 @@ export class ReviewProgressService {
           data,
         });
         count++;
+        facetCountByKuId.set(targetKuId, (facetCountByKuId.get(targetKuId) ?? 0) + 1);
       }
     }
 
     if (count === 0) return 0;
 
     await batch.commit();
-    await this.userKnowledgeUnitsService.update(uid, kuId, {
-      facet_count: FieldValue.increment(count),
-    });
+    await Promise.all(
+      Array.from(facetCountByKuId.entries()).map(([targetKuId, n]) =>
+        this.userKnowledgeUnitsService.update(uid, targetKuId, {
+          facet_count: FieldValue.increment(n),
+        }),
+      ),
+    );
 
     return count;
   }

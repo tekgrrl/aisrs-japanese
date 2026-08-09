@@ -255,52 +255,6 @@ export function buildVocabCacheContext(jlptLevel: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// Kanji lesson
-// ---------------------------------------------------------------------------
-
-/** Full prompt for generating a Kanji lesson. Source: lessons.service.ts:generateLesson */
-export function buildKanjiLessonPrompt(content: string): string {
-  return `You are an expert Japanese tutor. You will be asked to generate a lesson for the Japanese Kanji: ${content}.
-
-The lesson should be in English. Where you want to use Japanese text for examples, explanations, meanings and readings do so but do not include Romaji.
-
-**Task 1: Detailed breakdown**
-* Provide the **Meanings**, **On'yomi**, **Kun'yomi** readings.
-* Identify the **Radical** (character, meaning).
-* **Stroke Count**.
-
-**Task 2: Mnemonics**
-* Generate a **Meaning Mnemonic**.
-* Generate a **Reading Mnemonic**.
-
-**Task 3: Related Vocabulary**
-* Provide 3-5 related vocabulary words (Content + Reading).
-
-**Response Schema:**
-You MUST return a valid JSON object matching this schema:
-{
-  "type": "Kanji",
-  "kanji": "The Kanji character",
-  "meaning": "Core meaning(s)",
-  "onyomi": ["reading (katakana)"],
-  "kunyomi": ["reading (hiragana)"],
-  "strokeCount": 0,
-  "strokeImages": [],
-  "radical": {
-    "character": "Radical char",
-    "meaning": "Radical meaning",
-    "image": "",
-    "animation": []
-  },
-  "mnemonic_meaning": "Story...",
-  "mnemonic_reading": "Story...",
-  "relatedVocab": [
-    { "id": "", "content": "Word", "reading": "Reading" }
-  ]
-}`;
-}
-
-// ---------------------------------------------------------------------------
 // Kanji details (fallback metadata lookup)
 // ---------------------------------------------------------------------------
 

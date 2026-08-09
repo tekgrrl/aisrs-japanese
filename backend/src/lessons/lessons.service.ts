@@ -7,9 +7,10 @@ import { KnowledgeUnit, Lesson, VocabLesson, KanjiLesson, GrammarLesson, Grammar
 import { performance } from 'perf_hooks';
 import { KnowledgeUnitsService } from '../knowledge-units/knowledge-units.service';
 import { ValidationService } from '../validation/validation.service';
-import { buildVocabLessonMessage, buildVocabCacheContext, buildKanjiLessonPrompt } from '../prompts/vocab.prompts';
+import { buildVocabLessonMessage, buildVocabCacheContext } from '../prompts/vocab.prompts';
 import { buildGrammarLessonMessage } from '../prompts/grammar.prompts';
 import { ADMIN_USER_ID } from '../lib/constants';
+import { KanjiService } from '../kanji/kanji.service';
 
 function applyKuOverrides(lesson: Lesson, ku: KnowledgeUnit): Lesson {
   if (ku.type !== 'Grammar') return lesson;
@@ -27,6 +28,7 @@ export class LessonsService {
     private readonly geminiService: GeminiService,
     private readonly knowledgeUnitsService: KnowledgeUnitsService,
     private readonly validationService: ValidationService,
+    private readonly kanjiService: KanjiService,
   ) { }
 
   async generateLesson(uid: string, kuId: string, cachedContentName?: string) {
@@ -40,6 +42,13 @@ export class LessonsService {
     }
 
     const ku = kuDoc.data() as KnowledgeUnit;
+
+    // Kanji lessons are never AI-generated — always sourced live from Kanji Alive,
+    // same as the top-level Kanji enrollment path (GET /api/kanji/details). No
+    // lessons/{kuId} caching here, matching that path's always-fresh behavior.
+    if (ku.type === "Kanji") {
+      return this.kanjiService.getKanjiDetails(uid, ku.content, kuId);
+    }
 
     const userDoc = await this.db.collection('users').doc(uid).get();
     const jlptLevel: string = (userDoc.data() as any)?.preferences?.jlptLevel ?? 'N5';
@@ -90,13 +99,9 @@ export class LessonsService {
       return applyKuOverrides(lessonJson, ku);
     }
 
-    if (ku.type === "Kanji") {
-      userMessage = buildKanjiLessonPrompt(ku.content);
-    } else {
-      // TODO: pass ku.data.corpusNotes into buildVocabLessonMessage so Vocab/Kanji corpus
-      // notes are injected into the prompt, mirroring how Grammar uses corpusNotes.
-      userMessage = buildVocabLessonMessage(ku.content, !!cachedContentName, jlptLevel);
-    }
+    // TODO: pass ku.data.corpusNotes into buildVocabLessonMessage so Vocab corpus
+    // notes are injected into the prompt, mirroring how Grammar uses corpusNotes.
+    userMessage = buildVocabLessonMessage(ku.content, !!cachedContentName, jlptLevel);
 
     const lessonString = await this.geminiService.generateLesson(
       userMessage,

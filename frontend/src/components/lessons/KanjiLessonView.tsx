@@ -18,6 +18,25 @@ export default function KanjiLessonView({ lesson }: KanjiLessonViewProps) {
       </div>
       <div className="bg-shodo-paper-dark p-6 rounded-lg shadow-sm mb-8 border border-shodo-ink/10">
         <h2 className="text-2xl font-semibold mb-4 text-shodo-ink">
+          Example Words
+        </h2>
+        {lesson.exampleWords && lesson.exampleWords.length > 0 ? (
+          <ul className="space-y-2">
+            {lesson.exampleWords.map((ex, i) => (
+              <li key={i} className="flex items-baseline gap-3">
+                <span className="text-xl text-shodo-ink">{ex.japanese}</span>
+                <span className="text-md text-shodo-ink-light">{ex.meaning}</span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-shodo-ink-faint italic">
+            No example words provided.
+          </p>
+        )}
+      </div>
+      <div className="bg-shodo-paper-dark p-6 rounded-lg shadow-sm mb-8 border border-shodo-ink/10">
+        <h2 className="text-2xl font-semibold mb-4 text-shodo-ink">
           Radicals
         </h2>
         <ul className="flex flex-wrap gap-4">

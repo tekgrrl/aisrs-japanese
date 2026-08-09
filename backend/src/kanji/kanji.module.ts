@@ -9,5 +9,6 @@ import { GeminiModule } from '../gemini/gemini.module';
   imports: [ConfigModule, KnowledgeUnitsModule, GeminiModule],
   controllers: [KanjiController],
   providers: [KanjiService],
+  exports: [KanjiService],
 })
 export class KanjiModule { }

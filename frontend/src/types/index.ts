@@ -170,6 +170,13 @@ export interface KanjiLesson {
   mnemonic_meaning: string;
   mnemonic_reading: string;
 
+  // Real example words showing the kanji in use (From API)
+  exampleWords?: {
+    japanese: string;
+    meaning: string;
+    audioUrl?: string;
+  }[];
+
   // Context (From your DB)
   // This replaces the static "examples" string
   relatedVocab: {

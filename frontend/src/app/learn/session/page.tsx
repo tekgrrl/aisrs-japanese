@@ -194,13 +194,41 @@ function KanjiCharacterSlide({ loaded }: { loaded: LoadedItem }) {
   );
 }
 
-function KanjiMnemonicMeaningSlide({ loaded }: { loaded: LoadedItem }) {
+function KanjiExampleWordsSlide({ loaded }: { loaded: LoadedItem }) {
   const kl = loaded.lesson as KanjiLesson;
+  const examples = kl.exampleWords ?? [];
+  const playExampleAudio = (url?: string) => {
+    if (url) new Audio(url).play();
+  };
   return (
     <div className="flex flex-col gap-6 max-w-2xl mx-auto">
-      <span className="text-xs font-semibold uppercase tracking-widest text-shodo-ink-faint">Remember the Meaning</span>
+      <span className="text-xs font-semibold uppercase tracking-widest text-shodo-ink-faint">Seen In</span>
       <div className="text-5xl font-bold text-shodo-stamp-red">{loaded.item.content}</div>
-      <p className="text-lg text-shodo-ink-light leading-relaxed">{kl.mnemonic_meaning}</p>
+      {examples.length > 0 ? (
+        <ul className="space-y-3">
+          {examples.map((ex, i) => (
+            <li key={i} className="flex items-center justify-between gap-3">
+              <div>
+                <span className="text-2xl text-shodo-ink">{ex.japanese}</span>
+                <span className="ml-3 text-lg text-shodo-ink-light">{ex.meaning}</span>
+              </div>
+              {ex.audioUrl && (
+                <button
+                  onClick={() => playExampleAudio(ex.audioUrl)}
+                  className="text-shodo-ink-faint hover:text-shodo-accent transition-colors shrink-0"
+                  title="Play audio"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                  </svg>
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-shodo-ink-faint">No example words found.</p>
+      )}
     </div>
   );
 }
@@ -337,7 +365,7 @@ function renderSlide(loaded: LoadedItem, slideIdx: number, onAudio: (text: strin
   if (item.type === "Kanji") {
     switch (slideIdx) {
       case 0: return <KanjiCharacterSlide loaded={loaded} />;
-      case 1: return <KanjiMnemonicMeaningSlide loaded={loaded} />;
+      case 1: return <KanjiExampleWordsSlide loaded={loaded} />;
       case 2: return <KanjiReadingsSlide loaded={loaded} />;
       case 3: return <KanjiVocabSlide loaded={loaded} />;
     }
