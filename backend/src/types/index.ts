@@ -102,6 +102,16 @@ export interface UserRoot {
     /** The set of grammar constructs the AI is permitted to use when generating content for this user. */
     allowedGrammar: string[];
 
+    /**
+     * Vocab the user explicitly said they don't want to learn right now ("Not now" on a
+     * flagged word). Must never be used as incidental/filler content in lessons, reviews,
+     * or scenarios — forward-only: does not retroactively touch already-generated content.
+     */
+    excludedVocab?: string[];
+
+    /** Same as excludedVocab, but for grammar patterns explicitly declined via the same flag flow. */
+    excludedGrammar?: string[];
+
     /** Specific grammar points the user struggles with; AI should emphasize diagnosing and practicing these. */
     weakGrammarPoints: TutorVocabEntry[];
 
@@ -389,7 +399,7 @@ export interface UserKnowledgeUnit {
   facet_count: number;
   history?: any[];
   source?: {
-    type: 'scenario' | 'lesson';
+    type: 'scenario' | 'lesson' | 'flag';
     id: string;
   };
   /** Current position in the facet unlock sequence. 0 = not yet initialized. */

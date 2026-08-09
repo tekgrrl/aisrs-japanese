@@ -48,6 +48,15 @@ export class ScenariosService {
     return this.buildGrammarToolHandlers(uid).get_grammar_patterns({ jlptLevel });
   }
 
+  /** Content the user explicitly flagged "not now" — see issue #222. */
+  private async getExcludedContent(uid: string): Promise<{ excludedVocab: string[]; excludedGrammar: string[] }> {
+    const user = await this.userService.findById(uid);
+    return {
+      excludedVocab: user?.tutorContext?.excludedVocab ?? [],
+      excludedGrammar: user?.tutorContext?.excludedGrammar ?? [],
+    };
+  }
+
   private buildGrammarToolHandlers(uid: string) {
     return {
       get_grammar_patterns: async (args: Record<string, unknown>) => {
@@ -191,7 +200,8 @@ export class ScenariosService {
 
   async generateScenario(userId: string, dto: GenerateScenarioDto): Promise<string> {
     // Apply user preferences as defaults for fields not explicitly set in the DTO
-    const userPrefs = (await this.userService.findById(userId))?.preferences;
+    const user = await this.userService.findById(userId);
+    const userPrefs = user?.preferences;
     const resolvedDto: GenerateScenarioDto = {
       ...dto,
       difficulty: dto.difficulty ?? userPrefs?.jlptLevel ?? 'N4',
@@ -199,7 +209,11 @@ export class ScenariosService {
       sourceContextSentence: dto.sourceContextSentence?.replace(/\[[^\]]*\]/g, '').trim(),
     };
 
-    const prompt = buildArchitectPrompt(resolvedDto);
+    const prompt = buildArchitectPrompt(
+      resolvedDto,
+      user?.tutorContext?.excludedVocab ?? [],
+      user?.tutorContext?.excludedGrammar ?? [],
+    );
 
     try {
       const data = await this.geminiService.generateScenario(
@@ -549,7 +563,8 @@ export class ScenariosService {
       aiRoles = roles.aiRole;
     }
 
-    const systemPrompt = buildChatSystemPrompt(scenario, aiRoles, userRole, referenceScript, historyLines);
+    const { excludedVocab, excludedGrammar } = await this.getExcludedContent(uid);
+    const systemPrompt = buildChatSystemPrompt(scenario, aiRoles, userRole, referenceScript, historyLines, excludedVocab, excludedGrammar);
 
     // 3. Get AI Response
     const aiResponse = await this.geminiService.generateChatResponse(

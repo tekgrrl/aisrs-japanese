@@ -203,7 +203,9 @@ export class QuestionsService {
         const userData = userDoc.data() as any;
         const level = (userData?.preferences?.jlptLevel ?? 'N5') as JlptLevel;
         const allowedGrammar: string[] = userData?.tutorContext?.allowedGrammar ?? [];
-        return { jlptLevel: level, allowedGrammar };
+        const excludedVocab: string[] = userData?.tutorContext?.excludedVocab ?? [];
+        const excludedGrammar: string[] = userData?.tutorContext?.excludedGrammar ?? [];
+        return { jlptLevel: level, allowedGrammar, excludedVocab, excludedGrammar };
       },
     };
   }

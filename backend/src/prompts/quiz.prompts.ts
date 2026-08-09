@@ -46,8 +46,9 @@ Rules:
 6.  If a reading and/or meaning are provided, generate a question where the topic matches those specific constraints only — do not test alternative readings.
 7.  For verb and adjective questions where the answer is a conjugated form, include valid politeness-level alternatives (plain form and polite 〜ます form) in accepted_alternatives unless the question specifically constrains the form.
 8.  LEVEL CONSTRAINT (critical): Use ONLY grammar patterns listed in the cumulative schema returned by get_user_level for the surrounding sentence. The target word itself may be more advanced — that is the point — but every other word and grammatical structure in the question must come from the learner's known schema.
-9.  Ambiguity prevention: if synonyms could fit the blank, use the context field to pin the exact meaning of the target word.
-10. If the question requires verb conjugation and the answer is not the base form, provide enough context to make the expected form unambiguous.`;
+9.  EXCLUSION CONSTRAINT (critical): NEVER use any word or pattern from excludedVocab/excludedGrammar (also returned by get_user_level) in the surrounding sentence, regardless of level — the learner explicitly said they don't want to see these right now.
+10. Ambiguity prevention: if synonyms could fit the blank, use the context field to pin the exact meaning of the target word.
+11. If the question requires verb conjugation and the answer is not the base form, provide enough context to make the expected form unambiguous.`;
 }
 
 /**
@@ -96,7 +97,8 @@ Rules:
 3. 'accepted_alternatives' MUST always be an empty array. The sentence structure uniquely determines the correct particle.
 4. Do NOT use は or が as the particle. Use action particles only: を, に, で, から, へ, と, まで.
 5. LEVEL CONSTRAINT: Use ONLY vocabulary and grammar from the cumulative schema returned by get_user_level for the surrounding sentence.
-6. ${NO_ROMAJI}`;
+6. EXCLUSION CONSTRAINT (critical): NEVER use any word or pattern from excludedVocab/excludedGrammar (also returned by get_user_level) in the surrounding sentence, regardless of level.
+7. ${NO_ROMAJI}`;
 }
 
 /** Few-shot conversation turns for noun+particle questions.
@@ -162,8 +164,9 @@ Rules:
 2. The 'question' field MUST be written entirely in English. Any Japanese sentence shown to the user must be embedded inline as a quoted string — never write the question instruction itself in Japanese.
 3. ${NO_ROMAJI}
 4. LEVEL CONSTRAINT (critical): Use ONLY grammar patterns from the allowedGrammar list returned by get_user_level for any surrounding sentence. The pattern being tested (${pattern}) is the exception — everything else must come from that list.
-5. Keep vocabulary simple and concrete. The user is being tested on grammar, not vocabulary.
-6. ${JSON_ONLY_OUTPUT}`;
+5. EXCLUSION CONSTRAINT (critical): NEVER use any word or pattern from excludedVocab/excludedGrammar (also returned by get_user_level) in the surrounding sentence, regardless of level.
+6. Keep vocabulary simple and concrete. The user is being tested on grammar, not vocabulary.
+7. ${JSON_ONLY_OUTPUT}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -205,7 +208,8 @@ Rules:
 2. The 'question' field MUST be written entirely in English. Any Japanese sentence shown to the user must be embedded inline as a quoted string — never write the instruction itself in Japanese.
 3. ${NO_ROMAJI}
 4. For fill-in-the-blank, the blank must encapsulate the conjugated rule application.
-5. LEVEL CONSTRAINT (critical): Use ONLY vocabulary and grammar patterns from the cumulative schema returned by get_user_level for the surrounding sentence. The mechanic being tested is the exception — everything else must be within the learner's known schema.`;
+5. LEVEL CONSTRAINT (critical): Use ONLY vocabulary and grammar patterns from the cumulative schema returned by get_user_level for the surrounding sentence. The mechanic being tested is the exception — everything else must be within the learner's known schema.
+6. EXCLUSION CONSTRAINT (critical): NEVER use any word or pattern from excludedVocab/excludedGrammar (also returned by get_user_level) in the surrounding sentence, regardless of level.`;
 }
 
 // ---------------------------------------------------------------------------

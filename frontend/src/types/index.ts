@@ -88,6 +88,12 @@ export interface UserRoot {
     /** The set of grammar constructs the AI is permitted to use when generating content for this user. */
     allowedGrammar: string[];
 
+    /** Vocab the user explicitly said they don't want to learn right now. Forward-only exclusion. */
+    excludedVocab?: string[];
+
+    /** Same as excludedVocab, but for grammar patterns. */
+    excludedGrammar?: string[];
+
     /** Specific grammar points the user struggles with; AI should emphasize diagnosing and practicing these. */
     weakGrammarPoints: string[];
 

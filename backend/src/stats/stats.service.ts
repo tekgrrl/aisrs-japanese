@@ -322,6 +322,18 @@ export class StatsService {
         });
     }
 
+    async addToExcludedVocab(uid: string, content: string): Promise<void> {
+        await this.db.collection('users').doc(uid).update({
+            'tutorContext.excludedVocab': FieldValue.arrayUnion(content),
+        });
+    }
+
+    async addToExcludedGrammar(uid: string, pattern: string): Promise<void> {
+        await this.db.collection('users').doc(uid).update({
+            'tutorContext.excludedGrammar': FieldValue.arrayUnion(pattern),
+        });
+    }
+
     async addToWeakGrammarPoints(uid: string, pattern: string, facetType: FacetType): Promise<void> {
         await this.mergeTutorVocabEntry(uid, 'weakGrammarPoints', pattern, [facetType]);
     }

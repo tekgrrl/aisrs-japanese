@@ -320,12 +320,16 @@ export class LessonsService {
       .slice(0, 3)
       .map(d => ({ kuId: d.id, content: d.data().content as string, type: d.data().type as string }));
 
-    // ── Path 2: Enrolled Grammar queue ────────────────────────────────────
-    // Grammar KUs the user enrolled via a scenario (UKU exists) but hasn't
-    // started in review yet (no facets).
+    // ── Path 2: Enrolled-but-not-started queue ────────────────────────────
+    // KUs the user enrolled (via a scenario, or the "help me learn this" flag
+    // flow) but hasn't started in review yet (UKU exists, no facets). Covers
+    // all types, not just Grammar — a flagged Vocab word with zero facets
+    // would otherwise never surface here at all (seenKuIds already excludes
+    // it from the fresh-corpus pool below).
     const enrolledNotStarted = ukuKuIds.filter(id => !facetKuIds.has(id));
 
     let enrolledGrammarItems: { kuId: string; content: string; type: string }[] = [];
+    let enrolledVocabKanjiItems: { kuId: string; content: string; type: string }[] = [];
     if (enrolledNotStarted.length > 0) {
       const chunk = enrolledNotStarted.slice(0, 30);
       const enrolledSnap = await this.db.collection(KNOWLEDGE_UNITS_COLLECTION)
@@ -335,15 +339,24 @@ export class LessonsService {
         .filter(d => d.data().type === 'Grammar')
         .slice(0, 3)
         .map(d => ({ kuId: d.id, content: d.data().content as string, type: d.data().type as string }));
+      enrolledVocabKanjiItems = enrolledSnap.docs
+        .filter(d => d.data().type === 'Vocab' || d.data().type === 'Kanji')
+        .slice(0, 3)
+        .map(d => ({ kuId: d.id, content: d.data().content as string, type: d.data().type as string }));
     }
 
-    // Enrolled grammar first, then corpus grammar, then vocab/kanji
+    // Enrolled grammar first, then corpus grammar, then enrolled vocab/kanji, then corpus vocab/kanji
     const grammarItems = [
       ...enrolledGrammarItems,
       ...grammarCorpusItems.filter(g => !enrolledGrammarItems.some(e => e.kuId === g.kuId)),
     ].slice(0, 3);
 
-    return [...grammarItems, ...vocabKanjiItems].slice(0, 10);
+    const combinedVocabKanjiItems = [
+      ...enrolledVocabKanjiItems,
+      ...vocabKanjiItems.filter(v => !enrolledVocabKanjiItems.some(e => e.kuId === v.kuId)),
+    ].slice(0, 7);
+
+    return [...grammarItems, ...combinedVocabKanjiItems].slice(0, 10);
   }
 
   async processBatch(uid: string, vocabValues: { id: string; content: string }[]) {
