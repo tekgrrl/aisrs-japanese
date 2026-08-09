@@ -88,12 +88,23 @@ export class ReviewProgressService {
     }
 
     await this.userKnowledgeUnitsService.create(uid, kuId);
-    const facetsCreated = await this.createFacetsForStage(uid, kuId, ku, lesson, firstStage, startAtSrsStage);
-    await this.userKnowledgeUnitsService.update(uid, kuId, { currentStage: firstStage.stage });
+
+    // A stage can look applicable from lesson data alone (findFirstApplicableStage)
+    // yet still produce zero facets once per-user dedup is applied — e.g. every
+    // component kanji already has its own Kanji-Component-Meaning facet from an
+    // earlier-enrolled word. Keep trying the next applicable stage rather than
+    // leaving the KU stranded on a stage with no facets that can never advance.
+    const result = await this.createFacetsSkippingEmptyStages(uid, kuId, ku, lesson, sequence, firstStage, startAtSrsStage);
+    if (!result) {
+      this.logger.warn(`initializeSequence: every stage fully deduped for kuId=${kuId}, no facets created`);
+      return { stage: 0, facetsCreated: 0 };
+    }
+
+    await this.userKnowledgeUnitsService.update(uid, kuId, { currentStage: result.stage.stage });
     await this.learningProgressService.recomputeAndCache(uid, kuId);
 
     this.logger.log(
-      `Initialized sequence for uid=${uid} kuId=${kuId}: stage=${firstStage.stage} facets=${facetsCreated} startAtSrsStage=${startAtSrsStage}`,
+      `Initialized sequence for uid=${uid} kuId=${kuId}: stage=${result.stage.stage} facets=${result.facetsCreated} startAtSrsStage=${startAtSrsStage}`,
     );
 
     // If the caller front-loaded the SRS stage far enough to already satisfy this
@@ -106,7 +117,7 @@ export class ReviewProgressService {
       await this.checkAndAdvanceStage(uid, kuId, startAtSrsStage);
     }
 
-    return { stage: firstStage.stage, facetsCreated };
+    return { stage: result.stage.stage, facetsCreated: result.facetsCreated };
   }
 
   /**
@@ -158,13 +169,42 @@ export class ReviewProgressService {
       `Advancing sequence uid=${uid} kuId=${kuId}: ${uku.currentStage} → ${nextStage.stage}`,
     );
 
-    await this.createFacetsForStage(uid, kuId, ku, lesson, nextStage, startAtSrsStage);
-    await this.userKnowledgeUnitsService.update(uid, kuId, { currentStage: nextStage.stage });
+    // Same per-user-dedup concern as initializeSequence: nextStage looked applicable
+    // from lesson data alone but may still produce zero facets for this user.
+    const result = await this.createFacetsSkippingEmptyStages(uid, kuId, ku, lesson, sequence, nextStage, startAtSrsStage);
+    if (!result) return; // nothing further this user needs from the remaining stages
+
+    await this.userKnowledgeUnitsService.update(uid, kuId, { currentStage: result.stage.stage });
     await this.learningProgressService.recomputeAndCache(uid, kuId);
 
     if (startAtSrsStage > 0) {
       await this.checkAndAdvanceStage(uid, kuId, startAtSrsStage);
     }
+  }
+
+  /**
+   * Starting at `stageDef`, creates facets for the first stage that actually
+   * produces at least one facet for this user, trying subsequent applicable
+   * stages if earlier ones are fully deduped (see callers for why that happens).
+   * Returns null if no remaining stage produces any facet.
+   */
+  private async createFacetsSkippingEmptyStages(
+    uid: string,
+    kuId: string,
+    ku: KnowledgeUnit,
+    lesson: Lesson,
+    sequence: KuFacetSequence,
+    stageDef: FacetStageDefinition,
+    startAtSrsStage: number,
+  ): Promise<{ stage: FacetStageDefinition; facetsCreated: number } | null> {
+    let candidate: FacetStageDefinition | null = stageDef;
+    while (candidate) {
+      const facetsCreated = await this.createFacetsForStage(uid, kuId, ku, lesson, candidate, startAtSrsStage);
+      if (facetsCreated > 0) return { stage: candidate, facetsCreated };
+      this.logger.log(`Stage ${candidate.stage} produced no facets for kuId=${kuId} (fully deduped), trying next stage`);
+      candidate = this.findNextApplicableStage(sequence, lesson, candidate.stage);
+    }
+    return null;
   }
 
   // ─── Private helpers ────────────────────────────────────────────────────────
@@ -309,6 +349,18 @@ export class ReviewProgressService {
           facet_count: FieldValue.increment(n),
         }),
       ),
+    );
+
+    // Recompute status for any KU other than the parent that just got a facet
+    // (i.e. Kanji stubs from a kanji-components entry) — the parent's own status
+    // is recomputed by the caller (initializeSequence/checkAndAdvanceStage), but
+    // a Kanji stub's status would otherwise stay stuck at 'learning' until its
+    // facet is actually reviewed for the first time (recomputeAndCache is also
+    // called reactively from updateFacetSrs, but only after that first review).
+    await Promise.all(
+      Array.from(facetCountByKuId.keys())
+        .filter(targetKuId => targetKuId !== kuId)
+        .map(targetKuId => this.learningProgressService.recomputeAndCache(uid, targetKuId)),
     );
 
     return count;
