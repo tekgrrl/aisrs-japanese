@@ -59,7 +59,7 @@ if MODEL_PROVIDER == "gemini":
 
     client = genai.Client()
     response = client.models.generate_content(
-        model="gemini-2.5-flash",
+        model="gemini-3.6-flash",
         contents=prompt,
     )
     raw_ai_text = response.text
@@ -120,6 +120,7 @@ payload = {
     "event": decision,
     "comments": github_comments,
 }
+print(f"Posting review. Decision: {decision}, inline comments: {len(github_comments)}")
 
 # Attempt 1: Post with inline comments
 response = requests.post(review_url, headers=post_headers, json=payload)
@@ -127,7 +128,8 @@ response = requests.post(review_url, headers=post_headers, json=payload)
 # If GitHub rejects the payload (usually due to hallucinated line numbers out of diff bounds)
 if response.status_code == 422 and github_comments:
     print(
-        "GitHub rejected inline comments (likely invalid line numbers). Falling back to summary only."
+        f"GitHub rejected inline comments (likely invalid line numbers): {response.text}. "
+        "Falling back to summary only."
     )
 
     # Roll the inline comments into the main body so the feedback isn't lost
@@ -143,6 +145,20 @@ if response.status_code == 422 and github_comments:
 
     # Attempt 2: Post without inline comments
     response = requests.post(review_url, headers=post_headers, json=payload)
+
+# A review event that would self-approve/self-block this PR (e.g. the reviewing
+# identity happens to match the PR author) is rejected by GitHub's API — fall
+# back to a plain COMMENT rather than losing the review entirely.
+if response.status_code == 422 and payload["event"] != "COMMENT":
+    print(
+        f"GitHub rejected event='{payload['event']}' (likely a self-review restriction): "
+        f"{response.text}. Falling back to a COMMENT-type review."
+    )
+    payload["event"] = "COMMENT"
+    response = requests.post(review_url, headers=post_headers, json=payload)
+
+if not response.ok:
+    print(f"Final review submission failed: {response.status_code} {response.text}")
 
 response.raise_for_status()
 print(f"Review submitted successfully. Decision: {decision}")
