@@ -108,7 +108,10 @@ export const GET_USER_LEVEL_DECLARATION: FunctionDeclaration = {
     'Returns the learner\'s current JLPT level and the exact grammar patterns they have enrolled in. ' +
     'Call this before writing any question so that surrounding sentence grammar and vocabulary ' +
     'stays within what the learner has actually studied. ' +
-    'Use allowedGrammar (not any assumed JLPT schema) as the constraint for surrounding sentences.',
+    'Use allowedGrammar (not any assumed JLPT schema) as the constraint for surrounding sentences. ' +
+    'The response also includes excludedVocab and excludedGrammar — words and patterns the learner ' +
+    'explicitly said they do not want to see right now. NEVER use anything from those two lists, ' +
+    'even as incidental/filler content, regardless of level.',
   parameters: {
     type: Type.OBJECT,
     properties: {},

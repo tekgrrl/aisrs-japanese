@@ -9,7 +9,7 @@ export const NO_ROMAJI =
   `Do not include Romaji anywhere in your response.`;
 
 export function levelConstraint(jlptLevel: string): string {
-  return `Keep all example sentences at or below JLPT ${jlptLevel}, even if the target vocabulary or pattern is more advanced.`;
+  return `LEVEL CONSTRAINT (critical): every word in the example sentences — not just the grammar structure — MUST be at or below JLPT ${jlptLevel}. The ONLY exception is the specific target vocabulary/pattern being taught; everything else in the sentence must be ordinary, well-known JLPT ${jlptLevel}-or-below vocabulary. If a natural example would require a more advanced word, choose a different example scenario rather than reaching for it — do not compromise on this to make the sentence more natural or interesting.`;
 }
 
 export const JSON_ONLY_OUTPUT =

@@ -31,9 +31,17 @@ export const ALLOWED_AI_ROLES = [
  * Builds the full prompt for generating a new scenario.
  * Source: scenarios.service.ts:buildArchitectPrompt (private method, extracted verbatim)
  */
-export function buildArchitectPrompt(dto: GenerateScenarioDto): string {
+export function buildArchitectPrompt(
+  dto: GenerateScenarioDto,
+  excludedVocab: string[] = [],
+  excludedGrammar: string[] = [],
+): string {
   const contextExampleDirective = dto.sourceType === 'context-example' && dto.sourceContextSentence && dto.targetVocab
     ? `\n**Context Example Constraints:**\n- You MUST create a roleplay scenario where the user MUST use the target vocab ('${dto.targetVocab}') in a situation matching the following sentence: '${dto.sourceContextSentence}'.\n- The scenario goal MUST involve using this word in context.\n`
+    : '';
+
+  const exclusionDirective = (excludedVocab.length > 0 || excludedGrammar.length > 0)
+    ? `\n**Excluded content (critical):** The learner explicitly said they don't want to see these right now. NEVER use them anywhere in the dialogue, Target Words, or grammarMatches, even as incidental content:\n- Vocab: ${excludedVocab.join('、') || 'none'}\n- Grammar: ${excludedGrammar.join('、') || 'none'}\n`
     : '';
 
   return `
@@ -42,7 +50,7 @@ Create a "Genki-style" learning scenario for an ADULT traveler/expat (not a stud
 
 **Parameters:**
 - Target Level: ${dto.difficulty}
-- Theme/Setting: ${dto.theme || 'A common situation for an adult living in Japan'}${contextExampleDirective}
+- Theme/Setting: ${dto.theme || 'A common situation for an adult living in Japan'}${contextExampleDirective}${exclusionDirective}
 
 **Requirements:**
 1. **Dialogue:** Create a natural, realistic dialogue (6-12 lines). Use a mix of polite and casual forms appropriate for the setting.
@@ -140,10 +148,15 @@ export function buildChatSystemPrompt(
   userRole: string,
   referenceScript: string,
   historyLines: string,
+  excludedVocab: string[] = [],
+  excludedGrammar: string[] = [],
 ): string {
   const rolesArray = Array.isArray(aiRoles) ? aiRoles : [aiRoles];
   const multiRole = rolesArray.length > 1;
   const roleLabel = multiRole ? rolesArray.join(', ') : rolesArray[0];
+  const exclusionInstruction = (excludedVocab.length > 0 || excludedGrammar.length > 0)
+    ? `\n      13. EXCLUDED CONTENT (critical): The learner explicitly said they don't want to see these right now — NEVER use them, even in passing: Vocab: ${excludedVocab.join('、') || 'none'}. Grammar: ${excludedGrammar.join('、') || 'none'}.`
+    : '';
 
   return `
       You are a roleplay partner in a Japanese immersion scenario.
@@ -173,7 +186,7 @@ export function buildChatSystemPrompt(
       9. If the user makes a mistake (grammar/vocab), reply naturally but include a short "correction" in the JSON.
       10. Keep responses concise (1-2 sentences).
       11. CHECK GOAL: If the user has explicitly and successfully achieved the goal ("${scenario.setting.goal}") during this turn, set 'sceneFinished' to true in your JSON response. Otherwise false.
-      12. Set 'speaker' in your JSON response to the exact role name of the character speaking (one of: ${rolesArray.join(', ')}).
+      12. Set 'speaker' in your JSON response to the exact role name of the character speaking (one of: ${rolesArray.join(', ')}).${exclusionInstruction}
     `;
 }
 

@@ -3,6 +3,9 @@
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { ReviewFacet } from "@/types";
+import { apiFetch } from "@/lib/api-client";
+
+const LONG_PRESS_MS = 500;
 
 interface Props {
   facet: ReviewFacet;
@@ -41,6 +44,14 @@ export default function SentenceAssemblyCard({ facet, onResult, onAdvance, onSki
   const [isSubmitting, setIsSubmitting] = useState(false);
   const nextButtonRef = useRef<HTMLButtonElement>(null);
 
+  // "I don't know this" flag flow (issue #222) — long-press an unplaced fragment
+  // to flag it, without disturbing the tap-to-select gesture the same button uses.
+  const [flagFragment, setFlagFragment] = useState<string | null>(null);
+  const [flagStatus, setFlagStatus] = useState<"idle" | "sending">("idle");
+  const [flagMessage, setFlagMessage] = useState<string | null>(null);
+  const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressTriggered = useRef(false);
+
   useEffect(() => {
     if (submitted) {
       setTimeout(() => nextButtonRef.current?.focus(), 50);
@@ -52,6 +63,53 @@ export default function SentenceAssemblyCard({ facet, onResult, onAdvance, onSki
     const fragment = available[idx];
     setAvailable(prev => prev.filter((_, i) => i !== idx));
     setAssembled(prev => [...prev, fragment]);
+  };
+
+  const startPress = (fragment: string) => {
+    longPressTriggered.current = false;
+    pressTimer.current = setTimeout(() => {
+      longPressTriggered.current = true;
+      setFlagFragment(fragment);
+    }, LONG_PRESS_MS);
+  };
+
+  const cancelPress = () => {
+    if (pressTimer.current) {
+      clearTimeout(pressTimer.current);
+      pressTimer.current = null;
+    }
+  };
+
+  const handleFragmentClick = (idx: number) => {
+    if (longPressTriggered.current) {
+      longPressTriggered.current = false;
+      return;
+    }
+    addFragment(idx);
+  };
+
+  const handleFlagChoice = async (choice: "exclude" | "enroll") => {
+    if (!flagFragment) return;
+    setFlagStatus("sending");
+    try {
+      const res = await apiFetch("/api/learner-flags", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          content: flagFragment,
+          kuType: "Vocab",
+          choice,
+          context: "sentence-assembly",
+        }),
+      });
+      if (!res.ok) throw new Error("Flag request failed");
+      setFlagMessage(choice === "exclude" ? "Got it — won't show this for a while." : "Added to your learning queue.");
+    } catch {
+      setFlagMessage("Something went wrong — try again later.");
+    } finally {
+      setFlagStatus("idle");
+      setTimeout(() => { setFlagFragment(null); setFlagMessage(null); }, 2500);
+    }
   };
 
   const removeFragment = (idx: number) => {
@@ -153,15 +211,57 @@ export default function SentenceAssemblyCard({ facet, onResult, onAdvance, onSki
           {available.map((fragment, i) => (
             <button
               key={`${fragment}-${i}`}
-              onClick={() => addFragment(i)}
+              onClick={() => handleFragmentClick(i)}
+              onPointerDown={() => startPress(fragment)}
+              onPointerUp={cancelPress}
+              onPointerLeave={cancelPress}
               disabled={submitted}
-              className="px-3 py-1.5 bg-gray-600 hover:bg-gray-500 text-white text-base rounded-md font-medium transition-colors disabled:opacity-40 disabled:cursor-default"
+              title="Long-press if you don't know this"
+              className="px-3 py-1.5 bg-gray-600 hover:bg-gray-500 text-white text-base rounded-md font-medium transition-colors disabled:opacity-40 disabled:cursor-default select-none"
             >
               {fragment}
             </button>
           ))}
         </div>
       </div>
+
+      {/* "I don't know this" flag — long-press a fragment above to open */}
+      {flagFragment && (
+        <div className="rounded-lg border border-gray-600 bg-gray-900 p-4 space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-sm text-gray-300">
+              Don't know <span className="text-white font-semibold">{flagFragment}</span>?
+            </p>
+            <button
+              onClick={() => { setFlagFragment(null); setFlagMessage(null); }}
+              className="text-gray-500 hover:text-gray-300 text-sm shrink-0"
+              aria-label="Dismiss"
+            >
+              ✕
+            </button>
+          </div>
+          {flagMessage ? (
+            <p className="text-sm text-green-300">{flagMessage}</p>
+          ) : (
+            <div className="flex gap-3">
+              <button
+                onClick={() => handleFlagChoice("exclude")}
+                disabled={flagStatus === "sending"}
+                className="flex-1 px-3 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded-md transition-colors disabled:opacity-50"
+              >
+                Not now
+              </button>
+              <button
+                onClick={() => handleFlagChoice("enroll")}
+                disabled={flagStatus === "sending"}
+                className="flex-1 px-3 py-2 bg-emerald-700 hover:bg-emerald-600 text-white text-sm rounded-md transition-colors disabled:opacity-50"
+              >
+                Help me learn this
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Submit */}
       {!submitted && (
