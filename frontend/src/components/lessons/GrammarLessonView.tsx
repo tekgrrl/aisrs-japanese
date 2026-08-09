@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import { GrammarLesson, UserGrammarLesson } from "@/types";
+import { normalizeFormation } from "@/lib/grammar-lesson";
 
 interface GrammarLessonViewProps {
   lesson: GrammarLesson;
@@ -66,7 +67,7 @@ export default function GrammarLessonView({
       <div className="bg-shodo-paper-dark border border-shodo-ink/5 rounded-lg p-6 shadow-lg">
         <h2 className="text-sm font-bold text-shodo-ink-faint uppercase tracking-wide mb-2">Formation</h2>
         <ul className="space-y-2">
-          {(Array.isArray(lesson.formation) ? lesson.formation : [lesson.formation]).map((f, i) => (
+          {normalizeFormation(lesson.formation).map((f, i) => (
             <li key={i} className="flex items-start gap-2">
               <span className="mt-2 w-1.5 h-1.5 rounded-full bg-shodo-ink-faint flex-shrink-0" />
               <span className="font-mono text-shodo-ink bg-shodo-paper-warm border border-shodo-ink/10 rounded px-4 py-2 inline-block">
