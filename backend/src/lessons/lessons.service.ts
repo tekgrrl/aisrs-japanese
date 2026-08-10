@@ -307,8 +307,20 @@ export class LessonsService {
       this.db.collection('users').doc(uid).collection('user-kus').get(),
     ]);
 
-    // Separate facet KU ids from UKU KU ids so we can compute enrolled-but-not-started
-    const facetKuIds = new Set(facetsSnap.docs.map(d => d.data().kuId as string).filter(Boolean));
+    // Separate facet KU ids from UKU KU ids so we can compute enrolled-but-not-started.
+    // A facet can be "started" for two different KUs at once: the word whose sequence
+    // it belongs to (source.id) and the specific content it targets (kuId) — these
+    // differ for Kanji-Component-* facets, which target the component kanji's own kuId
+    // while being gated by the parent Vocab word's source.id (see
+    // ReviewProgressService.getFacetsAtStage). Registering only one of the two
+    // incorrectly leaves the other looking "enrolled but never started" forever —
+    // track both so neither the parent word nor the component kanji gets stuck.
+    const facetKuIds = new Set<string>();
+    facetsSnap.docs.forEach(d => {
+      const data = d.data();
+      if (data.kuId) facetKuIds.add(data.kuId as string);
+      if (data.source?.id) facetKuIds.add(data.source.id as string);
+    });
     const ukuKuIds = ukuSnap.docs.map(d => d.data().kuId as string).filter(Boolean);
     const seenKuIds = new Set([...facetKuIds, ...ukuKuIds]);
 
