@@ -565,6 +565,13 @@ export interface ReviewFacet {
   questionAttempts?: number;
   sequenceStage?: number;
   data?: any;
+  /** Which lesson's sequence this facet belongs to — differs from kuId for
+   *  Kanji-Component-* facets, which target the component kanji's own kuId
+   *  but are gated by the parent Vocab/Grammar word's sequence. */
+  source?: {
+    type: 'lesson' | 'concept';
+    id: string;
+  };
 }
 
 export interface ReviewItem {
@@ -614,6 +621,8 @@ export interface ContentFlag {
   kuId?: string;
   sourceType: 'lesson' | 'facet' | 'scenario';
   sourceId: string;
+  /** Owning user of a scenario-sourced flag — not set for lesson-sourced flags. */
+  userId?: string;
   kuContent: string;
   userLevel: string;
   violations: Array<{ segment: string; detectedLevel: string; type: 'vocab' | 'grammar' }>;

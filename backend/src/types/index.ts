@@ -714,6 +714,10 @@ export interface ContentFlag {
   kuId?: string;
   sourceType: 'lesson' | 'facet' | 'scenario';
   sourceId: string;
+  /** Owning user of a scenario-sourced flag — scenarios live in a per-user
+   *  subcollection, so regenerating one needs to know whose. Not set for
+   *  lesson-sourced flags (lessons are global, not per-user). */
+  userId?: string;
   kuContent: string;
   userLevel: string;
   violations: Array<{ segment: string; detectedLevel: string; type: 'vocab' | 'grammar' }>;
