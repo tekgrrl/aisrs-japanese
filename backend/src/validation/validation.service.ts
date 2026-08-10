@@ -119,11 +119,13 @@ export class ValidationService implements OnModuleInit {
     title: string,
     userLevel: string,
     result: ValidationResult,
+    userId?: string,
   ): Promise<void> {
     if (!result.valid && result.violations?.length) {
       const flag: Omit<ContentFlag, 'id'> = {
         sourceType: 'scenario',
         sourceId: scenarioId,
+        ...(userId ? { userId } : {}),
         kuContent: title,
         userLevel,
         violations: result.violations,
@@ -138,6 +140,7 @@ export class ValidationService implements OnModuleInit {
   async createManualFlag(params: {
     sourceType: 'lesson' | 'scenario';
     sourceId: string;
+    kuId?: string;
     kuContent: string;
     userLevel: string;
     manualNote: string;
@@ -145,6 +148,7 @@ export class ValidationService implements OnModuleInit {
     const flag: Omit<ContentFlag, 'id'> = {
       sourceType: params.sourceType,
       sourceId: params.sourceId,
+      ...(params.kuId ? { kuId: params.kuId } : {}),
       kuContent: params.kuContent,
       userLevel: params.userLevel,
       violations: [],
@@ -167,6 +171,12 @@ export class ValidationService implements OnModuleInit {
       await batch.commit();
       this.logger.log(`Resolved ${openFlags.size} open flag(s) for kuId=${kuId}`);
     }
+  }
+
+  async getFlagById(flagId: string): Promise<ContentFlag | null> {
+    const doc = await this.db.collection(CONTENT_FLAGS_COLLECTION).doc(flagId).get();
+    if (!doc.exists) return null;
+    return { id: doc.id, ...doc.data() } as ContentFlag;
   }
 
   async getFlags(status?: string): Promise<ContentFlag[]> {

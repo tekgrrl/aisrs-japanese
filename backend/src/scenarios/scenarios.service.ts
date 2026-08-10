@@ -278,6 +278,44 @@ export class ScenariosService {
     }
   }
 
+  /**
+   * Regenerates a scenario referenced by a content-quality flag, reusing the
+   * original generation parameters (difficulty, source context, roles). Creates
+   * a fresh scenario rather than overwriting the flagged one in place — the
+   * flagged scenario may carry live chat/progress state that shouldn't be
+   * silently discarded; the admin resolves/dismisses the old flag separately
+   * once satisfied with the new content.
+   */
+  async regenerateFromFlag(flagId: string): Promise<{ id: string }> {
+    const flag = await this.validationService.getFlagById(flagId);
+    if (!flag || flag.sourceType !== 'scenario') {
+      throw new NotFoundException(`No scenario flag found for id=${flagId}`);
+    }
+    if (!flag.userId) {
+      throw new InternalServerErrorException(
+        `Flag ${flagId} has no userId recorded — created before scenario flags tracked ownership, can't locate the source scenario`,
+      );
+    }
+
+    const old = await this.getScenario(flag.userId, flag.sourceId);
+    if (!old) {
+      throw new NotFoundException(`Scenario ${flag.sourceId} not found for uid=${flag.userId}`);
+    }
+
+    const dto: GenerateScenarioDto = {
+      difficulty: old.difficultyLevel,
+      sourceType: old.sourceType,
+      sourceContextSentence: old.sourceContextSentence,
+      targetVocab: old.targetVocab,
+      sourceKuId: old.sourceKuId,
+      userRole: old.roles?.user,
+      aiRole: Array.isArray(old.roles?.ai) ? old.roles.ai[0] : old.roles?.ai,
+    };
+
+    const id = await this.generateScenario(flag.userId, dto);
+    return { id };
+  }
+
   async saveFromTutor(uid: string, data: any): Promise<{ id: string; success: true }> {
     const docRef = this.scenariosColRef(uid).doc();
     const id = docRef.id;
@@ -887,13 +925,18 @@ export class ScenariosService {
 
   private async validateScenario(scenario: Scenario, jlptLevel: string): Promise<void> {
     try {
+      // Only the user's own lines need to be level-appropriate — the AI's lines are
+      // what the user is meant to practice comprehending, and can't be expected to
+      // stay within the user's known vocabulary any more than a real conversation
+      // partner would.
       const segments = scenario.dialogue
+        .filter(line => line.speakerRole === 'user')
         .map(line => line.text)
         .filter(Boolean);
       if (segments.length === 0) return;
 
       const result = await this.validationService.validateContent(segments, jlptLevel, scenario.userId);
-      await this.validationService.flagScenario(scenario.id, scenario.title, jlptLevel, result);
+      await this.validationService.flagScenario(scenario.id, scenario.title, jlptLevel, result, scenario.userId);
     } catch (err) {
       this.logger.error(`Scenario validation failed for id=${scenario.id}`, err);
     }

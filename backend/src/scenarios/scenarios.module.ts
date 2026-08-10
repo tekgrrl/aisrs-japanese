@@ -5,6 +5,7 @@ import { GeminiModule } from '../gemini/gemini.module';
 import { KnowledgeUnitsModule } from '../knowledge-units/knowledge-units.module';
 import { LessonsModule } from '../lessons/lessons.module';
 import { UserModule } from '../users/user.module';
+import { AuthModule } from '../auth/auth.module';
 
 @Module({
   imports: [
@@ -12,6 +13,7 @@ import { UserModule } from '../users/user.module';
     KnowledgeUnitsModule,
     LessonsModule,
     UserModule,
+    AuthModule,
   ],
   controllers: [ScenariosController],
   providers: [ScenariosService],

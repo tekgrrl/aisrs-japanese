@@ -32,10 +32,12 @@ export default function ContentQualityPage() {
   }, [activeTab, fetchFlags]);
 
   const handleRegenerate = async (flag: ContentFlag) => {
-    if (!flag.id || !flag.kuId) return;
+    if (!flag.id) return;
     setActioningId(flag.id);
     try {
-      const res = await apiFetch(`/api/lessons/regenerate/${flag.kuId}`, { method: "POST" });
+      const res = flag.sourceType === "scenario"
+        ? await apiFetch(`/api/scenarios/regenerate-from-flag/${flag.id}`, { method: "POST" })
+        : await apiFetch(`/api/lessons/regenerate/${flag.kuId}`, { method: "POST" });
       if (!res.ok) throw new Error("Regeneration failed");
       await fetchFlags(activeTab);
     } catch (err) {
@@ -283,7 +285,7 @@ function FlagRow({
 }: FlagRowProps) {
   const [showDismissInput, setShowDismissInput] = useState(false);
   const isManual = !flag.violations.length && !!flag.manualNote;
-  const canRegenerate = flag.sourceType === "lesson" && !!flag.kuId;
+  const canRegenerate = (flag.sourceType === "lesson" && !!flag.kuId) || (flag.sourceType === "scenario" && !!flag.userId);
 
   return (
     <div className="border border-shodo-ink/10 rounded-lg p-4 bg-white">

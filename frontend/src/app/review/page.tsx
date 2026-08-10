@@ -11,6 +11,7 @@ import { getSrsLevelName, getSrsLevelIndex } from "@/utils/srs";
 import { apiFetch } from "@/lib/api-client";
 import SentenceAssemblyCard from "@/components/review/SentenceAssemblyCard";
 import SentenceClozeCard from "@/components/review/SentenceClozeCard";
+import FacetDebugPanel from "@/components/review/FacetDebugPanel";
 import VocabLessonView from "@/components/lessons/VocabLessonView";
 import KanjiLessonView from "@/components/lessons/KanjiLessonView";
 import GrammarLessonView from "@/components/lessons/GrammarLessonView";
@@ -1045,6 +1046,9 @@ export default function ReviewPage() {
           </div>
         </div>
       )}
+
+      {/* --- Facet Debug Panel (admin-only, all facet types) --- */}
+      <FacetDebugPanel facet={currentItem.facet} />
 
       {/* --- Inline Lesson Panel --- */}
       {showLesson && lessonForReview && (

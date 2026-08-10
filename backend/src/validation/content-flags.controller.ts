@@ -18,6 +18,7 @@ export class ContentFlagsController {
     @Body() body: {
       sourceType: 'lesson' | 'scenario';
       sourceId: string;
+      kuId?: string;
       kuContent: string;
       userLevel: string;
       manualNote: string;

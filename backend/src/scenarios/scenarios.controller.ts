@@ -14,6 +14,7 @@ import {
 import { ScenariosService } from './scenarios.service';
 import { GenerateScenarioDto, ImportScenarioDto, ChatTurnDto, ResetSessionDto } from '../types/scenario';
 import { FirebaseAuthGuard } from '../auth/firebase-auth.guard';
+import { AdminGuard } from '../auth/admin.guard';
 import { UserId } from '../auth/user-id.decorator';
 import { ALLOWED_USER_ROLES, ALLOWED_AI_ROLES } from '../prompts/scenario.prompts';
 
@@ -36,6 +37,12 @@ export class ScenariosController {
   async generateScenario(@UserId() uid: string, @Body() dto: GenerateScenarioDto) {
     const id = await this.scenariosService.generateScenario(uid, dto);
     return { id };
+  }
+
+  @Post('regenerate-from-flag/:flagId')
+  @UseGuards(AdminGuard)
+  async regenerateFromFlag(@Param('flagId') flagId: string) {
+    return this.scenariosService.regenerateFromFlag(flagId);
   }
 
   @Post('import')
