@@ -673,7 +673,7 @@ export default function ReviewPage() {
           // Drop parenthetical detail (e.g. "to hang (something)" -> "to hang") before
           // splitting on comma/semicolon — otherwise a definition like "to spend (time,
           // money)" gets mis-split on the comma inside the parens.
-          .map((def: string) => def.replace(/\(.*\)/g, '').replace(/（.*）/g, '').trim())
+          .map((def: string) => def.replace(/\([^)]*\)/g, '').replace(/（[^）]*）/g, '').trim())
           .flatMap((def: string) => def.split(/[,;]/))
           .map((def: string) => def.trim())
           .filter((def: string) => def.length > 0),
