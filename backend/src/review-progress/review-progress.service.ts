@@ -401,6 +401,7 @@ export class ReviewProgressService {
           answer: ex.japanese,
           english: ex.english,
           accepted_alternatives: ex.accepted_alternatives ?? [],
+          learnableTerms: ex.learnableTerms ?? [],
         }));
       }
       return [];

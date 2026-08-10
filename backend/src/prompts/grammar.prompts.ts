@@ -32,19 +32,23 @@ Generate a complete grammar lesson matching this JSON schema exactly:
       "english": "English translation",
       "context": "Short real-world setting label (e.g. convenience store)",
       "fragments": ["word1", "word2"],
-      "accepted_alternatives": []
+      "accepted_alternatives": [],
+      "learnableTerms": [
+        { "term": "dictionary-form word from this sentence", "surfaceForm": "the exact inflected form as it literally appears in the sentence/fragments (e.g. 行きました, not 行く)", "reading": "kana reading of the dictionary form", "meaning": "short English meaning" }
+      ]
     }
   ]
 }
 
 Rules:
 - Provide exactly 3 examples
-- When provided, ALWAYS copy the 'Example from context' data VERBATIM into examples[0], including its exact fragments and accepted_alternatives
+- When provided, ALWAYS copy the 'Example from context' data VERBATIM into examples[0], including its exact fragments and accepted_alternatives — learnableTerms is the one exception: generate it fresh for examples[0] too, since it isn't part of the original context data
 - examples[1] and examples[2] MUST use completely different Japanese sentences with their own unique fragments
 - If the pattern bundles multiple related words/forms (e.g. "よく / あまり / ぜんぜん + verb"), examples[1] and examples[2] MUST each use a different one of those words so all of them get exercised across the lesson, not just one repeated
 - ${FRAGMENT_CONTRACT} The final fragment MUST include the sentence-ending punctuation (。). Each example must have different fragments matching its own sentence.
 - ${ACCEPTED_ALTERNATIVES_DEF}
 - NEVER copy fragments from one example to another
+- LEARNABLE TERMS: for each example, list every standalone vocabulary word in that sentence that's substantial enough to be worth learning on its own. \`term\` MUST be the plain dictionary form (e.g. 買う, not 買った), since that's what gets searched/learned — but \`surfaceForm\` MUST be the exact inflected string as it literally appears in the sentence/fragments, since that's used to match the word back to its fragment. For unconjugated words (nouns, etc.) surfaceForm and term will be identical. EXCLUDE: the grammar pattern being taught (that's already the lesson's own subject), proper nouns/names, and function words (particles, copula). If a sentence has no such words beyond the pattern itself, return an empty array — do not force entries.
 - ${levelConstraint(jlptLevel)}
 `;
 }
