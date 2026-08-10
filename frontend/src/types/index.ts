@@ -263,6 +263,8 @@ export interface GrammarLesson {
     context?: string;
     fragments: string[];
     accepted_alternatives: string[];
+    /** Standalone vocab words in this sentence worth flagging via "I don't know this". */
+    learnableTerms?: { term: string; surfaceForm: string; reading: string; meaning: string }[];
   }[];
 }
 

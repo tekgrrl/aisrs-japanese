@@ -249,6 +249,14 @@ export interface GrammarLesson {
     context?: string;    // e.g. "convenience store" — for future facet targeting
     fragments: string[];
     accepted_alternatives: string[];
+    /**
+     * Standalone, dictionary-form vocab words in this sentence worth flagging via
+     * the "I don't know this" long-press (issue #222) — excludes the grammar
+     * pattern being taught and proper nouns. Independent of `fragments`: a
+     * fragment may bundle a term with a particle (e.g. "医者に"), so the frontend
+     * matches a fragment's text against these terms rather than assuming 1:1.
+     */
+    learnableTerms?: { term: string; surfaceForm: string; reading: string; meaning: string }[];
   }[];
 }
 

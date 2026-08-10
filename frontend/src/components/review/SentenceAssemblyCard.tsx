@@ -23,8 +23,15 @@ function shuffleArray<T>(arr: T[]): T[] {
   return a;
 }
 
+interface LearnableTerm {
+  term: string;
+  surfaceForm: string;
+  reading: string;
+  meaning: string;
+}
+
 export default function SentenceAssemblyCard({ facet, onResult, onAdvance, onSkip }: Props) {
-  const { goalTitle, fragments, answer, english, accepted_alternatives, sourceId, sourceTitle } = facet.data as {
+  const { goalTitle, fragments, answer, english, accepted_alternatives, sourceId, sourceTitle, learnableTerms } = facet.data as {
     goalTitle: string;
     fragments: string[];
     answer: string;
@@ -32,6 +39,7 @@ export default function SentenceAssemblyCard({ facet, onResult, onAdvance, onSki
     accepted_alternatives: string[];
     sourceId?: string;
     sourceTitle?: string;
+    learnableTerms?: LearnableTerm[];
   };
 
   const normalize = (s: string) => s.replace(/[。、！？!?\.]+$/u, "").replace(/[\s　]+/g, "").trim();
@@ -46,7 +54,12 @@ export default function SentenceAssemblyCard({ facet, onResult, onAdvance, onSki
 
   // "I don't know this" flag flow (issue #222) — long-press an unplaced fragment
   // to flag it, without disturbing the tap-to-select gesture the same button uses.
-  const [flagFragment, setFlagFragment] = useState<string | null>(null);
+  // Fragments bundle particles with their preceding word (needed for the assembly
+  // exercise itself), so they're often poor standalone learning items on their own
+  // ("先生は", "九時から"). Instead of flagging the raw fragment, match it against
+  // learnableTerms — dictionary-form words the lesson generator already identified
+  // as worth learning — and only offer the flag when a match exists.
+  const [flagTerm, setFlagTerm] = useState<LearnableTerm | null>(null);
   const [flagStatus, setFlagStatus] = useState<"idle" | "sending">("idle");
   const [flagMessage, setFlagMessage] = useState<string | null>(null);
   const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -67,9 +80,11 @@ export default function SentenceAssemblyCard({ facet, onResult, onAdvance, onSki
 
   const startPress = (fragment: string) => {
     longPressTriggered.current = false;
+    const match = (learnableTerms ?? []).find(t => fragment.includes(t.surfaceForm || t.term));
+    if (!match) return; // nothing learnable in this fragment — no long-press effect
     pressTimer.current = setTimeout(() => {
       longPressTriggered.current = true;
-      setFlagFragment(fragment);
+      setFlagTerm(match);
     }, LONG_PRESS_MS);
   };
 
@@ -89,14 +104,14 @@ export default function SentenceAssemblyCard({ facet, onResult, onAdvance, onSki
   };
 
   const handleFlagChoice = async (choice: "exclude" | "enroll") => {
-    if (!flagFragment) return;
+    if (!flagTerm) return;
     setFlagStatus("sending");
     try {
       const res = await apiFetch("/api/learner-flags", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          content: flagFragment,
+          content: flagTerm.term,
           kuType: "Vocab",
           choice,
           context: "sentence-assembly",
@@ -108,7 +123,7 @@ export default function SentenceAssemblyCard({ facet, onResult, onAdvance, onSki
       setFlagMessage("Something went wrong — try again later.");
     } finally {
       setFlagStatus("idle");
-      setTimeout(() => { setFlagFragment(null); setFlagMessage(null); }, 2500);
+      setTimeout(() => { setFlagTerm(null); setFlagMessage(null); }, 2500);
     }
   };
 
@@ -208,32 +223,37 @@ export default function SentenceAssemblyCard({ facet, onResult, onAdvance, onSki
       <div>
         <p className="text-xs uppercase tracking-widest text-gray-400 mb-2">Fragments</p>
         <div className="flex flex-wrap gap-2">
-          {available.map((fragment, i) => (
-            <button
-              key={`${fragment}-${i}`}
-              onClick={() => handleFragmentClick(i)}
-              onPointerDown={() => startPress(fragment)}
-              onPointerUp={cancelPress}
-              onPointerLeave={cancelPress}
-              disabled={submitted}
-              title="Long-press if you don't know this"
-              className="px-3 py-1.5 bg-gray-600 hover:bg-gray-500 text-white text-base rounded-md font-medium transition-colors disabled:opacity-40 disabled:cursor-default select-none"
-            >
-              {fragment}
-            </button>
-          ))}
+          {available.map((fragment, i) => {
+            const hasLearnableTerm = (learnableTerms ?? []).some(t => fragment.includes(t.surfaceForm || t.term));
+            return (
+              <button
+                key={`${fragment}-${i}`}
+                onClick={() => handleFragmentClick(i)}
+                onPointerDown={() => startPress(fragment)}
+                onPointerUp={cancelPress}
+                onPointerLeave={cancelPress}
+                disabled={submitted}
+                title={hasLearnableTerm ? "Long-press if you don't know this" : undefined}
+                className="px-3 py-1.5 bg-gray-600 hover:bg-gray-500 text-white text-base rounded-md font-medium transition-colors disabled:opacity-40 disabled:cursor-default select-none"
+              >
+                {fragment}
+              </button>
+            );
+          })}
         </div>
       </div>
 
       {/* "I don't know this" flag — long-press a fragment above to open */}
-      {flagFragment && (
+      {flagTerm && (
         <div className="rounded-lg border border-gray-600 bg-gray-900 p-4 space-y-3">
           <div className="flex items-center justify-between gap-3">
             <p className="text-sm text-gray-300">
-              Don't know <span className="text-white font-semibold">{flagFragment}</span>?
+              Don't know <span className="text-white font-semibold">{flagTerm.term}</span>
+              {flagTerm.reading && flagTerm.reading !== flagTerm.term && <span className="text-gray-400"> ({flagTerm.reading})</span>}
+              {flagTerm.meaning && <span className="text-gray-400"> — {flagTerm.meaning}</span>}?
             </p>
             <button
-              onClick={() => { setFlagFragment(null); setFlagMessage(null); }}
+              onClick={() => { setFlagTerm(null); setFlagMessage(null); }}
               className="text-gray-500 hover:text-gray-300 text-sm shrink-0"
               aria-label="Dismiss"
             >
