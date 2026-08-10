@@ -669,9 +669,14 @@ export default function ReviewPage() {
     if (facet.facetType === "Content-to-Definition" || facet.facetType === "audio") {
       const defs: string[] = facet.data?.definitions ?? [];
       const parsed = Array.from(new Set(
-        defs.flatMap((def: string) => def.split(/[,;]/))
-            .map((def: string) => def.trim())
-            .filter((def: string) => def.length > 0),
+        defs
+          // Drop parenthetical detail (e.g. "to hang (something)" -> "to hang") before
+          // splitting on comma/semicolon — otherwise a definition like "to spend (time,
+          // money)" gets mis-split on the comma inside the parens.
+          .map((def: string) => def.replace(/\([^)]*\)/g, '').replace(/（[^）]*）/g, '').trim())
+          .flatMap((def: string) => def.split(/[,;]/))
+          .map((def: string) => def.trim())
+          .filter((def: string) => def.length > 0),
       ));
       if (parsed.length === 0 && facet.data?.topic) {
         return [facet.data.topic];
