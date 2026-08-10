@@ -30,6 +30,8 @@ export const FRAGMENT_CONTRACT =
  * Used alongside FRAGMENT_CONTRACT wherever sentence-assembly facets are generated.
  */
 export const ACCEPTED_ALTERNATIVES_DEF =
-  `'accepted_alternatives': List every other ordering of the EXACT same fragments that produces a grammatically ` +
-  `correct sentence. Do NOT include rephrased sentences or sentences using different words. ` +
+  `'accepted_alternatives': a JSON array of STRINGS — never an array of arrays. Each string is one other ordering ` +
+  `of the EXACT same fragments, concatenated back into a single grammatically correct sentence ` +
+  `(e.g. if fragments are ["今、", "テレビを", "見ています。"], a valid entry is the STRING "テレビを今、見ています。", ` +
+  `NOT the array ["テレビを", "今、", "見ています。"]). Do NOT include rephrased sentences or sentences using different words. ` +
   `Provide an empty array if none exist.`;
