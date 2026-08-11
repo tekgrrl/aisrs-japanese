@@ -22,9 +22,64 @@ export class KnowledgeUnitsService {
 
     private readonly logger = new Logger(KnowledgeUnitsService.name);
 
+    // In-memory cache backing search() — Firestore has no substring query, so
+    // search fetches the whole collection and filters in memory. Loaded lazily
+    // on first search (not at boot) and kept in sync by the single-item
+    // mutations below; bulk/rare mutations just invalidate it wholesale rather
+    // than patching precisely, since they're infrequent enough that paying for
+    // one extra full reload on the next search is cheaper than the complexity.
+    private searchCache: KnowledgeUnit[] | null = null;
+    // In-flight load promise, so concurrent searches racing on a cold cache
+    // share one Firestore fetch instead of each firing their own.
+    private searchCacheLoading: Promise<KnowledgeUnit[]> | null = null;
+
     constructor(
         @Inject(FIRESTORE_CONNECTION) private readonly db: Firestore,
     ) { }
+
+    private async ensureSearchCache(): Promise<KnowledgeUnit[]> {
+        if (this.searchCache) return this.searchCache;
+        if (this.searchCacheLoading) return this.searchCacheLoading;
+
+        this.searchCacheLoading = (async () => {
+            const snapshot = await this.db.collection(KNOWLEDGE_UNITS_COLLECTION).get();
+            const loaded = snapshot.docs.map(doc => {
+                const data = doc.data();
+                return {
+                    id: doc.id,
+                    ...data,
+                    createdAt: typeof data.createdAt?.toDate === 'function'
+                        ? data.createdAt.toDate().toISOString()
+                        : data.createdAt,
+                } as unknown as KnowledgeUnit;
+            });
+            this.searchCache = loaded;
+            this.logger.log(`Search cache loaded: ${loaded.length} KUs`);
+            return loaded;
+        })();
+
+        try {
+            return await this.searchCacheLoading;
+        } finally {
+            this.searchCacheLoading = null;
+        }
+    }
+
+    private invalidateSearchCache(): void {
+        this.searchCache = null;
+    }
+
+    private upsertSearchCacheEntry(ku: KnowledgeUnit): void {
+        if (!this.searchCache) return; // not warmed yet — next search will load fresh
+        const i = this.searchCache.findIndex(k => k.id === ku.id);
+        if (i >= 0) this.searchCache[i] = ku;
+        else this.searchCache.push(ku);
+    }
+
+    private removeSearchCacheEntry(id: string): void {
+        if (!this.searchCache) return;
+        this.searchCache = this.searchCache.filter(k => k.id !== id);
+    }
 
     async findAll({ status, type, content, jlptLevel }: { status?: string, type?: string, content?: string[], jlptLevel?: string }) {
         try {
@@ -92,25 +147,42 @@ export class KnowledgeUnitsService {
         } as unknown as KnowledgeUnit;
     }
 
-    async search(query: string): Promise<KnowledgeUnit[]> {
-        const snapshot = await this.db
-            .collection(KNOWLEDGE_UNITS_COLLECTION)
-            .where('content', '>=', query)
-            .where('content', '<=', query + '\uf8ff')
-            .orderBy('content')
-            .limit(15)
-            .get();
+    async search(query: string, type?: string, jlptLevel?: string): Promise<KnowledgeUnit[]> {
+        // Firestore has no native substring/contains query, only prefix-range
+        // tricks \u2014 which miss anything the query isn't the literal start of
+        // (e.g. searching "\u306a" wouldn't find "Present form of \u3044 and \u306a
+        // adjectives"). The corpus is currently a few thousand docs, small
+        // enough to filter in memory \u2014 cached in searchCache (see
+        // ensureSearchCache) rather than re-fetched every call, since a fresh
+        // full collection read per search doesn't scale on read cost/latency.
+        // Revisit with a real search index (see feature backlog) if/when the
+        // corpus outgrows this.
+        //
+        // type/jlptLevel are applied here, before the result cap below \u2014 a
+        // common query character (\u306a: 85 hits) can otherwise bury a relevant
+        // result under more common ones from a type the caller didn't want,
+        // in a way no amount of post-hoc client-side filtering can recover.
+        const cache = await this.ensureSearchCache();
+        const q = query.toLowerCase();
 
-        if (snapshot.empty) return [];
+        const matches = cache
+            .filter(ku => ku.content?.toLowerCase()?.includes(q))
+            .filter(ku => !type || ku.type === type)
+            .filter(ku => !jlptLevel || (ku.data as any)?.jlptLevel === jlptLevel);
 
-        return snapshot.docs.map(doc => {
-            const data = doc.data();
-            return {
-                id: doc.id,
-                ...data,
-                createdAt: data.createdAt ? (data.createdAt as Timestamp).toDate().toISOString() : null,
-            } as unknown as KnowledgeUnit;
+        // Rank prefix matches above mid-string matches. (A length-based
+        // secondary sort was tried and dropped — this corpus mixes bare
+        // Japanese patterns like "～ながら" with English-titled Grammar KUs
+        // like "Present form of い and な adjectives", and comparing them by
+        // character count just penalizes the English ones, which isn't a
+        // real relevance signal.)
+        matches.sort((a, b) => {
+            const aPrefix = a.content.toLowerCase().startsWith(q) ? 0 : 1;
+            const bPrefix = b.content.toLowerCase().startsWith(q) ? 0 : 1;
+            return aPrefix - bPrefix;
         });
+
+        return matches.slice(0, 75);
     }
 
     async findByKanjiComponent(kanjiChar: string): Promise<KnowledgeUnit[]> {
@@ -187,6 +259,17 @@ export class KnowledgeUnitsService {
         }
 
         await ref.update(updates);
+
+        const existing = doc.data()!;
+        this.upsertSearchCacheEntry({
+            id,
+            ...existing,
+            ...updates,
+            createdAt: typeof existing.createdAt?.toDate === 'function'
+                ? existing.createdAt.toDate().toISOString()
+                : existing.createdAt,
+        } as unknown as KnowledgeUnit);
+
         return { id, ...updates };
     }
 
@@ -208,6 +291,12 @@ export class KnowledgeUnitsService {
         const newDocRef = await this.db
             .collection(KNOWLEDGE_UNITS_COLLECTION)
             .add(newKuData);
+
+        this.upsertSearchCacheEntry({
+            id: newDocRef.id,
+            ...newKuData,
+            createdAt: newKuData.createdAt.toDate().toISOString(),
+        } as unknown as KnowledgeUnit);
 
         this.logger.log(`POST /knowledge-units - Created unit ${newDocRef.id}`);
         return { id: newDocRef.id };
@@ -257,6 +346,7 @@ export class KnowledgeUnitsService {
             await batch.commit();
         }
 
+        this.invalidateSearchCache();
         this.logger.log(`bulkUpdate - updated ${updatedIds.length}, skipped ${skipped}`);
         return { updated: updatedIds.length, skipped, ids: updatedIds };
     }
@@ -325,6 +415,7 @@ export class KnowledgeUnitsService {
             await batch.commit();
         }
 
+        this.invalidateSearchCache();
         this.logger.log(`bulkIngest - created ${createdIds.length}, skipped ${skipped}`);
         return { created: createdIds.length, skipped, ids: createdIds };
     }
@@ -414,6 +505,7 @@ export class KnowledgeUnitsService {
 
         // Global: KU itself
         await this.db.collection(KNOWLEDGE_UNITS_COLLECTION).doc(kuId).delete();
+        this.removeSearchCacheEntry(kuId);
         deleted['knowledge-units'] = 1;
 
         this.logger.log(`Cascade deleted KU ${kuId} for user ${uid}: ${JSON.stringify(deleted)}`);
@@ -452,6 +544,7 @@ export class KnowledgeUnitsService {
         }
 
         skipped = snap.size - migrated;
+        this.invalidateSearchCache();
         this.logger.log(`migrateGrammarJlptLevel: migrated=${migrated}, skipped=${skipped}`);
         return { migrated, skipped };
     }
@@ -485,6 +578,7 @@ export class KnowledgeUnitsService {
         }
 
         const skipped = snap.size - migrated;
+        this.invalidateSearchCache();
         this.logger.log(`migrateGrammarExplanationToCorpusNotes: migrated=${migrated}, skipped=${skipped}`);
         return { migrated, skipped };
     }
