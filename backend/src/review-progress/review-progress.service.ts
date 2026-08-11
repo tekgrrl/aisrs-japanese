@@ -130,32 +130,68 @@ export class ReviewProgressService {
    * and re-checked recursively so the cascade keeps unlocking every stage the
    * elevated SRS stage satisfies, rather than stopping after one hop.
    */
+  /**
+   * Guard clauses below are deliberately split into two tiers, not treated
+   * uniformly:
+   *  - "Normal flow" no-ops (terminal stage reached, not every facet ready
+   *    yet) are the common case on most calls and stay silent — logging them
+   *    would just be noise on nearly every review.
+   *  - Every other early return means this call reached a state that
+   *    shouldn't normally be possible if the caller passed the right kuId and
+   *    the data is intact (e.g. a UKU with no sequence, a stage number with
+   *    no definition, a stage with zero facets under it). These warn with
+   *    enough context to diagnose without needing ad-hoc data digging —
+   *    exactly what this function couldn't tell us the first time this class
+   *    of bug showed up.
+   */
   async checkAndAdvanceStage(uid: string, kuId: string, startAtSrsStage = 0): Promise<void> {
     const uku = await this.userKnowledgeUnitsService.findByKuId(uid, kuId);
-    if (!uku?.currentStage) return; // 0 or missing = sequence not initialized
+    if (!uku?.currentStage) {
+      this.logger.warn(`checkAndAdvanceStage: no UKU or currentStage for uid=${uid} kuId=${kuId} — sequence not initialized, or called with the wrong kuId`);
+      return;
+    }
 
     const ku = await this.knowledgeUnitsService.findOne(kuId);
-    if (!ku) return;
+    if (!ku) {
+      this.logger.warn(`checkAndAdvanceStage: UKU exists but KU ${kuId} not found (uid=${uid}) — orphaned UKU`);
+      return;
+    }
 
     const sequence = FACET_SEQUENCES.find(s => s.kuType === ku.type);
-    if (!sequence) return;
+    if (!sequence) {
+      this.logger.warn(`checkAndAdvanceStage: no FACET_SEQUENCES entry for kuType=${ku.type} (kuId=${kuId})`);
+      return;
+    }
 
     const currentStageDef = sequence.stages.find(s => s.stage === uku.currentStage);
-    if (!currentStageDef || currentStageDef.unlockAtSrsStage === null) return; // terminal
+    if (!currentStageDef) {
+      this.logger.warn(`checkAndAdvanceStage: UKU.currentStage=${uku.currentStage} for kuId=${kuId} doesn't match any defined stage in the ${ku.type} sequence`);
+      return;
+    }
+    if (currentStageDef.unlockAtSrsStage === null) return; // terminal stage — normal, common, not logged
 
     const stageFacets = await this.getFacetsAtStage(uid, kuId, uku.currentStage);
-    if (stageFacets.length === 0) return;
+    if (stageFacets.length === 0) {
+      this.logger.warn(`checkAndAdvanceStage: UKU says currentStage=${uku.currentStage} for kuId=${kuId} but zero facets exist at that stage — sequence is stuck with nothing left to review`);
+      return;
+    }
 
     const allReady = stageFacets.every(
       f => (f.srsStage ?? 0) >= currentStageDef.unlockAtSrsStage!,
     );
-    if (!allReady) return;
+    if (!allReady) return; // not every facet ready yet — normal, the common case, not logged
 
     const lesson = await this.lessonsService.findByKuId(uid, kuId);
-    if (!lesson) return;
+    if (!lesson) {
+      this.logger.warn(`checkAndAdvanceStage: no lesson found for kuId=${kuId} (uid=${uid}) despite having facets — can't determine next stage`);
+      return;
+    }
 
     const nextStage = this.findNextApplicableStage(sequence, lesson, uku.currentStage);
-    if (!nextStage) return;
+    if (!nextStage) {
+      this.logger.debug(`checkAndAdvanceStage: no further applicable stage for kuId=${kuId} after stage ${uku.currentStage} — remaining stages not applicable to this lesson's content`);
+      return;
+    }
 
     // Guard against concurrent calls (e.g. two sentence-assembly facets reviewed in quick
     // succession): if next-stage facets already exist, the first call already advanced us.
@@ -172,7 +208,10 @@ export class ReviewProgressService {
     // Same per-user-dedup concern as initializeSequence: nextStage looked applicable
     // from lesson data alone but may still produce zero facets for this user.
     const result = await this.createFacetsSkippingEmptyStages(uid, kuId, ku, lesson, sequence, nextStage, startAtSrsStage);
-    if (!result) return; // nothing further this user needs from the remaining stages
+    if (!result) {
+      this.logger.warn(`checkAndAdvanceStage: every remaining stage fully deduped for kuId=${kuId} (uid=${uid}), no facets created`);
+      return;
+    }
 
     await this.userKnowledgeUnitsService.update(uid, kuId, { currentStage: result.stage.stage });
     await this.learningProgressService.recomputeAndCache(uid, kuId);

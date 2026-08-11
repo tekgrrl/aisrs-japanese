@@ -142,7 +142,14 @@ export class ReviewsService {
                 prevStage: currentSrsStage,
                 newStage: nextSrsStage,
                 nextReview: nextReviewDate,
-                kuId: facetData.kuId,
+                // source.id is the KU whose sequence this facet gates — the same
+                // KU passed to initializeSequence/checkAndAdvanceStage throughout.
+                // For most facet types this equals facetData.kuId (self-referencing),
+                // but Kanji-Component-* facets target a different KU (the component
+                // kanji's own kuId) than the sequence they belong to (the parent
+                // Vocab word's), so kuId alone silently pointed advancement checks
+                // at the wrong (sequence-less) KU. See issue #244.
+                kuId: facetData.source?.id ?? facetData.kuId,
                 facetType: facetData.facetType,
                 prevConsecutiveFailures,
                 newConsecutiveFailures,
