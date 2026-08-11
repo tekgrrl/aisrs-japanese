@@ -29,6 +29,9 @@ export class KnowledgeUnitsService {
     // than patching precisely, since they're infrequent enough that paying for
     // one extra full reload on the next search is cheaper than the complexity.
     private searchCache: KnowledgeUnit[] | null = null;
+    // In-flight load promise, so concurrent searches racing on a cold cache
+    // share one Firestore fetch instead of each firing their own.
+    private searchCacheLoading: Promise<KnowledgeUnit[]> | null = null;
 
     constructor(
         @Inject(FIRESTORE_CONNECTION) private readonly db: Firestore,
@@ -36,17 +39,30 @@ export class KnowledgeUnitsService {
 
     private async ensureSearchCache(): Promise<KnowledgeUnit[]> {
         if (this.searchCache) return this.searchCache;
-        const snapshot = await this.db.collection(KNOWLEDGE_UNITS_COLLECTION).get();
-        this.searchCache = snapshot.docs.map(doc => {
-            const data = doc.data();
-            return {
-                id: doc.id,
-                ...data,
-                createdAt: data.createdAt ? (data.createdAt as Timestamp).toDate().toISOString() : null,
-            } as unknown as KnowledgeUnit;
-        });
-        this.logger.log(`Search cache loaded: ${this.searchCache.length} KUs`);
-        return this.searchCache;
+        if (this.searchCacheLoading) return this.searchCacheLoading;
+
+        this.searchCacheLoading = (async () => {
+            const snapshot = await this.db.collection(KNOWLEDGE_UNITS_COLLECTION).get();
+            const loaded = snapshot.docs.map(doc => {
+                const data = doc.data();
+                return {
+                    id: doc.id,
+                    ...data,
+                    createdAt: typeof data.createdAt?.toDate === 'function'
+                        ? data.createdAt.toDate().toISOString()
+                        : data.createdAt,
+                } as unknown as KnowledgeUnit;
+            });
+            this.searchCache = loaded;
+            this.logger.log(`Search cache loaded: ${loaded.length} KUs`);
+            return loaded;
+        })();
+
+        try {
+            return await this.searchCacheLoading;
+        } finally {
+            this.searchCacheLoading = null;
+        }
     }
 
     private invalidateSearchCache(): void {
