@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { KnowledgeUnit } from "@/types";
 import EditKnowledgeUnitModal from "@/components/EditKnowledgeUnitModal";
 import { apiFetch } from "@/lib/api-client";
@@ -111,6 +111,8 @@ export default function AdminKnowledgeUnitsPage() {
 
   const [filterType, setFilterType] = useState("");
   const [filterLevel, setFilterLevel] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const searchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [editTarget, setEditTarget] = useState<KnowledgeUnit | null>(null);
 
@@ -118,22 +120,36 @@ export default function AdminKnowledgeUnitsPage() {
     setLoading(true);
     setError(null);
     try {
-      const params = new URLSearchParams();
-      if (filterType) params.set("type", filterType);
-      if (filterLevel) params.set("jlptLevel", filterLevel);
-      const res = await apiFetch(`/api/knowledge-units/get-all?${params}`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      setKus(await res.json());
+      const q = searchQuery.trim();
+      let results: KnowledgeUnit[];
+      if (q) {
+        const searchParams = new URLSearchParams({ q });
+        if (filterType) searchParams.set("type", filterType);
+        if (filterLevel) searchParams.set("jlptLevel", filterLevel);
+        const res = await apiFetch(`/api/knowledge-units/search?${searchParams}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        results = await res.json();
+      } else {
+        const params = new URLSearchParams();
+        if (filterType) params.set("type", filterType);
+        if (filterLevel) params.set("jlptLevel", filterLevel);
+        const res = await apiFetch(`/api/knowledge-units/get-all?${params}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        results = await res.json();
+      }
+      setKus(results);
     } catch (e) {
       setError((e as Error).message);
     } finally {
       setLoading(false);
     }
-  }, [filterType, filterLevel]);
+  }, [filterType, filterLevel, searchQuery]);
 
   useEffect(() => {
-    fetchKus();
-  }, [fetchKus]);
+    if (searchDebounce.current) clearTimeout(searchDebounce.current);
+    searchDebounce.current = setTimeout(fetchKus, searchQuery.trim() ? 300 : 0);
+    return () => { if (searchDebounce.current) clearTimeout(searchDebounce.current); };
+  }, [fetchKus, searchQuery]);
 
   const handleDelete = async (ku: KnowledgeUnit) => {
     if (!confirm(`Delete "${ku.content}" (${ku.type})? This will remove the KU and all associated data.`)) return;
@@ -163,6 +179,14 @@ export default function AdminKnowledgeUnitsPage() {
 
       {/* Filters */}
       <div className="flex gap-3 items-center mb-4">
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={e => setSearchQuery(e.target.value)}
+          placeholder="Search by content…"
+          className="px-3 py-1.5 text-sm border border-shodo-mist rounded bg-white text-shodo-ink placeholder-shodo-ink-light focus:outline-none focus:border-shodo-indigo w-64"
+        />
+
         <select value={filterType} onChange={e => setFilterType(e.target.value)} className={selectClass}>
           <option value="">All types</option>
           {TYPES.map(t => <option key={t} value={t}>{t}</option>)}
@@ -173,9 +197,9 @@ export default function AdminKnowledgeUnitsPage() {
           {LEVELS.map(l => <option key={l} value={l}>{l}</option>)}
         </select>
 
-        {(filterType || filterLevel) && (
+        {(filterType || filterLevel || searchQuery) && (
           <button
-            onClick={() => { setFilterType(""); setFilterLevel(""); }}
+            onClick={() => { setFilterType(""); setFilterLevel(""); setSearchQuery(""); }}
             className="text-xs text-shodo-ink-light hover:text-shodo-stamp-red transition-colors"
           >
             Clear

@@ -92,25 +92,47 @@ export class KnowledgeUnitsService {
         } as unknown as KnowledgeUnit;
     }
 
-    async search(query: string): Promise<KnowledgeUnit[]> {
-        const snapshot = await this.db
-            .collection(KNOWLEDGE_UNITS_COLLECTION)
-            .where('content', '>=', query)
-            .where('content', '<=', query + '\uf8ff')
-            .orderBy('content')
-            .limit(15)
-            .get();
+    async search(query: string, type?: string, jlptLevel?: string): Promise<KnowledgeUnit[]> {
+        // Firestore has no native substring/contains query, only prefix-range
+        // tricks \u2014 which miss anything the query isn't the literal start of
+        // (e.g. searching "\u306a" wouldn't find "Present form of \u3044 and \u306a
+        // adjectives"). The corpus is currently a few thousand docs, small
+        // enough to fetch and filter in memory; revisit with a real search
+        // index (see feature backlog) if/when that stops being true.
+        //
+        // type/jlptLevel are applied here, before the result cap below \u2014 a
+        // common query character (\u306a: 85 hits) can otherwise bury a relevant
+        // result under more common ones from a type the caller didn't want,
+        // in a way no amount of post-hoc client-side filtering can recover.
+        const snapshot = await this.db.collection(KNOWLEDGE_UNITS_COLLECTION).get();
+        const q = query.toLowerCase();
 
-        if (snapshot.empty) return [];
+        const matches = snapshot.docs
+            .map(doc => {
+                const data = doc.data();
+                return {
+                    id: doc.id,
+                    ...data,
+                    createdAt: data.createdAt ? (data.createdAt as Timestamp).toDate().toISOString() : null,
+                } as unknown as KnowledgeUnit;
+            })
+            .filter(ku => ku.content?.toLowerCase().includes(q))
+            .filter(ku => !type || ku.type === type)
+            .filter(ku => !jlptLevel || (ku.data as any)?.jlptLevel === jlptLevel);
 
-        return snapshot.docs.map(doc => {
-            const data = doc.data();
-            return {
-                id: doc.id,
-                ...data,
-                createdAt: data.createdAt ? (data.createdAt as Timestamp).toDate().toISOString() : null,
-            } as unknown as KnowledgeUnit;
+        // Rank prefix matches above mid-string matches. (A length-based
+        // secondary sort was tried and dropped — this corpus mixes bare
+        // Japanese patterns like "～ながら" with English-titled Grammar KUs
+        // like "Present form of い and な adjectives", and comparing them by
+        // character count just penalizes the English ones, which isn't a
+        // real relevance signal.)
+        matches.sort((a, b) => {
+            const aPrefix = a.content.toLowerCase().startsWith(q) ? 0 : 1;
+            const bPrefix = b.content.toLowerCase().startsWith(q) ? 0 : 1;
+            return aPrefix - bPrefix;
         });
+
+        return matches.slice(0, 75);
     }
 
     async findByKanjiComponent(kanjiChar: string): Promise<KnowledgeUnit[]> {

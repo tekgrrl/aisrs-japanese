@@ -40,9 +40,9 @@ export class KnowledgeUnitsController {
     }
 
     @Get('search')
-    async search(@Query('q') q: string) {
+    async search(@Query('q') q: string, @Query('type') type?: string, @Query('jlptLevel') jlptLevel?: string) {
         if (!q || q.trim().length === 0) return [];
-        return this.knowledgeUnitsService.search(q.trim());
+        return this.knowledgeUnitsService.search(q.trim(), type, jlptLevel);
     }
 
     @Get(':id')
