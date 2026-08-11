@@ -116,7 +116,7 @@ export class KnowledgeUnitsService {
                     createdAt: data.createdAt ? (data.createdAt as Timestamp).toDate().toISOString() : null,
                 } as unknown as KnowledgeUnit;
             })
-            .filter(ku => ku.content?.toLowerCase().includes(q))
+            .filter(ku => ku.content?.toLowerCase()?.includes(q))
             .filter(ku => !type || ku.type === type)
             .filter(ku => !jlptLevel || (ku.data as any)?.jlptLevel === jlptLevel);
 
