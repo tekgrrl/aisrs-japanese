@@ -12,6 +12,7 @@ interface Props {
   onResult: (result: "pass" | "fail") => Promise<void>;
   onAdvance: () => void;
   onSkip: () => void;
+  onSpeak?: (text: string) => void;
 }
 
 function shuffleArray<T>(arr: T[]): T[] {
@@ -30,7 +31,7 @@ interface LearnableTerm {
   meaning: string;
 }
 
-export default function SentenceAssemblyCard({ facet, onResult, onAdvance, onSkip }: Props) {
+export default function SentenceAssemblyCard({ facet, onResult, onAdvance, onSkip, onSpeak }: Props) {
   const { goalTitle, fragments, answer, english, accepted_alternatives, sourceId, sourceTitle, learnableTerms } = facet.data as {
     goalTitle: string;
     fragments: string[];
@@ -167,6 +168,7 @@ export default function SentenceAssemblyCard({ facet, onResult, onAdvance, onSki
 
     setSubmittedAnswer(assembledStr);
     setIsCorrect(correct);
+    onSpeak?.(correct ? assembledStr : answer);
     await onResult(correct ? "pass" : "fail");
     setSubmitted(true);
     setIsSubmitting(false);

@@ -752,6 +752,9 @@ export default function ReviewPage() {
         </span>
       </header>
 
+      {/* Always mounted so fetchAndPlayAudio works for every facet type, not just the ones with a visible Play Audio button */}
+      <audio ref={audioRef} style={{ display: 'none' }} />
+
       {error && (
         <div className={`border p-4 rounded-md mb-6 flex flex-col gap-3 ${
           error.startsWith("SRS update failed")
@@ -822,6 +825,7 @@ export default function ReviewPage() {
           onResult={handleUpdateSrs}
           onAdvance={advanceToNext}
           onSkip={advanceToNext}
+          onSpeak={fetchAndPlayAudio}
         />
       )}
 
@@ -878,7 +882,6 @@ export default function ReviewPage() {
                     </svg>
                     Play Audio
                   </button>
-                  <audio ref={audioRef} style={{ display: 'none' }} />
                 </div>
               )}
             </>
