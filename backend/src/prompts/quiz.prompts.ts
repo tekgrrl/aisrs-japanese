@@ -4,7 +4,7 @@
  */
 
 import { ConceptKnowledgeUnit } from '../types';
-import { NO_ROMAJI, JSON_ONLY_OUTPUT } from './fragments';
+import { NO_ROMAJI, JSON_ONLY_OUTPUT, BLANK_DISAMBIGUATION_GUARD } from './fragments';
 
 export type ConceptMechanic = ConceptKnowledgeUnit['data']['mechanics'][number];
 
@@ -41,7 +41,7 @@ Rules:
 1.  The question must directly test the provided 'topic'.
 2.  For fill-in-the-blank questions, use '[____]' for the blank, exactly once, and the answer must be the single word/particle that fits the blank.
 3.  ${NO_ROMAJI}
-4.  The context field MUST be used for any fill-in-the-blank question that tests a noun or adjective, providing a hint to differentiate the answer from common synonyms.
+4.  ${BLANK_DISAMBIGUATION_GUARD}
 5.  Ensure the generated question and any accepted answers make grammatical sense.
 6.  If a reading and/or meaning are provided, generate a question where the topic matches those specific constraints only — do not test alternative readings.
 7.  For verb and adjective questions where the answer is a conjugated form, include valid politeness-level alternatives (plain form and polite 〜ます form) in accepted_alternatives unless the question specifically constrains the form.
@@ -166,7 +166,8 @@ Rules:
 4. LEVEL CONSTRAINT (critical): Use ONLY grammar patterns from the allowedGrammar list returned by get_user_level for any surrounding sentence. The pattern being tested (${pattern}) is the exception — everything else must come from that list.
 5. EXCLUSION CONSTRAINT (critical): NEVER use any word or pattern from excludedVocab/excludedGrammar (also returned by get_user_level) in the surrounding sentence, regardless of level.
 6. Keep vocabulary simple and concrete. The user is being tested on grammar, not vocabulary.
-7. ${JSON_ONLY_OUTPUT}`;
+7. ${BLANK_DISAMBIGUATION_GUARD}
+8. ${JSON_ONLY_OUTPUT}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -209,7 +210,8 @@ Rules:
 3. ${NO_ROMAJI}
 4. For fill-in-the-blank, the blank must encapsulate the conjugated rule application.
 5. LEVEL CONSTRAINT (critical): Use ONLY vocabulary and grammar patterns from the cumulative schema returned by get_user_level for the surrounding sentence. The mechanic being tested is the exception — everything else must be within the learner's known schema.
-6. EXCLUSION CONSTRAINT (critical): NEVER use any word or pattern from excludedVocab/excludedGrammar (also returned by get_user_level) in the surrounding sentence, regardless of level.`;
+6. EXCLUSION CONSTRAINT (critical): NEVER use any word or pattern from excludedVocab/excludedGrammar (also returned by get_user_level) in the surrounding sentence, regardless of level.
+7. ${BLANK_DISAMBIGUATION_GUARD}`;
 }
 
 // ---------------------------------------------------------------------------

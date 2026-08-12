@@ -31,6 +31,20 @@ export const PREFER_SPOKEN_REGISTER =
   `natural spoken alternative, use the natural one — unless the pattern being taught IS specifically that form.`;
 
 /**
+ * Guards against an ambiguous fill-in-the-blank question — used wherever a quiz
+ * question might contain a '[____]' blank, even if that isn't the primary format
+ * being requested (models sometimes reach for a blank unprompted, e.g. to test a
+ * conjugated form within an otherwise full-sentence question type).
+ */
+export const BLANK_DISAMBIGUATION_GUARD =
+  `BLANK DISAMBIGUATION (critical): if the 'question' text contains a '[____]' blank anywhere — whether or not the ` +
+  `question format you were asked to produce is itself a fill-in-the-blank style — the 'context' field MUST be ` +
+  `populated with enough information to uniquely determine the intended answer. A bare sentence with a blank is ` +
+  `rarely enough on its own: e.g. "The child [____] bread now." could correctly be completed by 食べた (ate), 買った ` +
+  `(bought), あげた (gave), and more. Context must say something like "the target word means 'to eat'" to rule ` +
+  `those out. This applies regardless of part of speech — verbs are at least as prone to this ambiguity as nouns.`;
+
+/**
  * Contract for sentence-assembly fragment arrays.
  * Used in: concept naturalExample, grammar lesson examples, scenario grammarNotes.
  */
