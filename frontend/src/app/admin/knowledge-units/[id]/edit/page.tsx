@@ -163,6 +163,12 @@ export default function EditLessonPage() {
         </div>
         <div className="flex items-center gap-3">
           {saveMessage && <span className="text-sm text-green-700">{saveMessage}</span>}
+          <Link
+            href={`/admin/knowledge-units/${kuId}/preview?from=${encodeURIComponent(`/admin/knowledge-units/${kuId}/edit`)}`}
+            className="px-4 py-2 rounded-lg text-sm font-medium border border-shodo-ink/20 text-shodo-ink hover:bg-shodo-paper-dark transition-colors"
+          >
+            Preview
+          </Link>
           <button
             onClick={handleSave}
             disabled={!hasChanges || isSaving}
