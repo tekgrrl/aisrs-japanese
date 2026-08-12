@@ -826,6 +826,9 @@ export default function ReviewPage() {
           onAdvance={advanceToNext}
           onSkip={advanceToNext}
           onSpeak={fetchAndPlayAudio}
+          onShowLesson={handleShowLesson}
+          showLesson={showLesson}
+          isFetchingLesson={isFetchingLesson}
         />
       )}
 

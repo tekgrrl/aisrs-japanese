@@ -13,6 +13,9 @@ interface Props {
   onAdvance: () => void;
   onSkip: () => void;
   onSpeak?: (text: string) => void;
+  onShowLesson?: () => void;
+  showLesson?: boolean;
+  isFetchingLesson?: boolean;
 }
 
 function shuffleArray<T>(arr: T[]): T[] {
@@ -31,7 +34,7 @@ interface LearnableTerm {
   meaning: string;
 }
 
-export default function SentenceAssemblyCard({ facet, onResult, onAdvance, onSkip, onSpeak }: Props) {
+export default function SentenceAssemblyCard({ facet, onResult, onAdvance, onSkip, onSpeak, onShowLesson, showLesson, isFetchingLesson }: Props) {
   const { goalTitle, fragments, answer, english, accepted_alternatives, sourceId, sourceTitle, learnableTerms } = facet.data as {
     goalTitle: string;
     fragments: string[];
@@ -301,6 +304,16 @@ export default function SentenceAssemblyCard({ facet, onResult, onAdvance, onSki
           >
             {isSubmitting ? "Checking…" : "Submit"}
           </button>
+          {onShowLesson && (
+            <button
+              type="button"
+              onClick={onShowLesson}
+              disabled={isFetchingLesson}
+              className="flex-1 px-6 py-3 bg-[#0A5C36] text-white text-lg font-semibold rounded-md shadow-md hover:bg-[#084a2b] focus:outline-none focus:ring-2 focus:ring-green-800 focus:ring-offset-2 focus:ring-offset-gray-800 disabled:bg-gray-800 disabled:text-gray-500"
+            >
+              {isFetchingLesson ? "Loading..." : showLesson ? "Hide Lesson" : "Review Lesson"}
+            </button>
+          )}
         </div>
       )}
 
@@ -346,6 +359,16 @@ export default function SentenceAssemblyCard({ facet, onResult, onAdvance, onSki
                 >
                   Review concept: {sourceTitle}
                 </Link>
+              )}
+              {onShowLesson && (
+                <button
+                  type="button"
+                  onClick={onShowLesson}
+                  disabled={isFetchingLesson}
+                  className="inline-block px-4 py-2 bg-[#0A5C36] text-white font-semibold rounded-md hover:bg-[#084a2b] disabled:opacity-50"
+                >
+                  {isFetchingLesson ? "Loading..." : showLesson ? "Hide Lesson" : "Review Lesson"}
+                </button>
               )}
             </>
           )}
