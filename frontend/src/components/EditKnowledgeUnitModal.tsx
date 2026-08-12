@@ -293,12 +293,23 @@ export default function EditKnowledgeUnitModal({
         {/* Footer */}
         <div className="px-6 py-4 bg-shodo-paper-dark border-t border-shodo-mist flex justify-between items-center">
           {(knowledgeUnit.type === "Vocab" || knowledgeUnit.type === "Grammar") ? (
-            <Link
-              href={`/admin/knowledge-units/${knowledgeUnit.id}/edit`}
-              className="text-sm text-shodo-indigo hover:text-shodo-indigo/70 transition-colors font-medium"
-            >
-              Edit lesson →
-            </Link>
+            <div className="flex items-center gap-3">
+              <Link
+                href={`/admin/knowledge-units/${knowledgeUnit.id}/edit`}
+                onClick={onClose}
+                className="text-sm text-shodo-indigo hover:text-shodo-indigo/70 transition-colors font-medium"
+              >
+                Edit lesson →
+              </Link>
+              <span className="text-shodo-mist">·</span>
+              <Link
+                href={`/admin/knowledge-units/${knowledgeUnit.id}/preview?from=${encodeURIComponent(`/admin/knowledge-units?openEdit=${knowledgeUnit.id}`)}`}
+                onClick={onClose}
+                className="text-sm text-shodo-indigo hover:text-shodo-indigo/70 transition-colors font-medium"
+              >
+                Preview
+              </Link>
+            </div>
           ) : <span />}
           <div className="flex gap-3">
           <button

@@ -59,6 +59,7 @@ test-results/
 ms-playwright/
 blob-report/
 playwright/.auth/
+.playwright-mcp/
 
 # content library
 content/

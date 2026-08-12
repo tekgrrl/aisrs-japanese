@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { KnowledgeUnit } from "@/types";
 import EditKnowledgeUnitModal from "@/components/EditKnowledgeUnitModal";
 import { apiFetch } from "@/lib/api-client";
@@ -96,6 +97,25 @@ export default function AdminKnowledgeUnitsPage() {
   const searchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [editTarget, setEditTarget] = useState<KnowledgeUnit | null>(null);
+
+  const router = useRouter();
+  const urlSearchParams = useSearchParams();
+
+  // Reopen the edit modal for a specific KU when returning from its lesson preview
+  // (Preview's "Back" link carries ?openEdit=<kuId> for exactly this).
+  useEffect(() => {
+    const openEditId = urlSearchParams.get("openEdit");
+    if (!openEditId) return;
+    (async () => {
+      try {
+        const res = await apiFetch(`/api/knowledge-units/${openEditId}/global`);
+        if (res.ok) setEditTarget(await res.json());
+      } finally {
+        router.replace("/admin/knowledge-units");
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const fetchKus = useCallback(async () => {
     setLoading(true);
