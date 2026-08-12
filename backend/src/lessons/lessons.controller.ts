@@ -77,6 +77,19 @@ export class LessonsController {
     return this.lessonsService.updateLesson(uid, kuId, body.section, body.content);
   }
 
+  @Put(':kuId/global')
+  @UseGuards(AdminGuard)
+  async updateGlobal(
+    @Param('kuId') kuId: string,
+    @Body() body: { updates: Record<string, any> }
+  ) {
+    if (!body.updates || typeof body.updates !== 'object' || Array.isArray(body.updates)) {
+      throw new BadRequestException('updates object is required');
+    }
+
+    return this.lessonsService.updateGlobalLesson(kuId, body.updates);
+  }
+
   @Get()
   async findOne(@UserId() uid: string, @Query('kuId') kuId: string) {
     if (!kuId) {

@@ -18,7 +18,6 @@ function KuRow({ ku, onEdit, onDelete }: { ku: KnowledgeUnit; onEdit: () => void
   const data = ku.data as any;
   const level = data?.jlptLevel as string | undefined;
   const wk = data?.wanikaniLevel as number | undefined;
-  const classification = data?.classification as { structuralCategory?: string; expressiveFunctions?: string[] } | undefined;
 
   let preview = "";
   if (ku.type === "Vocab" || ku.type === "Kanji") {
@@ -49,24 +48,6 @@ function KuRow({ ku, onEdit, onDelete }: { ku: KnowledgeUnit; onEdit: () => void
       {wk && (
         <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-purple-100 text-purple-800 shrink-0">
           WK{wk}
-        </span>
-      )}
-
-      {ku.type === "Grammar" && !classification && (
-        <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-gray-100 text-gray-400 shrink-0">
-          unclassified
-        </span>
-      )}
-
-      {classification?.structuralCategory && (
-        <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-teal-100 text-teal-800 shrink-0">
-          {classification.structuralCategory}
-        </span>
-      )}
-
-      {classification?.expressiveFunctions?.[0] && (
-        <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-800 shrink-0">
-          {classification.expressiveFunctions[0]}
         </span>
       )}
 

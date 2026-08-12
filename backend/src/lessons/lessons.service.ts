@@ -217,29 +217,50 @@ export class LessonsService {
     return lessonJson;
   }
 
-  async updateLesson(uid: string, kuId: string, section: string, content: string) {
-    const lessonDoc = await this.db.collection(LESSONS_COLLECTION).doc(kuId).get();
-    if (!lessonDoc.exists) throw new NotFoundException('Lesson not found');
-
-    let valueToSave: any = content;
+  /** Parses a raw section value the same way both write paths below do: JSON if it looks like an object/array literal, else left as-is. */
+  private parseSectionValue(content: any): any {
+    if (typeof content !== 'string') return content;
     try {
       const trimmed = content.trim();
       if ((trimmed.startsWith('{') && trimmed.endsWith('}')) ||
         (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
-        valueToSave = JSON.parse(content);
+        return JSON.parse(content);
       }
     } catch (e) {
-      valueToSave = content;
+      // not valid JSON — fall through and save as the raw string
     }
+    return content;
+  }
 
+  private async writeGlobalLesson(kuId: string, updates: Record<string, any>): Promise<void> {
+    const lessonRef = this.db.collection(LESSONS_COLLECTION).doc(kuId);
+    const lessonDoc = await lessonRef.get();
+    if (!lessonDoc.exists) throw new NotFoundException('Lesson not found');
+
+    const parsed: Record<string, any> = {};
+    for (const [section, value] of Object.entries(updates)) {
+      parsed[section] = this.parseSectionValue(value);
+    }
+    await lessonRef.update(parsed);
+  }
+
+  async updateLesson(uid: string, kuId: string, section: string, content: string) {
     const isAdmin = uid === ADMIN_USER_ID || process.env.ADMIN_ALL === 'true';
     if (isAdmin) {
-      await this.db.collection(LESSONS_COLLECTION).doc(kuId).update({ [section]: valueToSave });
+      await this.writeGlobalLesson(kuId, { [section]: content });
     } else {
+      const lessonDoc = await this.db.collection(LESSONS_COLLECTION).doc(kuId).get();
+      if (!lessonDoc.exists) throw new NotFoundException('Lesson not found');
       const overlayRef = this.db.collection('users').doc(uid).collection(USER_LESSONS_SUBCOLLECTION).doc(kuId);
-      await overlayRef.set({ [section]: valueToSave }, { merge: true });
+      await overlayRef.set({ [section]: this.parseSectionValue(content) }, { merge: true });
     }
 
+    return { success: true };
+  }
+
+  /** Admin-only: batched write of multiple lesson sections to global data in a single Firestore update. */
+  async updateGlobalLesson(kuId: string, updates: Record<string, any>) {
+    await this.writeGlobalLesson(kuId, updates);
     return { success: true };
   }
 

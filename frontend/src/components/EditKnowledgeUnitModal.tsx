@@ -1,16 +1,9 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import Link from "next/link";
 import { apiFetch } from "@/lib/api-client";
-import {
-  KnowledgeUnit,
-  GrammarClassification,
-  GrammarProductionType,
-  GrammarStructuralCategory,
-  ExpressiveFunction,
-  ExpressiveDomain,
-  EXPRESSIVE_FUNCTIONS_BY_DOMAIN,
-} from "@/types";
+import { KnowledgeUnit } from "@/types";
 
 interface EditKnowledgeUnitModalProps {
   isOpen: boolean;
@@ -18,43 +11,6 @@ interface EditKnowledgeUnitModalProps {
   onSave: (id: string, updates: Partial<KnowledgeUnit>) => Promise<void>;
   knowledgeUnit: KnowledgeUnit | null;
 }
-
-const STRUCTURAL_CATEGORIES: { value: GrammarStructuralCategory; label: string }[] = [
-  { value: "inflectional", label: "Inflectional" },
-  { value: "particle", label: "Particle" },
-  { value: "syntactic", label: "Syntactic" },
-  { value: "derivational", label: "Derivational" },
-  { value: "numerical", label: "Numerical" },
-  { value: "modal", label: "Modal" },
-  { value: "aspectual", label: "Aspectual" },
-  { value: "discourse", label: "Discourse" },
-  { value: "comparative", label: "Comparative" },
-  { value: "speech-act", label: "Speech-act" },
-  { value: "honorific", label: "Honorific" },
-  { value: "pragmatic", label: "Pragmatic" },
-];
-
-const DOMAIN_LABELS: Record<ExpressiveDomain, string> = {
-  "describing-the-world": "Describing the world",
-  "expressing-the-mind": "Expressing the mind",
-  "acting-in-the-world": "Acting in the world",
-  "connecting-ideas": "Connecting ideas",
-  "managing-conversation": "Managing conversation",
-};
-
-const DOMAINS: ExpressiveDomain[] = [
-  "describing-the-world",
-  "expressing-the-mind",
-  "acting-in-the-world",
-  "connecting-ideas",
-  "managing-conversation",
-];
-
-const emptyClassification = (): GrammarClassification => ({
-  productionType: "compositional",
-  structuralCategory: "inflectional",
-  expressiveFunctions: [],
-});
 
 export default function EditKnowledgeUnitModal({
   isOpen,
@@ -71,8 +27,6 @@ export default function EditKnowledgeUnitModal({
   const [grammarNotes, setGrammarNotes] = useState("");
   const [initialGrammarNotes, setInitialGrammarNotes] = useState("");
   const [grammarCorpusNotes, setGrammarCorpusNotes] = useState("");
-  const [classification, setClassification] = useState<GrammarClassification>(emptyClassification());
-  const [hasClassification, setHasClassification] = useState(false);
   const [corpusNotes, setCorpusNotes] = useState("");
   const [isSaving, setIsSaving] = useState(false);
 
@@ -86,22 +40,12 @@ export default function EditKnowledgeUnitModal({
         setWanikaniLevel(knowledgeUnit.data?.wanikaniLevel || "");
         setGrammarTitle("");
         setGrammarCorpusNotes("");
-        setClassification(emptyClassification());
-        setHasClassification(false);
       } else if (knowledgeUnit.type === "Grammar") {
         setGrammarTitle(knowledgeUnit.data?.title || "");
         setGrammarNotes("");
         setInitialGrammarNotes("");
         setGrammarCorpusNotes(knowledgeUnit.data?.corpusNotes || "");
         setJlptLevel(knowledgeUnit.data?.jlptLevel || "");
-        const existing = knowledgeUnit.data?.classification;
-        if (existing) {
-          setClassification(existing);
-          setHasClassification(true);
-        } else {
-          setClassification(emptyClassification());
-          setHasClassification(false);
-        }
         setReading("");
         setDefinition("");
         setWanikaniLevel("");
@@ -122,24 +66,12 @@ export default function EditKnowledgeUnitModal({
         setGrammarNotes("");
         setInitialGrammarNotes("");
         setGrammarCorpusNotes("");
-        setClassification(emptyClassification());
-        setHasClassification(false);
       }
       setCorpusNotes(knowledgeUnit.data?.corpusNotes || "");
     }
   }, [knowledgeUnit]);
 
   if (!isOpen || !knowledgeUnit) return null;
-
-  const toggleExpressiveFunction = (fn: ExpressiveFunction) => {
-    setClassification(prev => ({
-      ...prev,
-      expressiveFunctions: prev.expressiveFunctions.includes(fn)
-        ? prev.expressiveFunctions.filter(f => f !== fn)
-        : [...prev.expressiveFunctions, fn],
-    }));
-    if (!hasClassification) setHasClassification(true);
-  };
 
   const hasChanges = () => {
     if (!knowledgeUnit) return false;
@@ -154,20 +86,12 @@ export default function EditKnowledgeUnitModal({
       );
     }
     if (knowledgeUnit.type === "Grammar") {
-      const origClass = knowledgeUnit.data?.classification;
-      const classChanged = hasClassification !== !!origClass ||
-        (hasClassification && (
-          classification.productionType !== origClass?.productionType ||
-          classification.structuralCategory !== origClass?.structuralCategory ||
-          JSON.stringify(classification.expressiveFunctions) !== JSON.stringify(origClass?.expressiveFunctions)
-        ));
       return (
         content !== knowledgeUnit.content ||
         grammarTitle !== (knowledgeUnit.data?.title || "") ||
         grammarNotes !== initialGrammarNotes ||
         grammarCorpusNotes !== (knowledgeUnit.data?.corpusNotes || "") ||
-        jlptLevel !== (knowledgeUnit.data?.jlptLevel || "") ||
-        classChanged
+        jlptLevel !== (knowledgeUnit.data?.jlptLevel || "")
       );
     }
     return content !== knowledgeUnit.content;
@@ -187,7 +111,6 @@ export default function EditKnowledgeUnitModal({
             title: grammarTitle,
             corpusNotes: grammarCorpusNotes,
             jlptLevel: jlptLevel || null,
-            classification: hasClassification ? classification : null,
           },
         };
       } else {
@@ -340,91 +263,6 @@ export default function EditKnowledgeUnitModal({
                   className={`${inputClass} resize-none`}
                 />
               </div>
-
-              {/* Classification */}
-              <div className="border border-shodo-mist rounded-lg p-4 space-y-4">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-shodo-ink-light uppercase tracking-wide">
-                    Classification
-                  </span>
-                  {!hasClassification && (
-                    <span className="text-[10px] text-shodo-ink-light italic">not yet classified</span>
-                  )}
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className={labelClass}>Production Type</label>
-                    <select
-                      value={classification.productionType}
-                      onChange={(e) => {
-                        setClassification(prev => ({ ...prev, productionType: e.target.value as GrammarProductionType }));
-                        setHasClassification(true);
-                      }}
-                      className={inputClass}
-                    >
-                      <option value="compositional">Compositional</option>
-                      <option value="constructional">Constructional</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className={labelClass}>Structural Category</label>
-                    <select
-                      value={classification.structuralCategory}
-                      onChange={(e) => {
-                        setClassification(prev => ({ ...prev, structuralCategory: e.target.value as GrammarStructuralCategory }));
-                        setHasClassification(true);
-                      }}
-                      className={inputClass}
-                    >
-                      {STRUCTURAL_CATEGORIES.map(c => (
-                        <option key={c.value} value={c.value}>{c.label}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                <div>
-                  <label className={labelClass}>Expressive Functions</label>
-                  <div className="space-y-2 mt-1">
-                    {DOMAINS.map(domain => (
-                      <div key={domain}>
-                        <div className="text-[10px] font-semibold text-shodo-ink-light uppercase tracking-wider mb-1">
-                          {DOMAIN_LABELS[domain]}
-                        </div>
-                        <div className="flex flex-wrap gap-1.5">
-                          {EXPRESSIVE_FUNCTIONS_BY_DOMAIN[domain].map(fn => {
-                            const active = classification.expressiveFunctions.includes(fn);
-                            const isPrimary = classification.expressiveFunctions[0] === fn;
-                            return (
-                              <button
-                                key={fn}
-                                type="button"
-                                onClick={() => toggleExpressiveFunction(fn)}
-                                className={`text-[10px] px-2 py-0.5 rounded border transition-colors ${
-                                  active
-                                    ? isPrimary
-                                      ? "bg-shodo-indigo text-white border-shodo-indigo"
-                                      : "bg-shodo-indigo/20 text-shodo-indigo border-shodo-indigo"
-                                    : "bg-white text-shodo-ink-light border-shodo-mist hover:border-shodo-indigo hover:text-shodo-indigo"
-                                }`}
-                              >
-                                {fn}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  {classification.expressiveFunctions.length > 0 && (
-                    <p className="text-[10px] text-shodo-ink-light mt-1.5">
-                      Primary: <span className="font-semibold">{classification.expressiveFunctions[0]}</span>
-                      {classification.expressiveFunctions.length > 1 && ` · ${classification.expressiveFunctions.length - 1} secondary`}
-                    </p>
-                  )}
-                </div>
-              </div>
             </>
           )}
 
@@ -453,7 +291,16 @@ export default function EditKnowledgeUnitModal({
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 bg-shodo-paper-dark border-t border-shodo-mist flex justify-end gap-3">
+        <div className="px-6 py-4 bg-shodo-paper-dark border-t border-shodo-mist flex justify-between items-center">
+          {(knowledgeUnit.type === "Vocab" || knowledgeUnit.type === "Grammar") ? (
+            <Link
+              href={`/admin/knowledge-units/${knowledgeUnit.id}/edit`}
+              className="text-sm text-shodo-indigo hover:text-shodo-indigo/70 transition-colors font-medium"
+            >
+              Edit lesson →
+            </Link>
+          ) : <span />}
+          <div className="flex gap-3">
           <button
             onClick={onClose}
             className="px-4 py-2 rounded text-shodo-ink-light hover:text-shodo-ink hover:bg-shodo-mist transition-colors font-medium text-sm"
@@ -471,6 +318,7 @@ export default function EditKnowledgeUnitModal({
           >
             {isSaving ? "Saving..." : "Save Changes"}
           </button>
+          </div>
         </div>
       </div>
     </div>
