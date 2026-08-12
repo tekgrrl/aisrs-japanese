@@ -3,6 +3,8 @@ name: AI PR Reviewer
 on:
   pull_request:
     types: [opened, synchronize]
+  pull_request_review_comment:
+    types: [created]
 
 permissions:
   contents: read
@@ -10,6 +12,16 @@ permissions:
 
 jobs:
   review:
+    # Guard against a self-triggering loop: posting a review with inline comments
+    # itself fires pull_request_review_comment events. Only re-run on a reply from
+    # someone other than this same reviewer identity (a human, or Claude replying
+    # via the claude-reviewer-aigenki App) on a PR that's still open — pull_request
+    # events (opened/synchronize) always run.
+    if: |
+      github.event_name == 'pull_request' ||
+      (github.event_name == 'pull_request_review_comment' &&
+       github.event.comment.user.login != 'github-actions[bot]' &&
+       github.event.pull_request.state == 'open')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
