@@ -9,13 +9,23 @@ PR_NUMBER = os.environ.get("PR_NUMBER")
 GH_TOKEN = os.environ.get("GH_TOKEN")
 MODEL_PROVIDER = os.environ.get("MODEL_PROVIDER", "gemini")
 
+# The identity this script's GH_TOKEN posts as — used to find and dismiss this
+# script's own stale reviews, and to avoid treating its own comments as new input.
+BOT_LOGIN = "github-actions[bot]"
+
+json_headers = {
+    "Authorization": f"Bearer {GH_TOKEN}",
+    "Accept": "application/vnd.github+json",
+    "X-GitHub-Api-Version": "2022-11-28",
+}
+
 # 1. Fetch the PR Diff
-headers = {
+diff_headers = {
     "Authorization": f"Bearer {GH_TOKEN}",
     "Accept": "application/vnd.github.v3.diff",
 }
 diff_url = f"https://api.github.com/repos/{REPO}/pulls/{PR_NUMBER}"
-diff_response = requests.get(diff_url, headers=headers)
+diff_response = requests.get(diff_url, headers=diff_headers)
 diff_response.raise_for_status()
 pr_diff = diff_response.text
 
@@ -23,15 +33,55 @@ if not pr_diff.strip():
     print("Empty diff, exiting.")
     sys.exit(0)
 
+# 1b. Fetch existing reviews and inline review-comment threads. Used both to give
+# the model the prior discussion (so it can revise its own earlier verdict instead
+# of re-litigating a concern that's already been addressed) and, after a fresh
+# decision is made, to dismiss this script's own stale CHANGES_REQUESTED reviews.
+reviews_url = f"https://api.github.com/repos/{REPO}/pulls/{PR_NUMBER}/reviews"
+reviews_response = requests.get(reviews_url, headers=json_headers)
+reviews_response.raise_for_status()
+existing_reviews = reviews_response.json()
+
+review_comments_url = f"https://api.github.com/repos/{REPO}/pulls/{PR_NUMBER}/comments"
+review_comments_response = requests.get(review_comments_url, headers=json_headers)
+review_comments_response.raise_for_status()
+review_comments = review_comments_response.json()
+
+
+def format_discussion(reviews, comments):
+    lines = []
+    for r in reviews:
+        author = r.get("user", {}).get("login", "unknown")
+        state = r.get("state", "")
+        body = (r.get("body") or "").strip()
+        if body:
+            lines.append(f"- [{state}] {author}: {body}")
+    for c in comments:
+        author = c.get("user", {}).get("login", "unknown")
+        path = c.get("path", "")
+        line = c.get("line") or c.get("original_line")
+        body = (c.get("body") or "").strip()
+        marker = "  reply ->" if c.get("in_reply_to_id") else "-"
+        lines.append(f"{marker} {author} on {path}:{line}: {body}")
+    return "\n".join(lines) if lines else "(No prior review discussion on this PR.)"
+
+
+discussion_context = format_discussion(existing_reviews, review_comments)
+
 # 2. The Pragmatic Principal Prompt
-prompt = f"""You are a Pragmatic Principal Software Engineer reviewing a Pull Request. 
-You care deeply about shipping reliable code, preventing security vulnerabilities, and maintaining clean architecture. 
+prompt = f"""You are a Pragmatic Principal Software Engineer reviewing a Pull Request.
+You care deeply about shipping reliable code, preventing security vulnerabilities, and maintaining clean architecture.
 However, you are not a pedantic auditor. You allow for stylistic leeway, you understand engineering trade-offs, and you optimize for team velocity.
 
 Review Rules:
 1. "APPROVE": The code is solid. It may have minor nits, but nothing that should block a merge.
 2. "REQUEST_CHANGES": There is a genuine security vulnerability, a severe logic error, or a major architectural break. Never block a PR for style or minor optimizations.
 3. "COMMENT": You just want to leave general feedback without formally approving or blocking.
+
+You are re-evaluating this PR from scratch against its current state — you may be reconsidering a concern you (or a prior run of this same reviewer) already raised. Prior review discussion is included below. If a previously raised concern has since been fixed by a code change, or convincingly explained as not applicable in a reply, do not re-raise it — only request changes for concerns that are genuinely still unresolved.
+
+Prior review discussion on this PR:
+{discussion_context}
 
 You MUST respond in raw, valid JSON with no markdown wrapping. Use this exact schema:
 {{
@@ -107,13 +157,26 @@ for c in inline_comments:
             }
         )
 
-# 5. Post the Review
+# 5. Dismiss this script's own stale CHANGES_REQUESTED reviews before posting a
+# fresh one, so the PR's mergeability reflects only the current, up-to-date
+# verdict — this is the manual "dismiss and explain why" step a human would
+# otherwise have to do after a concern is fixed or explained away.
+post_headers = json_headers
+for r in existing_reviews:
+    if r.get("user", {}).get("login") == BOT_LOGIN and r.get("state") == "CHANGES_REQUESTED":
+        dismiss_url = f"https://api.github.com/repos/{REPO}/pulls/{PR_NUMBER}/reviews/{r['id']}/dismissals"
+        dismiss_response = requests.put(
+            dismiss_url,
+            headers=post_headers,
+            json={"message": "Superseded by a fresh review below, which re-evaluated this PR against the current diff and discussion."},
+        )
+        if dismiss_response.ok:
+            print(f"Dismissed stale CHANGES_REQUESTED review {r['id']}")
+        else:
+            print(f"Failed to dismiss stale review {r['id']}: {dismiss_response.status_code} {dismiss_response.text}")
+
+# 6. Post the Review
 review_url = f"https://api.github.com/repos/{REPO}/pulls/{PR_NUMBER}/reviews"
-post_headers = {
-    "Authorization": f"Bearer {GH_TOKEN}",
-    "Accept": "application/vnd.github+json",
-    "X-GitHub-Api-Version": "2022-11-28",
-}
 
 payload = {
     "body": f"### AI Review (Pragmatic)\n\n{summary}",
