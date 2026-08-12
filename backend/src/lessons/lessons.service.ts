@@ -233,6 +233,8 @@ export class LessonsService {
   }
 
   private async writeGlobalLesson(kuId: string, updates: Record<string, any>): Promise<void> {
+    if (Object.keys(updates).length === 0) return;
+
     const lessonRef = this.db.collection(LESSONS_COLLECTION).doc(kuId);
     const lessonDoc = await lessonRef.get();
     if (!lessonDoc.exists) throw new NotFoundException('Lesson not found');
