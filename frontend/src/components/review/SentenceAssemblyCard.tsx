@@ -327,6 +327,18 @@ export default function SentenceAssemblyCard({ facet, onResult, onAdvance, onSki
                 <span className="font-semibold">Correct answer: </span>
                 <span className="text-white font-medium">{answer}</span>
               </p>
+              {onSpeak && (
+                <button
+                  type="button"
+                  onClick={() => onSpeak(answer)}
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm font-medium rounded-md transition-colors"
+                >
+                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M4.018 14L14.41 9 4.018 4v10z"></path>
+                  </svg>
+                  Replay Audio
+                </button>
+              )}
               {sourceId && (
                 <Link
                   href={`/concepts/${sourceId}`}
