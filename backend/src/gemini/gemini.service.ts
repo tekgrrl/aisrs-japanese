@@ -68,6 +68,7 @@ export class GeminiService implements OnModuleInit {
     let startTime = performance.now();
     let errorOccurred = false;
     let capturedError: any;
+    let aiJsonText: string | undefined; // Capture raw text for logging
     let evaluationResult:
       | { result: "pass" | "fail"; explanation: string }
       | undefined;
@@ -98,7 +99,7 @@ export class GeminiService implements OnModuleInit {
         },
       });
 
-      const aiJsonText = response.text;
+      aiJsonText = response.text;
 
       if (!aiJsonText) {
         this.logger.error("Empty response text from Gemini SDK", { response });
@@ -187,7 +188,7 @@ export class GeminiService implements OnModuleInit {
           // Assuming success means we got 'evaluationResult'
           // We might want to add raw text logging here too if needed
           updateData.responseData = {
-            // rawText: aiJsonText, // Uncomment if raw text needed
+            rawText: aiJsonText,
             parsedJson: evaluationResult, // Log the parsed result
           };
         }
