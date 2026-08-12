@@ -168,6 +168,15 @@ export class LessonsService {
           }
           (lessonJson as any).component_kanji = filtered;
         }
+
+        // Stronger enforcement than the heuristic above: kanaOnly is an explicit
+        // "never use this word's kanji breakdown" decision (AI-set at generation time,
+        // or curated manually via the admin editor). Don't trust that the model actually
+        // left component_kanji empty just because it also set kanaOnly — force it.
+        if ((lessonJson as any).kanaOnly === true && Array.isArray((lessonJson as any).component_kanji) && (lessonJson as any).component_kanji.length > 0) {
+          this.logger.warn(`kanaOnly=true but component_kanji was non-empty for "${vocabText}" (kuId=${kuId}) — clearing`);
+          (lessonJson as any).component_kanji = [];
+        }
       }
 
     } catch (parseError) {
@@ -243,6 +252,15 @@ export class LessonsService {
     for (const [section, value] of Object.entries(updates)) {
       parsed[section] = this.parseSectionValue(value);
     }
+
+    // Same invariant as generateLesson's safety net: kanaOnly=true must mean
+    // component_kanji is empty. The admin editor always sends both fields together
+    // on save, so enforcing within this single update is sufficient — no need to
+    // read back existing Firestore state.
+    if (parsed.kanaOnly === true) {
+      parsed.component_kanji = [];
+    }
+
     await lessonRef.update(parsed);
   }
 

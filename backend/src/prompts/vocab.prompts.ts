@@ -23,7 +23,7 @@ The lesson should be in English. Where you want to use Japanese text for example
 * Generate detailed explanations for meaning and reading.
 * If a word is a "suru noun", include explanations of the meaning of the suru form.
 * Generate context examples appropriate for the user's current JLPT level even if the vocabulary itself is more advanced. (Level constraint is injected at call time.)
-* Analyze component Kanji. If the word is normally or almost always written in kana alone in modern Japanese (e.g. もらう, くれる, いる, ある, すごい, かわいい), set \`component_kanji\` to an empty array — do not include the kanji breakdown even if kanji exist for it.
+* Analyze component Kanji. If the word is normally or almost always written in kana alone in modern Japanese (e.g. もらう, くれる, いる, ある, すごい, かわいい), set \`kanaOnly\` to true and \`component_kanji\` to an empty array — do not include the kanji breakdown even if kanji exist for it. Otherwise set \`kanaOnly\` to false.
 * Do not explain what "rendaku" means.
 
 **Constraints:**
@@ -52,6 +52,7 @@ You MUST return a valid JSON object matching this schema:
   "context_examples": [
     { "sentence": "Japanese sentence with Furigana in brackets e.g. 明日[あした]", "translation": "English translation." }
   ],
+  "kanaOnly": "true | false — true if this word is normally written in kana alone (see Task 2); when true, component_kanji MUST be an empty array",
   "component_kanji": [
     {
       "kanji": "Single Kanji",
@@ -82,6 +83,7 @@ Output:
   "context_examples": [
     { "sentence": "田中[たなか]先生[せんせい]は日本語[にほんご]を教[おし]えています。", "translation": "Professor Tanaka teaches Japanese." }
   ],
+  "kanaOnly": false,
   "component_kanji": [
     {
       "kanji": "先",
@@ -115,6 +117,7 @@ Output:
   "context_examples": [
     { "sentence": "朝[あさ]ごはんにパンを食[た]べました。", "translation": "I ate bread for breakfast." }
   ],
+  "kanaOnly": false,
   "component_kanji": [
     {
       "kanji": "食",
@@ -141,6 +144,7 @@ Output:
   "context_examples": [
     { "sentence": "彼[かれ]は有名[ゆうめい]な歌手[かしゅ]です。", "translation": "He is a famous singer." }
   ],
+  "kanaOnly": false,
   "component_kanji": [
     {
       "kanji": "有",
@@ -174,6 +178,7 @@ Output:
   "context_examples": [
     { "sentence": "毎日[まいにち]日本語[にほんご]を勉強[べんきょう]します。", "translation": "I study Japanese every day." }
   ],
+  "kanaOnly": false,
   "component_kanji": [
     {
       "kanji": "勉",
@@ -207,6 +212,7 @@ Output:
   "context_examples": [
     { "sentence": "日本[にほん]に行[い]きたいです。", "translation": "I want to go to Japan." }
   ],
+  "kanaOnly": false,
   "component_kanji": [
     {
       "kanji": "日",
@@ -223,6 +229,25 @@ Output:
       "kunyomi": ["もと"]
     }
   ]
+}
+
+Input: くれる
+
+Output:
+{
+  "type": "Vocab",
+  "vocab": "くれる",
+  "reading": "くれる",
+  "definitions": ["to give (to me/us)", "to do for me/us"],
+  "partOfSpeech": "transitive-verb",
+  "conjugationType": "ichidan",
+  "meaning_explanation": "Used when someone gives something to the speaker (or someone in the speaker's in-group). Always written in kana in modern Japanese — the kanji 呉れる exists but is essentially never used.",
+  "reading_explanation": "No kanji reading to explain — this word is written entirely in kana.",
+  "context_examples": [
+    { "sentence": "友達[ともだち]がプレゼントをくれました。", "translation": "My friend gave me a present." }
+  ],
+  "kanaOnly": true,
+  "component_kanji": []
 }
 `;
 

@@ -17,6 +17,7 @@ const VOCAB_EDITABLE_FIELDS: (keyof VocabLesson)[] = [
   "component_kanji",
   "partOfSpeech",
   "conjugationType",
+  "kanaOnly",
 ];
 
 const GRAMMAR_EDITABLE_FIELDS: (keyof GrammarLesson)[] = ["meaning", "formation", "examples"];

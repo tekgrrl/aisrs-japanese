@@ -165,6 +165,8 @@ export interface VocabLesson {
   reading_explanation: string;
   context_examples?: { sentence: string; translation: string }[];
   validation?: LessonValidation;
+  /** When true, component_kanji must be empty — this word is never taught/queued with its kanji breakdown, regardless of how it's stored. Set by the AI at generation time or curated manually via the admin editor; enforced app-side, not just prompted for. */
+  kanaOnly?: boolean;
   component_kanji?: {
     kanji: string;
     reading: string;
