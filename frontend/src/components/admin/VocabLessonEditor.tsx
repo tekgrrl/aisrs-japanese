@@ -78,6 +78,15 @@ export default function VocabLessonEditor({ lesson, onChange }: Props) {
         </div>
       </div>
 
+      <label className="flex items-center gap-2 text-sm text-shodo-ink">
+        <input
+          type="checkbox"
+          checked={!!lesson.kanaOnly}
+          onChange={(e) => set("kanaOnly", e.target.checked)}
+        />
+        Kana only — never show or queue this word&apos;s kanji breakdown
+      </label>
+
       <div className={sectionClass}>
         <ArrayFieldEditor
           label="Definitions"
@@ -129,7 +138,12 @@ export default function VocabLessonEditor({ lesson, onChange }: Props) {
         />
       </div>
 
-      <div className={sectionClass}>
+      <div className={`${sectionClass} ${lesson.kanaOnly ? "opacity-40 pointer-events-none" : ""}`}>
+        {lesson.kanaOnly && (
+          <p className="text-xs text-shodo-ink-light italic">
+            Ignored on save while &quot;Kana only&quot; is checked.
+          </p>
+        )}
         <ArrayFieldEditor
           label="Component Kanji"
           items={lesson.component_kanji || []}

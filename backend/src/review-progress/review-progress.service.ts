@@ -414,6 +414,7 @@ export class ReviewProgressService {
     if (entry.source === 'kanji-components') {
       if (lesson.type !== 'Vocab') return [];
       const vl = lesson as VocabLesson;
+      if (vl.kanaOnly) return []; // never queue kanji-component facets for a word decided kana-only
       const components = vl.component_kanji ?? [];
       if (components.length === 0) return [];
 

@@ -21,7 +21,7 @@ export function slideCount(loaded: LoadedItem): number {
   const { item, lesson } = loaded;
   if (item.type === "Vocab" && lesson.type === "Vocab") {
     const vl = lesson as VocabLesson;
-    const hasKanji = (vl.component_kanji?.length ?? 0) > 0;
+    const hasKanji = !vl.kanaOnly && (vl.component_kanji?.length ?? 0) > 0;
     return 3 + (hasKanji ? 1 : 0) + ((vl.context_examples?.length ?? 0) > 0 ? 1 : 0);
   }
   if (item.type === "Kanji") return 4;
@@ -367,7 +367,7 @@ export function renderSlide(loaded: LoadedItem, slideIdx: number, onAudio: (text
   const { item, lesson } = loaded;
   if (item.type === "Vocab" && lesson.type === "Vocab") {
     const vl = lesson as VocabLesson;
-    const hasKanji = (vl.component_kanji?.length ?? 0) > 0;
+    const hasKanji = !vl.kanaOnly && (vl.component_kanji?.length ?? 0) > 0;
     let s = slideIdx;
     if (s === 0) return <VocabWordSlide loaded={loaded} onAudio={onAudio} />;
     s--;
