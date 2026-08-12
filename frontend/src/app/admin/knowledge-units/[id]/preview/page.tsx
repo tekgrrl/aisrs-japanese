@@ -17,12 +17,24 @@ import {
 
 const SUPPORTED_TYPES = new Set(["Vocab", "Kanji", "Grammar"]);
 
+// `from` comes from a URL query param, so it's fully attacker-controlled — a crafted
+// link (?from=https://evil.com or ?from=javascript:...) must not be usable as a
+// navigation target. Only allow same-origin relative paths: single leading "/", and
+// reject "//" or "/\" (both get browser-normalized to a protocol-relative external URL).
+function isSafeRelativePath(path: string | null): path is string {
+  if (!path) return false;
+  if (!path.startsWith("/")) return false;
+  if (path.startsWith("//") || path.startsWith("/\\")) return false;
+  return true;
+}
+
 export default function PreviewLessonPage() {
   const { isAdmin, loading: authLoading } = useAuth();
   const params = useParams();
   const searchParams = useSearchParams();
   const kuId = params?.id as string;
-  const backHref = searchParams.get("from") || `/admin/knowledge-units/${kuId}/edit`;
+  const rawFrom = searchParams.get("from");
+  const backHref = isSafeRelativePath(rawFrom) ? rawFrom : `/admin/knowledge-units/${kuId}/edit`;
 
   const [ku, setKu] = useState<KnowledgeUnit | null>(null);
   const [loaded, setLoaded] = useState<LoadedItem | null>(null);
@@ -92,6 +104,12 @@ export default function PreviewLessonPage() {
   const header = ku && (
     <div className="flex items-center justify-between mb-8">
       <div>
+        {/* Intentionally a hard navigation, not router.push/<Link>: the destination page
+            (the KU list) reads a ?openEdit= param on mount to reopen the correct modal, and
+            Next's client-side router cache can restore a previously-visited page's component
+            instance without re-running that mount effect, silently reopening the wrong (or no)
+            modal. A full reload guarantees a fresh mount. backHref is validated above — never
+            pass an unvalidated `from` value here. */}
         <button
           onClick={() => { window.location.href = backHref; }}
           className="text-sm text-shodo-ink-light hover:text-shodo-indigo transition-colors"
