@@ -15,6 +15,11 @@ export class TutorGenerateScenarioDto {
   sourceContextSentence?: string;
   targetVocab?: string;
   sourceKuId?: string;
+  // Grammar/Concept KU seeding (sourceType === 'grammar-pattern') — parallel to the
+  // Vocab-only sourceContextSentence/targetVocab pair above.
+  pattern?: string;
+  title?: string;
+  corpusNotes?: string;
 }
 
 const MAX_ITERATIONS = 5;
@@ -76,6 +81,14 @@ export class TutorService {
     }
     if (dto.targetVocab) {
       lines.push(`The scenario should naturally feature this vocabulary word: ${dto.targetVocab}`);
+    }
+    if (dto.sourceType === 'grammar-pattern' && dto.pattern) {
+      lines.push(
+        `Build this scenario around practicing the grammar pattern "${dto.pattern}"` +
+        (dto.title ? ` (${dto.title})` : '') +
+        `. The dialogue MUST naturally require the user to produce this pattern at least once — it is the specific thing they need practice with, not incidental content.` +
+        (dto.corpusNotes ? ` Context: ${dto.corpusNotes}` : ''),
+      );
     }
 
     const scenarioMeta: Record<string, unknown> = {};

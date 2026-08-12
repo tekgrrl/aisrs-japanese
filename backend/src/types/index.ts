@@ -41,6 +41,19 @@ export interface PromotedEntry {
   promotedAt: Timestamp;
 }
 
+/**
+ * A dismissible "practice this in a Scenario" opportunity, recorded when a KU's
+ * facet crosses into a new SRS level (Sumi-suri -> Kaisho -> Gyosho -> Sosho -> Mushin).
+ * Purely a suggestion — never read by SRS/facet logic, only surfaced in the daily plan.
+ */
+export interface ScenarioOpportunity {
+  kuId: string;
+  content: string;
+  type: string; // KU type: 'Vocab' | 'Grammar' | 'Concept' | 'Kanji'
+  newLevel: string; // e.g. "Kaisho" — from lib/srs-levels.ts getSrsLevelName
+  createdAt: Timestamp;
+}
+
 /** A KU entry in a tutor context array, with per-facet-type granularity. */
 export interface TutorVocabEntry {
   content: string;
@@ -70,6 +83,7 @@ export interface UserRoot {
     currentStreak: number;
     lastReviewDate?: Timestamp;
     recentlyPromoted?: PromotedEntry[];
+    scenarioOpportunities?: ScenarioOpportunity[];
 
     // Performance
     totalReviews: number;

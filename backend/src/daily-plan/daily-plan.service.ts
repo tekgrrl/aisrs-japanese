@@ -2,7 +2,8 @@ import { Injectable, Inject, Logger } from '@nestjs/common';
 import { Firestore, Query, Timestamp } from 'firebase-admin/firestore';
 import { FIRESTORE_CONNECTION, REVIEW_FACETS_COLLECTION, KNOWLEDGE_UNITS_COLLECTION } from '../firebase/firebase.module';
 import { ADMIN_USER_ID } from '../lib/constants';
-import { PromotedEntry, ReviewFacet, UserRoot } from '../types';
+import { PromotedEntry, ReviewFacet, ScenarioOpportunity, UserRoot } from '../types';
+import { StatsService } from '../stats/stats.service';
 
 export interface LeechEntry {
   kuId: string;
@@ -18,6 +19,7 @@ export interface DailyPlan {
   threshold: number;
   recentPromotions: PromotedEntry[];
   topLeeches: LeechEntry[];
+  practiceOpportunities: ScenarioOpportunity[];
   createdAt: Timestamp;
 }
 
@@ -25,7 +27,26 @@ export interface DailyPlan {
 export class DailyPlanService {
   private readonly logger = new Logger(DailyPlanService.name);
 
-  constructor(@Inject(FIRESTORE_CONNECTION) private readonly db: Firestore) {}
+  constructor(
+    @Inject(FIRESTORE_CONNECTION) private readonly db: Firestore,
+    private readonly statsService: StatsService,
+  ) {}
+
+  /**
+   * Dismisses a single scenario-practice opportunity. Removes it from stats (so future
+   * daily plans won't include it) and patches today's already-cached plan doc directly,
+   * since check() serves that cached doc for the rest of the day otherwise.
+   */
+  async dismissOpportunity(uid: string, kuId: string): Promise<void> {
+    await this.statsService.removeScenarioOpportunity(uid, kuId);
+    const planRef = this.db.collection('daily-plans').doc(uid);
+    const planDoc = await planRef.get();
+    if (planDoc.exists) {
+      const plan = planDoc.data() as DailyPlan;
+      const updated = (plan.practiceOpportunities ?? []).filter(o => o.kuId !== kuId);
+      await planRef.update({ practiceOpportunities: updated });
+    }
+  }
 
   private facetsBaseQuery(uid: string): Query {
     const col = uid === ADMIN_USER_ID
@@ -72,6 +93,11 @@ export class DailyPlanService {
       .filter(e => (e.promotedAt as Timestamp).toMillis() > cutoffMs)
       .sort((a, b) => b.srsStage - a.srsStage);
 
+    // No additional time-window filter — already pruned to 7 days at storage time
+    // (recordScenarioOpportunity), and dismissal (not display-window expiry) is the
+    // intended removal mechanism so these stay visible until acted on.
+    const practiceOpportunities: ScenarioOpportunity[] = (userData?.stats?.scenarioOpportunities ?? []) as ScenarioOpportunity[];
+
     const leechSnap = await this.facetsBaseQuery(uid)
       .where('consecutiveFailures', '>=', 1)
       .orderBy('consecutiveFailures', 'desc')
@@ -106,6 +132,7 @@ export class DailyPlanService {
       threshold,
       recentPromotions,
       topLeeches,
+      practiceOpportunities,
       createdAt: Timestamp.now(),
     };
   }
