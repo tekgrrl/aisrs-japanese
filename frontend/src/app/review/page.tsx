@@ -226,7 +226,10 @@ export default function ReviewPage() {
 
   // --- Effect to handle current item changes ---
   useEffect(() => {
-    if (currentItem && currentItem.facet.facetType === "audio") {
+    if (
+      currentItem &&
+      (currentItem.facet.facetType === "audio" || currentItem.facet.facetType === "Content-to-Definition")
+    ) {
       // Small timeout to let UI mount
       setTimeout(() => {
         fetchAndPlayAudio(currentItem.facet.data?.reading || currentItem.facet.data?.content);
@@ -863,7 +866,7 @@ export default function ReviewPage() {
                 {questionText || "[Question not loaded]"}
               </p>
 
-              {currentItem.facet.facetType === "audio" && (
+              {(currentItem.facet.facetType === "audio" || currentItem.facet.facetType === "Content-to-Definition") && (
                 <div className="mt-6 flex justify-center">
                   <button
                     type="button"
