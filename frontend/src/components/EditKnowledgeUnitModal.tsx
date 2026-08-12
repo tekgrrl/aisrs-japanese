@@ -40,6 +40,7 @@ export default function EditKnowledgeUnitModal({
         setWanikaniLevel(knowledgeUnit.data?.wanikaniLevel || "");
         setGrammarTitle("");
         setGrammarCorpusNotes("");
+        setCorpusNotes(knowledgeUnit.data?.corpusNotes || "");
       } else if (knowledgeUnit.type === "Grammar") {
         setGrammarTitle(knowledgeUnit.data?.title || "");
         setGrammarNotes("");
@@ -49,6 +50,7 @@ export default function EditKnowledgeUnitModal({
         setReading("");
         setDefinition("");
         setWanikaniLevel("");
+        setCorpusNotes("");
 
         apiFetch(`/api/lessons?kuId=${knowledgeUnit.id}`)
         .then(res => res.ok ? res.json() : null).then(lesson => {
@@ -66,8 +68,8 @@ export default function EditKnowledgeUnitModal({
         setGrammarNotes("");
         setInitialGrammarNotes("");
         setGrammarCorpusNotes("");
+        setCorpusNotes("");
       }
-      setCorpusNotes(knowledgeUnit.data?.corpusNotes || "");
     }
   }, [knowledgeUnit]);
 
