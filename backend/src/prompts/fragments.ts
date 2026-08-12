@@ -16,6 +16,21 @@ export const JSON_ONLY_OUTPUT =
   `Return ONLY a valid JSON object. Do NOT output any text before or after it. Do NOT use markdown code blocks or backticks.`;
 
 /**
+ * Register guidance for any Japanese sentence a learner will read or hear.
+ * Used wherever the AI generates example/context sentences: grammar examples,
+ * vocab context_examples, concept naturalExample/examples.
+ */
+export const PREFER_SPOKEN_REGISTER =
+  `NATURAL SPOKEN REGISTER (critical): favor the form an actual native speaker would say in conversation over a ` +
+  `grammatically valid but stiff/bookish alternative. The most common failure mode is past-tense negation: ` +
+  `〜くありませんでした for i-adjectives (e.g. 寒くありませんでした, "it was not cold") and 〜ではありませんでした ` +
+  `for na-adjectives/nouns (e.g. 学生ではありませんでした, "was not a student") are grammatically correct but read as ` +
+  `formal written Japanese, not natural spoken Japanese — even in polite speech, natural spoken Japanese uses ` +
+  `〜くなかったです and 〜じゃなかったです instead (e.g. 寒くなかったです, 学生じゃなかったです). Apply the same ` +
+  `judgment generally: when a grammatically valid form is rarely used in real conversation in favor of a more ` +
+  `natural spoken alternative, use the natural one — unless the pattern being taught IS specifically that form.`;
+
+/**
  * Contract for sentence-assembly fragment arrays.
  * Used in: concept naturalExample, grammar lesson examples, scenario grammarNotes.
  */
