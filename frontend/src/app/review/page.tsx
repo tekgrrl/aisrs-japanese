@@ -12,6 +12,7 @@ import { apiFetch } from "@/lib/api-client";
 import SentenceAssemblyCard from "@/components/review/SentenceAssemblyCard";
 import SentenceClozeCard from "@/components/review/SentenceClozeCard";
 import FacetDebugPanel from "@/components/review/FacetDebugPanel";
+import ReviewActionButtons from "@/components/review/ReviewActionButtons";
 import VocabLessonView from "@/components/lessons/VocabLessonView";
 import KanjiLessonView from "@/components/lessons/KanjiLessonView";
 import GrammarLessonView from "@/components/lessons/GrammarLessonView";
@@ -932,32 +933,17 @@ export default function ReviewPage() {
             className="w-full p-4 bg-gray-700 border-2 border-gray-600 text-white text-xl rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-800 disabled:text-gray-500"
           />
           <div className="relative mt-4">
-            <button
-              type="submit"
-              disabled={answerState !== "unanswered" || isDynamicLoading || !userAnswer.trim()}
-              className="w-full px-6 py-4 bg-blue-600 text-white text-xl font-semibold rounded-md shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-800 disabled:bg-gray-500 disabled:cursor-wait"
-            >
-              {answerState === "evaluating" ? "Evaluating..." : "Submit Answer"}
-            </button>
-
-            <div className="flex gap-4 mt-4">
-              <button
-                type="button"
-                onClick={handleSkip}
-                disabled={answerState !== "unanswered" || isDynamicLoading}
-                className="flex-1 px-6 py-3 bg-gray-500 text-white text-lg font-semibold rounded-md shadow-md hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 focus:ring-offset-gray-800 disabled:bg-gray-800 disabled:text-gray-500"
-              >
-                Skip
-              </button>
-              <button
-                type="button"
-                onClick={handleShowLesson}
-                disabled={isFetchingLesson}
-                className="flex-1 px-6 py-3 bg-[#0A5C36] text-white text-lg font-semibold rounded-md shadow-md hover:bg-[#084a2b] focus:outline-none focus:ring-2 focus:ring-green-800 focus:ring-offset-2 focus:ring-offset-gray-800 disabled:bg-gray-800 disabled:text-gray-500"
-              >
-                {isFetchingLesson ? "Loading..." : showLesson ? "Hide Lesson" : "Review Lesson"}
-              </button>
-            </div>
+            <ReviewActionButtons
+              submitLabel={answerState === "evaluating" ? "Evaluating..." : "Submit Answer"}
+              submitType="submit"
+              submitDisabled={answerState !== "unanswered" || isDynamicLoading || !userAnswer.trim()}
+              size="xl"
+              onSkip={handleSkip}
+              skipDisabled={answerState !== "unanswered" || isDynamicLoading}
+              onShowLesson={handleShowLesson}
+              showLesson={showLesson}
+              isFetchingLesson={isFetchingLesson}
+            />
 
             {/* Level Change Notification Overlay */}
             {levelStatus && (
