@@ -42,7 +42,7 @@ export default function EditLessonPage() {
       setError(null);
       try {
         const [kuRes, lessonRes] = await Promise.all([
-          apiFetch(`/api/knowledge-units/${kuId}`),
+          apiFetch(`/api/knowledge-units/${kuId}/global`),
           apiFetch(`/api/lessons?kuId=${kuId}`),
         ]);
         if (!kuRes.ok) throw new Error("Failed to load knowledge unit");
@@ -114,6 +114,10 @@ export default function EditLessonPage() {
 
   if (isLoading) {
     return <div className="max-w-4xl mx-auto p-8 text-shodo-ink-light">Loading…</div>;
+  }
+
+  if (error && !ku) {
+    return <div className="max-w-4xl mx-auto p-8 text-shodo-stamp-red">{error}</div>;
   }
 
   if (!ku) {

@@ -56,6 +56,18 @@ export class KnowledgeUnitsController {
         throw new NotFoundException(`Knowledge Unit ${id} not found`);
     }
 
+    // Admin-only lookup with no per-user enrollment gate — the plain :id route above
+    // requires the caller to have their own UKU for the KU (it's a "can I view what
+    // I'm learning" check), which is wrong for an admin editing arbitrary global
+    // corpus data they may never have personally enrolled in.
+    @Get(':id/global')
+    @UseGuards(AdminGuard)
+    async findOneGlobal(@Param('id') id: string) {
+        const ku = await this.knowledgeUnitsService.findOneById(id);
+        if (!ku) throw new NotFoundException(`Knowledge Unit ${id} not found`);
+        return ku;
+    }
+
     @Patch('bulk')
     @HttpCode(200)
     async bulkUpdate(@Body() body: any) {
