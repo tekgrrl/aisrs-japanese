@@ -3,7 +3,7 @@
  * Sources: backend/src/lessons/lessons.service.ts, backend/src/gemini/gemini.service.ts
  */
 
-import { levelConstraint } from './fragments';
+import { levelConstraint, PREFER_SPOKEN_REGISTER } from './fragments';
 
 // ---------------------------------------------------------------------------
 // Vocab lesson
@@ -23,6 +23,7 @@ The lesson should be in English. Where you want to use Japanese text for example
 * Generate detailed explanations for meaning and reading.
 * If a word is a "suru noun", include explanations of the meaning of the suru form.
 * Generate context examples appropriate for the user's current JLPT level even if the vocabulary itself is more advanced. (Level constraint is injected at call time.)
+* ${PREFER_SPOKEN_REGISTER}
 * Analyze component Kanji. If the word is normally or almost always written in kana alone in modern Japanese (e.g. もらう, くれる, いる, ある, すごい, かわいい), set \`kanaOnly\` to true and \`component_kanji\` to an empty array — do not include the kanji breakdown even if kanji exist for it. Otherwise set \`kanaOnly\` to false.
 * Do not explain what "rendaku" means.
 

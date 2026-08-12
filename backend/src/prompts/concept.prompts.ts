@@ -3,7 +3,7 @@
  * Source: backend/src/concepts/concepts.service.ts
  */
 
-import { NO_ROMAJI, levelConstraint, FRAGMENT_CONTRACT, ACCEPTED_ALTERNATIVES_DEF } from './fragments';
+import { NO_ROMAJI, levelConstraint, FRAGMENT_CONTRACT, ACCEPTED_ALTERNATIVES_DEF, PREFER_SPOKEN_REGISTER } from './fragments';
 
 /**
  * Builds the full prompt for generating a ConceptKnowledgeUnit page.
@@ -38,6 +38,7 @@ Write for an English-speaking learner at any level. Use Japanese text for all ex
 - ${levelConstraint(jlptLevel)}
 - Do not explain meta-linguistic terms (e.g. do not define what a "particle" is).
 - ${NO_ROMAJI}
+- ${PREFER_SPOKEN_REGISTER}
 
 **Response Schema:**
 You MUST return a valid JSON object matching this schema exactly:
