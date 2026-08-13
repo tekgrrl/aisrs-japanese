@@ -172,6 +172,9 @@ export default function KnowledgeManagementPage() {
       }
 
       await fetchData(); // Refetch all data to show updates
+      // The modal stays open after saving (no more auto-close) — refresh editingKu too,
+      // otherwise its hasChanges() check keeps comparing against the pre-save prop forever.
+      setEditingKu(prev => prev && prev.id === id ? { ...prev, ...updates } as KnowledgeUnit : prev);
       window.dispatchEvent(new CustomEvent("refreshStats"));
     } catch (err) {
       console.error(err);

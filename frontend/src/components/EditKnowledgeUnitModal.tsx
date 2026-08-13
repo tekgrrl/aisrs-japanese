@@ -32,14 +32,20 @@ export default function EditKnowledgeUnitModal({
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const prevKuIdRef = useRef<string | null>(null);
 
+  // The modal stays mounted across opens (parent only toggles isOpen/knowledgeUnit) — clear
+  // the "Saved." confirmation whenever it closes, so reopening later (even the same KU, with
+  // no new edits) doesn't show a leftover confirmation from a previous session.
+  useEffect(() => {
+    if (!isOpen) setSaveMessage(null);
+  }, [isOpen]);
+
   useEffect(() => {
     if (knowledgeUnit) {
-      // Only clear the "Saved." confirmation when a genuinely different KU opens —
-      // not when this same KU's prop gets refreshed after a save (see handleSave).
-      if (knowledgeUnit.id !== prevKuIdRef.current) {
-        setSaveMessage(null);
-        prevKuIdRef.current = knowledgeUnit.id;
-      }
+      // True when this effect fired because the parent refreshed the same KU's prop after a
+      // save (see handleSave) rather than because a genuinely different KU was opened.
+      const isSameKuRefresh = knowledgeUnit.id === prevKuIdRef.current;
+      prevKuIdRef.current = knowledgeUnit.id;
+
       setContent(knowledgeUnit.content || "");
       if (knowledgeUnit.type === "Vocab" || knowledgeUnit.type === "Kanji") {
         setReading(knowledgeUnit.data?.reading || "");
@@ -51,8 +57,6 @@ export default function EditKnowledgeUnitModal({
         setCorpusNotes(knowledgeUnit.data?.corpusNotes || "");
       } else if (knowledgeUnit.type === "Grammar") {
         setGrammarTitle(knowledgeUnit.data?.title || "");
-        setGrammarNotes("");
-        setInitialGrammarNotes("");
         setGrammarCorpusNotes(knowledgeUnit.data?.corpusNotes || "");
         setJlptLevel(knowledgeUnit.data?.jlptLevel || "");
         setReading("");
@@ -60,13 +64,23 @@ export default function EditKnowledgeUnitModal({
         setWanikaniLevel("");
         setCorpusNotes("");
 
-        apiFetch(`/api/lessons?kuId=${knowledgeUnit.id}`)
-        .then(res => res.ok ? res.json() : null).then(lesson => {
-          if (lesson?.notes) {
-            setGrammarNotes(lesson.notes);
-            setInitialGrammarNotes(lesson.notes);
-          }
-        }).catch(() => {});
+        if (isSameKuRefresh) {
+          // Notes were just saved via the PUT in handleSave — grammarNotes already holds
+          // the current value. Just re-baseline so hasChanges() reports false, instead of
+          // resetting to "" and refetching, which would flash the textarea empty and risk
+          // clobbering further edits typed during the async refetch.
+          setInitialGrammarNotes(grammarNotes);
+        } else {
+          setGrammarNotes("");
+          setInitialGrammarNotes("");
+          apiFetch(`/api/lessons?kuId=${knowledgeUnit.id}`)
+          .then(res => res.ok ? res.json() : null).then(lesson => {
+            if (lesson?.notes) {
+              setGrammarNotes(lesson.notes);
+              setInitialGrammarNotes(lesson.notes);
+            }
+          }).catch(() => {});
+        }
       } else {
         setReading("");
         setDefinition("");
