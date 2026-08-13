@@ -1,4 +1,4 @@
-import { Injectable, Inject, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Inject, Logger } from '@nestjs/common';
 import { FieldValue, Firestore, Timestamp, Transaction } from 'firebase-admin/firestore';
 import { FacetType, TutorVocabEntry } from '../types';
 import {
@@ -44,10 +44,10 @@ export class StatsService {
             .count()
             .get();
 
-        const next24HoursQuery = facetsCol
-            .where("nextReviewAt", ">", Timestamp.now())
-            .where("nextReviewAt", "<=", Timestamp.fromDate(new Date(Date.now() + 24 * 60 * 60 * 1000)))
-            .count()
+        // Earliest not-yet-reviewed facet, for the "Next reviews in X" dashboard indicator.
+        const nextUpcomingQuery = facetsCol
+            .orderBy("nextReviewAt", "asc")
+            .limit(1)
             .get();
 
         const endOfToday = new Date();
@@ -57,6 +57,33 @@ export class StatsService {
             .where("nextReviewAt", "<=", Timestamp.fromMillis(endOfToday.getTime()))
             .count()
             .get();
+
+        // Days 1-4 — live per-day range count queries. Previously read from a denormalized
+        // per-day cache (stats.reviewForecast) that only gets updated when an *existing*
+        // facet is rescheduled after a review, never when a new facet is created — it drifts
+        // silently over time. Direct queries here match the pattern already used above for
+        // reviewsDueQuery/restOfTodayQuery.
+        const now = new Date();
+        const futureDayQueries: Promise<FirebaseFirestore.AggregateQuerySnapshot<{ count: FirebaseFirestore.AggregateField<number> }>>[] = [];
+        for (let i = 1; i <= 4; i++) {
+            const dayStart = new Date(now);
+            dayStart.setDate(now.getDate() + i);
+            dayStart.setHours(0, 0, 0, 0);
+            const dayEnd = new Date(dayStart);
+            dayEnd.setHours(23, 59, 59, 999);
+            futureDayQueries.push(
+                // Lower bound is inclusive (>=) — dayStart is a fixed midnight instant, not
+                // "now", so unlike reviewsDueQuery/restOfTodayQuery there's no shared boundary
+                // with the previous query to dedupe against. A facet landing exactly on
+                // midnight would otherwise fall through the gap between the previous day's
+                // <= 23:59:59.999 and this day's > 00:00:00.000.
+                facetsCol
+                    .where("nextReviewAt", ">=", Timestamp.fromMillis(dayStart.getTime()))
+                    .where("nextReviewAt", "<=", Timestamp.fromMillis(dayEnd.getTime()))
+                    .count()
+                    .get(),
+            );
+        }
 
         const userStatsQuery = this.db.collection('users').doc(uid).get();
 
@@ -68,15 +95,20 @@ export class StatsService {
             .count()
             .get();
 
-        const [ukuLearnSnapshot, reviewingSnapshot, masteredSnapshot, reviewsSnapshot, next24HoursSnapshot, restOfTodaySnapshot, userStatsDoc, simulateScenariosSnapshot] = await Promise.all([
+        const [
+            ukuLearnSnapshot, reviewingSnapshot, masteredSnapshot, reviewsSnapshot,
+            nextUpcomingSnapshot, restOfTodaySnapshot, userStatsDoc, simulateScenariosSnapshot,
+            ...futureDaySnapshots
+        ] = await Promise.all([
             ukuLearnQuery,
             reviewQuery,
             masteredQuery,
             reviewsDueQuery,
-            next24HoursQuery,
+            nextUpcomingQuery,
             restOfTodayQuery,
             userStatsQuery,
             simulateScenariosQuery,
+            ...futureDayQueries,
         ]);
 
         const reviewsDueCount = reviewsSnapshot.data().count;
@@ -84,22 +116,21 @@ export class StatsService {
 
         const userStats = userStatsDoc.data()?.stats ?? {};
 
-        const rawReviewForecast = userStats.reviewForecast || {};
-        const rawHourlyForecast = userStats.hourlyForecast || {};
-
-        const now = new Date();
         const currentStreak = userStats.currentStreak || 0;
         const totalActive = reviewingSnapshot.data().count + reviewsDueCount;
 
         // --- CALCULATION LOGIC ---
 
-        // 1. Next 24 Hours — direct range query so past-due items (nextReviewAt <= now) are
-        // never double-counted with reviewsDue, regardless of SRS interval length.
-        const next24HoursCount = next24HoursSnapshot.data().count;
+        // 1. Next reviews — the earliest upcoming facet's nextReviewAt, so the dashboard can
+        // show a "Next reviews in X" countdown instead of a rolling-window count.
+        const nextUpcomingDoc = nextUpcomingSnapshot.docs[0];
+        const nextReviewAt: string | null = nextUpcomingDoc
+            ? (nextUpcomingDoc.data().nextReviewAt as Timestamp).toDate().toISOString()
+            : null;
 
         // 2. 5-Day Schedule
         // Day 0: Rest of Today (remaining hours)
-        // Day 1-4: Full days (from daily forecast)
+        // Day 1-4: Full days (live per-day counts)
 
         const schedule: { date: string; isToday: boolean; count: number; runningTotal: number; label: string; }[] = [];
         let runningTotal = reviewsDueCount;
@@ -122,7 +153,7 @@ export class StatsService {
             futureDate.setDate(now.getDate() + i);
             const key = this.getDateBuckets(futureDate).dayKey;
 
-            const dayCount = (rawReviewForecast[key] || 0);
+            const dayCount = futureDaySnapshots[i - 1].data().count;
             runningTotal += dayCount;
 
             schedule.push({
@@ -143,7 +174,7 @@ export class StatsService {
             simulateCount: simulateScenariosSnapshot.data().count,
 
             // New Widget Data
-            next24HoursCount: next24HoursCount,
+            nextReviewAt: nextReviewAt,
             schedule: schedule,
 
             // Legacy/Other support
@@ -151,6 +182,57 @@ export class StatsService {
             streak: currentStreak
         };
     }
+
+    /**
+     * Live per-hour breakdown of reviews due on a given day, for the dashboard's
+     * lazily-loaded per-day drill-down. `dateKey` is "YYYY-MM-DD". For today, the lower
+     * bound is "now" rather than midnight, matching how the day-level count in
+     * getDashboardStats already excludes hours that have already passed.
+     */
+    async getHourlyBreakdown(uid: string, dateKey: string): Promise<{ hour: string; count: number }[]> {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) {
+            throw new BadRequestException('date must be in YYYY-MM-DD format');
+        }
+
+        const facetsCol = uid === ADMIN_USER_ID
+            ? this.db.collection(REVIEW_FACETS_COLLECTION).where('userId', '==', uid)
+            : this.db.collection('users').doc(uid).collection(REVIEW_FACETS_COLLECTION);
+
+        const now = new Date();
+        const isToday = this.getDateBuckets(now).dayKey === dateKey;
+
+        const [yyyy, mm, dd] = dateKey.split('-').map(Number);
+        const dayEnd = new Date(yyyy, mm - 1, dd, 23, 59, 59, 999);
+        const dayStart = isToday ? now : new Date(yyyy, mm - 1, dd, 0, 0, 0, 0);
+        if (isNaN(dayEnd.getTime())) {
+            throw new BadRequestException('date is not a valid calendar date');
+        }
+
+        // Lower bound: exclusive "now" for today (matches restOfTodayQuery's convention
+        // elsewhere in this file), inclusive midnight for other days (a fixed instant, not
+        // shared with an adjacent query's boundary, so it must include the boundary itself
+        // to avoid dropping a facet landing exactly on midnight).
+        const baseQuery = isToday
+            ? facetsCol.where('nextReviewAt', '>', Timestamp.fromDate(dayStart))
+            : facetsCol.where('nextReviewAt', '>=', Timestamp.fromDate(dayStart));
+
+        const snapshot = await baseQuery
+            .where('nextReviewAt', '<=', Timestamp.fromDate(dayEnd))
+            .select('nextReviewAt')
+            .get();
+
+        const countsByHour = new Map<string, number>();
+        for (const doc of snapshot.docs) {
+            const nextReviewAt = (doc.data().nextReviewAt as Timestamp).toDate();
+            const { hourKey } = this.getDateBuckets(nextReviewAt);
+            countsByHour.set(hourKey, (countsByHour.get(hourKey) || 0) + 1);
+        }
+
+        return Array.from(countsByHour.entries())
+            .sort(([a], [b]) => a.localeCompare(b))
+            .map(([hourKey, count]) => ({ hour: hourKey.slice(-2) + ':00', count }));
+    }
+
     async updateReviewScheduleStats(
         userId: string,
         oldNextReviewAt: Date,

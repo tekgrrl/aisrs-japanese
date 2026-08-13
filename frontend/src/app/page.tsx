@@ -11,7 +11,7 @@ interface DashboardStats {
   learnCount: number;
   reviewingCount: number;
   masteredCount: number;
-  next24HoursCount: number;
+  nextReviewAt: string | null;
   reviewCount: number;
   reviewsDue: number;
   schedule: {
@@ -22,8 +22,6 @@ interface DashboardStats {
     label: string;
   }[];
   streak: number;
-  hourlyForecast?: Record<string, number>;
-  reviewForecast?: Record<string, number>;
 }
 
 export default function DashboardPage() {
@@ -34,13 +32,11 @@ export default function DashboardPage() {
     learnCount: 0,
     reviewingCount: 0,
     masteredCount: 0,
-    next24HoursCount: 0,
+    nextReviewAt: null,
     reviewCount: 0,
     reviewsDue: 0,
     schedule: [],
     streak: 0,
-    hourlyForecast: {},
-    reviewForecast: {},
   });
 
   const fetchStats = useCallback(async () => {
@@ -135,7 +131,7 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 gap-8 mb-8">
         <div className="h-full">
           <ReviewSchedule
-            next24HoursCount={stats.next24HoursCount}
+            nextReviewAt={stats.nextReviewAt}
             schedule={stats.schedule}
             reviewsDue={stats.reviewsDue}
           />
