@@ -1,4 +1,4 @@
-import { Injectable, Inject, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Inject, Logger } from '@nestjs/common';
 import { FieldValue, Firestore, Timestamp, Transaction } from 'firebase-admin/firestore';
 import { FacetType, TutorVocabEntry } from '../types';
 import {
@@ -72,8 +72,13 @@ export class StatsService {
             const dayEnd = new Date(dayStart);
             dayEnd.setHours(23, 59, 59, 999);
             futureDayQueries.push(
+                // Lower bound is inclusive (>=) — dayStart is a fixed midnight instant, not
+                // "now", so unlike reviewsDueQuery/restOfTodayQuery there's no shared boundary
+                // with the previous query to dedupe against. A facet landing exactly on
+                // midnight would otherwise fall through the gap between the previous day's
+                // <= 23:59:59.999 and this day's > 00:00:00.000.
                 facetsCol
-                    .where("nextReviewAt", ">", Timestamp.fromMillis(dayStart.getTime()))
+                    .where("nextReviewAt", ">=", Timestamp.fromMillis(dayStart.getTime()))
                     .where("nextReviewAt", "<=", Timestamp.fromMillis(dayEnd.getTime()))
                     .count()
                     .get(),
@@ -185,6 +190,10 @@ export class StatsService {
      * getDashboardStats already excludes hours that have already passed.
      */
     async getHourlyBreakdown(uid: string, dateKey: string): Promise<{ hour: string; count: number }[]> {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) {
+            throw new BadRequestException('date must be in YYYY-MM-DD format');
+        }
+
         const facetsCol = uid === ADMIN_USER_ID
             ? this.db.collection(REVIEW_FACETS_COLLECTION).where('userId', '==', uid)
             : this.db.collection('users').doc(uid).collection(REVIEW_FACETS_COLLECTION);
@@ -195,9 +204,19 @@ export class StatsService {
         const [yyyy, mm, dd] = dateKey.split('-').map(Number);
         const dayEnd = new Date(yyyy, mm - 1, dd, 23, 59, 59, 999);
         const dayStart = isToday ? now : new Date(yyyy, mm - 1, dd, 0, 0, 0, 0);
+        if (isNaN(dayEnd.getTime())) {
+            throw new BadRequestException('date is not a valid calendar date');
+        }
 
-        const snapshot = await facetsCol
-            .where('nextReviewAt', '>', Timestamp.fromDate(dayStart))
+        // Lower bound: exclusive "now" for today (matches restOfTodayQuery's convention
+        // elsewhere in this file), inclusive midnight for other days (a fixed instant, not
+        // shared with an adjacent query's boundary, so it must include the boundary itself
+        // to avoid dropping a facet landing exactly on midnight).
+        const baseQuery = isToday
+            ? facetsCol.where('nextReviewAt', '>', Timestamp.fromDate(dayStart))
+            : facetsCol.where('nextReviewAt', '>=', Timestamp.fromDate(dayStart));
+
+        const snapshot = await baseQuery
             .where('nextReviewAt', '<=', Timestamp.fromDate(dayEnd))
             .select('nextReviewAt')
             .get();
