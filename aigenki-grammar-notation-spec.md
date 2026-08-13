@@ -24,7 +24,7 @@ Closed vocabulary. Each token names a word class **and** its required conjugated
 | `{N}` | Noun |
 | `{Cl}` | Full clause (subject + predicate) — not a single word |
 
-**Multiple slots of the same type:** disambiguate with a subscript naming the grammatical role, not a bare A/B, wherever a role name is available: `{N_group}` / `{N_target}`, `{Cl₁}` / `{Cl₂}`. Role names must be reused identically across every KU that shares that role — this naming also drives the pill-label mapping in Section 6, so an inconsistent name here breaks that mapping too.
+**Multiple slots of the same type:** disambiguate with a named role wherever one is available: `{N_group}` / `{N_target}`. Where no distinct role name applies — the two slots are genuinely interchangeable, as in a comparison or a two-clause conjunction — use a plain `_A` / `_B` suffix instead of a subscript numeral: `{N_A}` / `{N_B}`, `{CL_A}` / `{CL_B}`. Role and A/B names must be reused identically across every KU that shares that role — this naming also drives the pill-label mapping in Section 6, so an inconsistent name here breaks that mapping too.
 
 ---
 
@@ -99,7 +99,7 @@ Nothing in this list is cached or independently edited. Regenerating from the ca
 | change-of-state (い) | `{Adj-i·stem}くなります` | 1 | branch: i-adjective; irregular いい→よく |
 | completion (affirmative) | `もう{V-ta}` | 1 | branch: affirmative |
 | completion (negative) | `まだ{V-nai}` | 1 | branch: negative |
-| reason | `{Cl₁}から、{Cl₂}` | 2 | — |
+| reason | `{CL_A}から、{CL_B}` | 2 | — |
 | group-membership (bare) | `{N}の中で{Cl}` | 1 | no comparison implied |
 | group-superlative | `{N_group}の中で{N_target}が一番{Adj}` | 1 | が-marked target is required, not optional |
 | locational の中で | `{N-place}の中で{Cl}` | 1 | verb_type: action_only (で, not に) |
