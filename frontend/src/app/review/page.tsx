@@ -16,6 +16,8 @@ import ReviewActionButtons from "@/components/review/ReviewActionButtons";
 import VocabLessonView from "@/components/lessons/VocabLessonView";
 import KanjiLessonView from "@/components/lessons/KanjiLessonView";
 import GrammarLessonView from "@/components/lessons/GrammarLessonView";
+import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
+import { Mic } from "lucide-react";
 
 type AnswerState = "unanswered" | "evaluating" | "correct" | "incorrect";
 
@@ -64,6 +66,16 @@ export default function ReviewPage() {
   const [showLesson, setShowLesson] = useState(false);
   const [lessonForReview, setLessonForReview] = useState<Lesson | null>(null);
   const [isFetchingLesson, setIsFetchingLesson] = useState(false);
+
+  // --- Dictation (speech-to-text) State ---
+  const {
+    isListening,
+    transcript,
+    start: startListening,
+    stop: stopListening,
+    reset: resetListening,
+    supported: isSpeechSupported,
+  } = useSpeechRecognition();
 
   // --- Audio State ---
   const audioCache = useRef<Record<string, string>>({});
@@ -138,6 +150,14 @@ export default function ReviewPage() {
       }
     };
   }, [answerState]);
+
+  // Sync dictated speech into the answer field, routed through the same
+  // kana conversion the manual onChange handler applies to typed input.
+  useEffect(() => {
+    if (isListening) {
+      setUserAnswer(wanakana.toKana(transcript, { IMEMode: true }));
+    }
+  }, [transcript, isListening]);
 
   // Focus the answer input after AI-Generated question finishes loading
   useEffect(() => {
@@ -357,6 +377,7 @@ export default function ReviewPage() {
   const handleEvaluateAnswer = async (e: FormEvent) => {
     e.preventDefault();
     if (answerState !== "unanswered" || !currentItem) return;
+    if (isListening) stopListening();
 
     // --- New: Short-circuit for empty answer ---
     if (userAnswer.trim() === "") {
@@ -547,6 +568,7 @@ export default function ReviewPage() {
     setLevelStatus(null);
     setShowLesson(false);
     setLessonForReview(null);
+    resetListening();
     // Use functional update to ensure we use the latest state
     setCurrentIndex((prevIndex) => prevIndex + 1);
   };
@@ -667,6 +689,11 @@ export default function ReviewPage() {
       type === "AI-Generated-Question"
     );
   };
+
+  // Facet types where dictation is offered. Currently identical to isJapaneseInput's
+  // set; kept as its own function so a future per-type user preference can be
+  // layered in here without touching call sites.
+  const isDictationAvailable = (item: ReviewItem): boolean => isJapaneseInput(item);
 
   const getExpectedAnswer = (item: ReviewItem): string[] => {
     const { facet } = item;
@@ -910,36 +937,53 @@ export default function ReviewPage() {
 
         {/* Answer Form */}
         <form onSubmit={handleEvaluateAnswer} className="relative">
-          <input
-            ref={answerInputRef}
-            key={currentItem.facet.id} // Force re-render (and autoFocus) on new item
-            type="text"
-            value={userAnswer}
-            autoFocus
-            onChange={(e) => {
-              const input = e.target.value;
+          <div className="relative">
+            <input
+              ref={answerInputRef}
+              key={currentItem.facet.id} // Force re-render (and autoFocus) on new item
+              type="text"
+              value={userAnswer}
+              autoFocus
+              onChange={(e) => {
+                const input = e.target.value;
 
-              // Only convert if it's a Reading question
-              if (isJapaneseInput(currentItem)) {
-                // toKana with IMEMode: true mimics real typing behavior
-                // e.g., typing 'n' waits to see if 'a' comes next (な) or another 'n' (ん)
-                const converted = wanakana.toKana(input, { IMEMode: true });
-                setUserAnswer(converted);
-              } else {
-                // For meanings/definitions, just pass raw text
-                setUserAnswer(input);
+                // Only convert if it's a Reading question
+                if (isJapaneseInput(currentItem)) {
+                  // toKana with IMEMode: true mimics real typing behavior
+                  // e.g., typing 'n' waits to see if 'a' comes next (な) or another 'n' (ん)
+                  const converted = wanakana.toKana(input, { IMEMode: true });
+                  setUserAnswer(converted);
+                } else {
+                  // For meanings/definitions, just pass raw text
+                  setUserAnswer(input);
+                }
+              }}
+              placeholder={
+                isJapaneseInput(currentItem)
+                  ? "回答を入力して..."
+                  : currentItem.facet.facetType === "audio"
+                    ? "Type the English meaning..."
+                    : "Type your answer..."
               }
-            }}
-            placeholder={
-              isJapaneseInput(currentItem)
-                ? "回答を入力して..."
-                : currentItem.facet.facetType === "audio"
-                  ? "Type the English meaning..."
-                  : "Type your answer..."
-            }
-            disabled={answerState !== "unanswered" || isDynamicLoading}
-            className="w-full p-4 bg-gray-700 border-2 border-gray-600 text-white text-xl rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-800 disabled:text-gray-500"
-          />
+              disabled={answerState !== "unanswered" || isDynamicLoading}
+              className={`w-full p-4 ${isDictationAvailable(currentItem) ? "pr-14" : ""} bg-gray-700 border-2 border-gray-600 text-white text-xl rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-800 disabled:text-gray-500`}
+            />
+            {isSpeechSupported && isDictationAvailable(currentItem) && (
+              <button
+                type="button"
+                onClick={() => (isListening ? stopListening() : startListening())}
+                disabled={answerState !== "unanswered" || isDynamicLoading}
+                title={isListening ? "Stop dictation" : "Start dictation"}
+                className={`absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded-full transition-colors ${
+                  isListening
+                    ? "bg-red-500/20 text-red-400 animate-pulse"
+                    : "text-gray-400 hover:text-white hover:bg-gray-600"
+                } disabled:opacity-40 disabled:pointer-events-none`}
+              >
+                <Mic size={20} className={isListening ? "fill-current" : ""} />
+              </button>
+            )}
+          </div>
           <div className="relative mt-4">
             <ReviewActionButtons
               submitLabel={answerState === "evaluating" ? "Evaluating..." : "Submit Answer"}
