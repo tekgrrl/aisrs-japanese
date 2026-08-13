@@ -5,6 +5,7 @@ import { VocabLesson, KanjiLesson, GrammarLesson, Lesson } from "@/types";
 import { apiFetch } from "@/lib/api-client";
 import { normalizeFormation } from "@/lib/grammar-lesson";
 import { FuriganaText } from "@/components/FuriganaText";
+import GrammarPatternDisplay from "@/components/lessons/GrammarPatternDisplay";
 
 export interface QueueItem {
   kuId: string;
@@ -298,7 +299,7 @@ function GrammarPatternSlide({ loaded }: { loaded: LoadedItem }) {
   return (
     <div className="w-full flex flex-col items-center justify-center gap-6 text-center">
       <span className="text-xs font-semibold uppercase tracking-widest text-shodo-ink-faint">Grammar Pattern</span>
-      <div className="text-5xl font-bold text-shodo-matcha leading-snug">{gl.pattern}</div>
+      <GrammarPatternDisplay pattern={gl.pattern} className="text-5xl font-bold text-shodo-matcha leading-snug" />
       <div className="text-2xl text-shodo-ink-light">{gl.title}</div>
       <div className="text-sm text-shodo-ink-faint">{gl.jlptLevel}</div>
     </div>
@@ -310,7 +311,7 @@ function GrammarMeaningSlide({ loaded }: { loaded: LoadedItem }) {
   return (
     <div className="flex flex-col gap-6 max-w-2xl mx-auto">
       <span className="text-xs font-semibold uppercase tracking-widest text-shodo-ink-faint">How it Works</span>
-      <div className="text-4xl font-bold text-shodo-matcha">{gl.pattern}</div>
+      <GrammarPatternDisplay pattern={gl.pattern} className="text-4xl font-bold text-shodo-matcha text-center" />
       <p className="text-xl text-shodo-ink-light">{gl.meaning}</p>
       <div className="bg-shodo-paper-dark rounded-lg px-4 py-3 border border-shodo-ink/10">
         <div className="text-xs uppercase tracking-widest text-shodo-ink-faint mb-1">Formation</div>
@@ -353,7 +354,7 @@ function GrammarNotesSlide({ loaded }: { loaded: LoadedItem }) {
   return (
     <div className="flex flex-col gap-6 max-w-2xl mx-auto">
       <span className="text-xs font-semibold uppercase tracking-widest text-shodo-ink-faint">Notes</span>
-      <div className="text-4xl font-bold text-shodo-matcha">{gl.pattern}</div>
+      <GrammarPatternDisplay pattern={gl.pattern} className="text-4xl font-bold text-shodo-matcha text-center" />
       <div className="flex flex-col gap-3">
         {paragraphs.map((para, i) => (
           <p key={i} className="text-lg text-shodo-ink-light leading-relaxed">{para}</p>
