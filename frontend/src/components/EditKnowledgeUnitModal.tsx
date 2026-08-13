@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { apiFetch } from "@/lib/api-client";
 import { KnowledgeUnit } from "@/types";
@@ -29,9 +29,17 @@ export default function EditKnowledgeUnitModal({
   const [grammarCorpusNotes, setGrammarCorpusNotes] = useState("");
   const [corpusNotes, setCorpusNotes] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const prevKuIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (knowledgeUnit) {
+      // Only clear the "Saved." confirmation when a genuinely different KU opens —
+      // not when this same KU's prop gets refreshed after a save (see handleSave).
+      if (knowledgeUnit.id !== prevKuIdRef.current) {
+        setSaveMessage(null);
+        prevKuIdRef.current = knowledgeUnit.id;
+      }
       setContent(knowledgeUnit.content || "");
       if (knowledgeUnit.type === "Vocab" || knowledgeUnit.type === "Kanji") {
         setReading(knowledgeUnit.data?.reading || "");
@@ -103,6 +111,7 @@ export default function EditKnowledgeUnitModal({
     if (!hasChanges()) return;
 
     setIsSaving(true);
+    setSaveMessage(null);
     try {
       let updates: Partial<KnowledgeUnit>;
       if (knowledgeUnit!.type === "Grammar") {
@@ -138,7 +147,7 @@ export default function EditKnowledgeUnitModal({
         });
       }
 
-      onClose();
+      setSaveMessage("Saved.");
     } catch (error) {
       console.error("Failed to save changes", error);
     } finally {
@@ -313,7 +322,8 @@ export default function EditKnowledgeUnitModal({
               </Link>
             </div>
           ) : <span />}
-          <div className="flex gap-3">
+          <div className="flex items-center gap-3">
+          {saveMessage && <span className="text-sm text-green-700">{saveMessage}</span>}
           <button
             onClick={onClose}
             className="px-4 py-2 rounded text-shodo-ink-light hover:text-shodo-ink hover:bg-shodo-mist transition-colors font-medium text-sm"

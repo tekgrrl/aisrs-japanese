@@ -91,10 +91,18 @@ export default function AdminKnowledgeUnitsPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [filterType, setFilterType] = useState("");
-  const [filterLevel, setFilterLevel] = useState("");
-  const [searchQuery, setSearchQuery] = useState("");
+  // Filters persist across a round trip through Preview / the full-page lesson editor and
+  // back (both navigate away from this page, which otherwise fully remounts on return).
+  const [filterType, setFilterType] = useState(() => (typeof window !== "undefined" ? sessionStorage.getItem("kuListFilterType") ?? "" : ""));
+  const [filterLevel, setFilterLevel] = useState(() => (typeof window !== "undefined" ? sessionStorage.getItem("kuListFilterLevel") ?? "" : ""));
+  const [searchQuery, setSearchQuery] = useState(() => (typeof window !== "undefined" ? sessionStorage.getItem("kuListSearchQuery") ?? "" : ""));
   const searchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    sessionStorage.setItem("kuListFilterType", filterType);
+    sessionStorage.setItem("kuListFilterLevel", filterLevel);
+    sessionStorage.setItem("kuListSearchQuery", searchQuery);
+  }, [filterType, filterLevel, searchQuery]);
 
   const [editTarget, setEditTarget] = useState<KnowledgeUnit | null>(null);
 
@@ -170,6 +178,9 @@ export default function AdminKnowledgeUnitsPage() {
     });
     if (!res.ok) throw new Error(`Save failed: HTTP ${res.status}`);
     setKus(prev => prev.map(k => k.id === id ? { ...k, ...updates } as KnowledgeUnit : k));
+    // Refresh editTarget too — the modal stays open after saving, and its hasChanges()
+    // check compares against this prop, which would otherwise still be the pre-save value.
+    setEditTarget(prev => prev && prev.id === id ? { ...prev, ...updates } as KnowledgeUnit : prev);
   };
 
   const selectClass = "px-3 py-1.5 text-sm border border-shodo-mist rounded bg-white text-shodo-ink focus:outline-none focus:border-shodo-indigo";
