@@ -69,8 +69,8 @@ export const PILL_TOKEN_MAP: Record<string, PillStyle> = (() => {
     "Adj-na": adjNa,
     // Clauses
     Cl: clause,
-    CL_A: clauseA,
-    CL_B: clauseB,
+    "Cl-A": clauseA,
+    "Cl-B": clauseB,
   };
 })();
 
