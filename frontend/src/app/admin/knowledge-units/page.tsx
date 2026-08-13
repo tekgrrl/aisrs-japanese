@@ -91,10 +91,34 @@ export default function AdminKnowledgeUnitsPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Filters persist across a round trip through Preview / the full-page lesson editor and
+  // back (both navigate away from this page, which otherwise fully remounts on return).
+  // Loaded/saved in effects rather than a useState lazy initializer — reading sessionStorage
+  // during the initial render would mismatch the server-rendered ("" on the server, since
+  // sessionStorage doesn't exist there) and client-hydrated output.
   const [filterType, setFilterType] = useState("");
   const [filterLevel, setFilterLevel] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const searchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    setFilterType(sessionStorage.getItem("kuListFilterType") ?? "");
+    setFilterLevel(sessionStorage.getItem("kuListFilterLevel") ?? "");
+    setSearchQuery(sessionStorage.getItem("kuListSearchQuery") ?? "");
+  }, []);
+
+  // Skip the first run — otherwise it fires before the load effect above has a chance to
+  // apply, clobbering sessionStorage with the pre-load "" defaults.
+  const skippedFirstPersist = useRef(false);
+  useEffect(() => {
+    if (!skippedFirstPersist.current) {
+      skippedFirstPersist.current = true;
+      return;
+    }
+    sessionStorage.setItem("kuListFilterType", filterType);
+    sessionStorage.setItem("kuListFilterLevel", filterLevel);
+    sessionStorage.setItem("kuListSearchQuery", searchQuery);
+  }, [filterType, filterLevel, searchQuery]);
 
   const [editTarget, setEditTarget] = useState<KnowledgeUnit | null>(null);
 
@@ -170,6 +194,9 @@ export default function AdminKnowledgeUnitsPage() {
     });
     if (!res.ok) throw new Error(`Save failed: HTTP ${res.status}`);
     setKus(prev => prev.map(k => k.id === id ? { ...k, ...updates } as KnowledgeUnit : k));
+    // Refresh editTarget too — the modal stays open after saving, and its hasChanges()
+    // check compares against this prop, which would otherwise still be the pre-save value.
+    setEditTarget(prev => prev && prev.id === id ? { ...prev, ...updates } as KnowledgeUnit : prev);
   };
 
   const selectClass = "px-3 py-1.5 text-sm border border-shodo-mist rounded bg-white text-shodo-ink focus:outline-none focus:border-shodo-indigo";

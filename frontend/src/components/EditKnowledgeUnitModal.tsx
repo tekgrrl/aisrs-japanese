@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { apiFetch } from "@/lib/api-client";
 import { KnowledgeUnit } from "@/types";
@@ -29,9 +29,23 @@ export default function EditKnowledgeUnitModal({
   const [grammarCorpusNotes, setGrammarCorpusNotes] = useState("");
   const [corpusNotes, setCorpusNotes] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const prevKuIdRef = useRef<string | null>(null);
+
+  // The modal stays mounted across opens (parent only toggles isOpen/knowledgeUnit) — clear
+  // the "Saved." confirmation whenever it closes, so reopening later (even the same KU, with
+  // no new edits) doesn't show a leftover confirmation from a previous session.
+  useEffect(() => {
+    if (!isOpen) setSaveMessage(null);
+  }, [isOpen]);
 
   useEffect(() => {
     if (knowledgeUnit) {
+      // True when this effect fired because the parent refreshed the same KU's prop after a
+      // save (see handleSave) rather than because a genuinely different KU was opened.
+      const isSameKuRefresh = knowledgeUnit.id === prevKuIdRef.current;
+      prevKuIdRef.current = knowledgeUnit.id;
+
       setContent(knowledgeUnit.content || "");
       if (knowledgeUnit.type === "Vocab" || knowledgeUnit.type === "Kanji") {
         setReading(knowledgeUnit.data?.reading || "");
@@ -43,8 +57,6 @@ export default function EditKnowledgeUnitModal({
         setCorpusNotes(knowledgeUnit.data?.corpusNotes || "");
       } else if (knowledgeUnit.type === "Grammar") {
         setGrammarTitle(knowledgeUnit.data?.title || "");
-        setGrammarNotes("");
-        setInitialGrammarNotes("");
         setGrammarCorpusNotes(knowledgeUnit.data?.corpusNotes || "");
         setJlptLevel(knowledgeUnit.data?.jlptLevel || "");
         setReading("");
@@ -52,13 +64,23 @@ export default function EditKnowledgeUnitModal({
         setWanikaniLevel("");
         setCorpusNotes("");
 
-        apiFetch(`/api/lessons?kuId=${knowledgeUnit.id}`)
-        .then(res => res.ok ? res.json() : null).then(lesson => {
-          if (lesson?.notes) {
-            setGrammarNotes(lesson.notes);
-            setInitialGrammarNotes(lesson.notes);
-          }
-        }).catch(() => {});
+        if (isSameKuRefresh) {
+          // Notes were just saved via the PUT in handleSave — grammarNotes already holds
+          // the current value. Just re-baseline so hasChanges() reports false, instead of
+          // resetting to "" and refetching, which would flash the textarea empty and risk
+          // clobbering further edits typed during the async refetch.
+          setInitialGrammarNotes(grammarNotes);
+        } else {
+          setGrammarNotes("");
+          setInitialGrammarNotes("");
+          apiFetch(`/api/lessons?kuId=${knowledgeUnit.id}`)
+          .then(res => res.ok ? res.json() : null).then(lesson => {
+            if (lesson?.notes) {
+              setGrammarNotes(lesson.notes);
+              setInitialGrammarNotes(lesson.notes);
+            }
+          }).catch(() => {});
+        }
       } else {
         setReading("");
         setDefinition("");
@@ -103,6 +125,7 @@ export default function EditKnowledgeUnitModal({
     if (!hasChanges()) return;
 
     setIsSaving(true);
+    setSaveMessage(null);
     try {
       let updates: Partial<KnowledgeUnit>;
       if (knowledgeUnit!.type === "Grammar") {
@@ -138,7 +161,7 @@ export default function EditKnowledgeUnitModal({
         });
       }
 
-      onClose();
+      setSaveMessage("Saved.");
     } catch (error) {
       console.error("Failed to save changes", error);
     } finally {
@@ -313,7 +336,8 @@ export default function EditKnowledgeUnitModal({
               </Link>
             </div>
           ) : <span />}
-          <div className="flex gap-3">
+          <div className="flex items-center gap-3">
+          {saveMessage && <span className="text-sm text-green-700">{saveMessage}</span>}
           <button
             onClick={onClose}
             className="px-4 py-2 rounded text-shodo-ink-light hover:text-shodo-ink hover:bg-shodo-mist transition-colors font-medium text-sm"
