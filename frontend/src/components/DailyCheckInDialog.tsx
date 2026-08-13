@@ -318,9 +318,13 @@ export default function DailyCheckInDialog({ plan, learnCount, onClose }: Props)
           </div>
         )}
 
-        {/* Dismiss */}
+        {/* Primary CTA — routes to whatever's actually next, not just a dismiss */}
         <button
-          onClick={onClose}
+          onClick={() => {
+            onClose();
+            if (plan.reviewsDue > 0) router.push("/review");
+            else if (plan.suggestNewContent) router.push("/learn");
+          }}
           className="w-full rounded-lg border border-shodo-ink/20 py-2 text-sm text-shodo-ink/70 hover:bg-shodo-ink/5 transition-colors"
         >
           Let's go
