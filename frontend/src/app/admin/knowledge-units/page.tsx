@@ -99,26 +99,27 @@ export default function AdminKnowledgeUnitsPage() {
   const [filterType, setFilterType] = useState("");
   const [filterLevel, setFilterLevel] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  // False until the sessionStorage load below has applied. Gates both the persist effect
+  // (so it doesn't clobber storage with the pre-load "" defaults) and the fetch effect (so
+  // no fetch fires with the pre-load "" filters at all — an earlier version let that fetch
+  // fire anyway on a 0ms timer, racing the correctly-filtered one; whichever response landed
+  // last won, which could leave the list unfiltered even though the dropdowns were correct).
+  const [filtersHydrated, setFiltersHydrated] = useState(false);
   const searchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     setFilterType(sessionStorage.getItem("kuListFilterType") ?? "");
     setFilterLevel(sessionStorage.getItem("kuListFilterLevel") ?? "");
     setSearchQuery(sessionStorage.getItem("kuListSearchQuery") ?? "");
+    setFiltersHydrated(true);
   }, []);
 
-  // Skip the first run — otherwise it fires before the load effect above has a chance to
-  // apply, clobbering sessionStorage with the pre-load "" defaults.
-  const skippedFirstPersist = useRef(false);
   useEffect(() => {
-    if (!skippedFirstPersist.current) {
-      skippedFirstPersist.current = true;
-      return;
-    }
+    if (!filtersHydrated) return;
     sessionStorage.setItem("kuListFilterType", filterType);
     sessionStorage.setItem("kuListFilterLevel", filterLevel);
     sessionStorage.setItem("kuListSearchQuery", searchQuery);
-  }, [filterType, filterLevel, searchQuery]);
+  }, [filterType, filterLevel, searchQuery, filtersHydrated]);
 
   const [editTarget, setEditTarget] = useState<KnowledgeUnit | null>(null);
 
@@ -171,10 +172,11 @@ export default function AdminKnowledgeUnitsPage() {
   }, [filterType, filterLevel, searchQuery]);
 
   useEffect(() => {
+    if (!filtersHydrated) return;
     if (searchDebounce.current) clearTimeout(searchDebounce.current);
     searchDebounce.current = setTimeout(fetchKus, searchQuery.trim() ? 300 : 0);
     return () => { if (searchDebounce.current) clearTimeout(searchDebounce.current); };
-  }, [fetchKus, searchQuery]);
+  }, [fetchKus, searchQuery, filtersHydrated]);
 
   const handleDelete = async (ku: KnowledgeUnit) => {
     if (!confirm(`Delete "${ku.content}" (${ku.type})? This will remove the KU and all associated data.`)) return;
