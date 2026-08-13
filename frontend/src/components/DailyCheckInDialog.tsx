@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { apiFetch } from "@/lib/api-client";
 
 interface PromotedEntry {
   kuId: string;
@@ -17,6 +19,13 @@ interface LeechEntry {
   consecutiveFailures: number;
 }
 
+interface ScenarioOpportunity {
+  kuId: string;
+  content: string;
+  type: string;
+  newLevel: string;
+}
+
 interface DailyPlan {
   date: string;
   reviewsDue: number;
@@ -24,6 +33,7 @@ interface DailyPlan {
   threshold: number;
   recentPromotions: PromotedEntry[];
   topLeeches: LeechEntry[];
+  practiceOpportunities?: ScenarioOpportunity[];
 }
 
 interface Props {
@@ -69,12 +79,59 @@ function PromotionBox({ entry }: { entry: PromotedEntry }) {
 }
 
 export default function DailyCheckInDialog({ plan, learnCount, onClose }: Props) {
+  const router = useRouter();
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [showAllPromotions, setShowAllPromotions] = useState(false);
+  const [opportunities, setOpportunities] = useState(plan.practiceOpportunities ?? []);
+  const [practicingKuId, setPracticingKuId] = useState<string | null>(null);
 
   useEffect(() => {
     dialogRef.current?.showModal();
   }, []);
+
+  async function handlePractice(opp: ScenarioOpportunity) {
+    setPracticingKuId(opp.kuId);
+    try {
+      const existingRes = await apiFetch(`/api/scenarios?sourceKuId=${encodeURIComponent(opp.kuId)}`);
+      if (existingRes.ok) {
+        const existing = await existingRes.json();
+        if (Array.isArray(existing) && existing.length > 0) {
+          router.push(`/scenarios/${existing[0].id}`);
+          onClose();
+          return;
+        }
+      }
+
+      const isVocab = opp.type === "Vocab";
+      const genRes = await apiFetch("/api/tutor/generate-scenario", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(
+          isVocab
+            ? { sourceType: "context-example", targetVocab: opp.content, sourceKuId: opp.kuId }
+            : { sourceType: "grammar-pattern", pattern: opp.content, sourceKuId: opp.kuId },
+        ),
+      });
+      if (genRes.ok) {
+        const { id } = await genRes.json();
+        router.push(`/scenarios/${id}`);
+        onClose();
+      }
+    } catch (e) {
+      console.error("Failed to start scenario practice", e);
+    } finally {
+      setPracticingKuId(null);
+    }
+  }
+
+  async function handleDismissOpportunity(kuId: string) {
+    setOpportunities(prev => prev.filter(o => o.kuId !== kuId));
+    try {
+      await apiFetch(`/api/daily-plan/opportunities/${encodeURIComponent(kuId)}/dismiss`, { method: "PATCH" });
+    } catch (e) {
+      console.error("Failed to dismiss practice opportunity", e);
+    }
+  }
 
   const reviewColor =
     plan.reviewsDue === 0
@@ -183,6 +240,45 @@ export default function DailyCheckInDialog({ plan, learnCount, onClose }: Props)
                 )}
               </>
             )}
+          </div>
+        )}
+
+        {/* Practice Opportunities */}
+        {opportunities.length > 0 && (
+          <div>
+            <div className="text-sm font-medium text-shodo-ink/60 mb-2">
+              Ready to practice
+            </div>
+            <ul className="flex flex-col gap-2">
+              {opportunities.map((opp) => (
+                <li
+                  key={opp.kuId}
+                  className="flex items-center justify-between gap-3 rounded-lg border border-shodo-indigo/20 bg-shodo-indigo/5 px-3 py-2 text-sm"
+                >
+                  <div className="min-w-0">
+                    <span className="font-medium text-shodo-ink">{opp.content}</span>
+                    <span className="ml-2 text-xs text-shodo-ink/60">
+                      reached {opp.newLevel} — use it in a scenario?
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      onClick={() => handleDismissOpportunity(opp.kuId)}
+                      className="text-xs text-shodo-ink/50 hover:text-shodo-ink transition-colors px-1"
+                    >
+                      Not now
+                    </button>
+                    <button
+                      onClick={() => handlePractice(opp)}
+                      disabled={practicingKuId === opp.kuId}
+                      className="rounded-lg bg-shodo-indigo px-3 py-1.5 text-xs font-medium text-white hover:bg-shodo-indigo/80 transition-colors disabled:opacity-50 disabled:cursor-wait"
+                    >
+                      {practicingKuId === opp.kuId ? "Starting…" : "Practice in a Scenario"}
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
           </div>
         )}
 

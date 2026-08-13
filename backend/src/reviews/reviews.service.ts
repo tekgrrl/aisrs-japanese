@@ -22,6 +22,7 @@ import { ScenariosService } from '../scenarios/scenarios.service';
 import { LearningProgressService } from '../learning-progress/learning-progress.service';
 import { ReviewProgressService } from '../review-progress/review-progress.service';
 import { buildAnswerEvaluatorPrompt } from '../prompts/evaluation.prompts';
+import { getSrsLevelIndex, getSrsLevelName } from '../lib/srs-levels';
 
 /**
  * Resolves which Firestore collection a ReviewFacet's kuId points to.
@@ -219,6 +220,17 @@ export class ReviewsService {
                             type: ku.type,
                             srsStage: newStage,
                         });
+                        // Crossing into a new SRS level (not just a stage bump) — surface an
+                        // optional "practice this in a Scenario" opportunity in the daily plan.
+                        // Never touches SRS/facet state; purely a suggestion.
+                        if (getSrsLevelIndex(newStage) > getSrsLevelIndex(prevStage)) {
+                            await this.statsService.recordScenarioOpportunity(uid, {
+                                kuId,
+                                content: ku.content,
+                                type: ku.type,
+                                newLevel: getSrsLevelName(newStage),
+                            });
+                        }
                     }
                 } catch (e) {
                     this.logger.error(`Failed to update tutorContext leech for uid=${uid} facetId=${facetId}`, e);

@@ -116,6 +116,8 @@ export default function ReviewPage() {
   const lastFetchedIndex = useRef<number | null>(null);
   const nextButtonRef = useRef<HTMLButtonElement>(null);
   const answerInputRef = useRef<HTMLInputElement>(null);
+  const currentIndexRef = useRef(currentIndex);
+  currentIndexRef.current = currentIndex;
 
   // --- Focus Next Button Effect ---
   const FOCUS_TIMEOUT_MS = 50;
@@ -498,6 +500,7 @@ export default function ReviewPage() {
       return;
     }
     if (!currentItem) return;
+    const requestedIndex = currentIndex;
     setIsFetchingLesson(true);
     try {
       const res = await apiFetch("/api/lessons/generate", {
@@ -505,6 +508,9 @@ export default function ReviewPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ kuId: currentItem.facet.kuId }),
       });
+      // Bail if the user has already moved on to a different item — this
+      // response is now stale and would otherwise show the wrong KU's lesson.
+      if (currentIndexRef.current !== requestedIndex) return;
       if (res.ok) {
         const data = await res.json() as Lesson;
         setLessonForReview(data);
@@ -513,7 +519,9 @@ export default function ReviewPage() {
     } catch (e) {
       console.error("Failed to fetch lesson for review", e);
     } finally {
-      setIsFetchingLesson(false);
+      if (currentIndexRef.current === requestedIndex) {
+        setIsFetchingLesson(false);
+      }
     }
   };
 

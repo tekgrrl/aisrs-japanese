@@ -133,7 +133,7 @@ export interface Scenario {
         ai: string | string[];
     };
 
-    sourceType?: 'library' | 'custom' | 'context-example';
+    sourceType?: 'library' | 'custom' | 'context-example' | 'grammar-pattern';
     sourceContextSentence?: string;
     targetVocab?: string;
     sourceKuId?: string;
@@ -185,7 +185,7 @@ export interface ScenarioSession {
 export class GenerateScenarioDto {
     difficulty?: ScenarioDifficulty;
     theme?: string;
-    sourceType?: 'library' | 'custom' | 'context-example';
+    sourceType?: 'library' | 'custom' | 'context-example' | 'grammar-pattern';
     sourceContextSentence?: string;
     targetVocab?: string;
     sourceKuId?: string;

@@ -357,6 +357,37 @@ export class StatsService {
         });
     }
 
+    /**
+     * Records a dismissible "practice this in a Scenario" opportunity, surfaced in the
+     * daily plan. Purely a suggestion — never read by SRS/facet logic. Pruned after 7
+     * days (longer than recordPromotion's 48h window since this is meant to be acted on
+     * at leisure, not urgently) and de-duped by kuId.
+     */
+    async recordScenarioOpportunity(uid: string, entry: Omit<import('../types').ScenarioOpportunity, 'createdAt'>): Promise<void> {
+        const userRef = this.db.collection('users').doc(uid);
+        await this.db.runTransaction(async (transaction) => {
+            const doc = await transaction.get(userRef);
+            const existing: import('../types').ScenarioOpportunity[] = doc.data()?.stats?.scenarioOpportunities ?? [];
+            const cutoffMs = Date.now() - 7 * 24 * 60 * 60 * 1000;
+            const pruned = existing.filter(
+                e => (e.createdAt as Timestamp).toMillis() > cutoffMs && e.kuId !== entry.kuId,
+            );
+            pruned.push({ ...entry, createdAt: Timestamp.now() });
+            transaction.update(userRef, { 'stats.scenarioOpportunities': pruned });
+        });
+    }
+
+    /** Removes a single scenario opportunity by kuId — called when the user dismisses it. */
+    async removeScenarioOpportunity(uid: string, kuId: string): Promise<void> {
+        const userRef = this.db.collection('users').doc(uid);
+        await this.db.runTransaction(async (transaction) => {
+            const doc = await transaction.get(userRef);
+            const existing: import('../types').ScenarioOpportunity[] = doc.data()?.stats?.scenarioOpportunities ?? [];
+            const remaining = existing.filter(e => e.kuId !== kuId);
+            transaction.update(userRef, { 'stats.scenarioOpportunities': remaining });
+        });
+    }
+
     async updateCurriculumNode(uid: string, jlptLevel: string): Promise<void> {
         await this.db.collection('users').doc(uid).update({
             'tutorContext.currentCurriculumNode': jlptLevel,
