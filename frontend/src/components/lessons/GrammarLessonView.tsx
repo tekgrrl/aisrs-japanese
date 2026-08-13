@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { GrammarLesson, UserGrammarLesson } from "@/types";
 import { normalizeFormation } from "@/lib/grammar-lesson";
+import GrammarPatternDisplay from "./GrammarPatternDisplay";
 
 interface GrammarLessonViewProps {
   lesson: GrammarLesson;
@@ -41,7 +42,7 @@ export default function GrammarLessonView({
 
       {/* Pattern Header */}
       <div className="bg-shodo-paper-dark border border-shodo-ink/5 rounded-lg p-6 text-center shadow-lg">
-        <div className="text-2xl font-bold text-shodo-ink mb-2">{lesson.pattern}</div>
+        <GrammarPatternDisplay pattern={lesson.pattern} className="text-2xl font-bold text-shodo-ink mb-2" />
         <div className="text-shodo-ink-faint text-sm mb-3">{lesson.title}</div>
         <span className="inline-block px-3 py-1 bg-indigo-100 text-indigo-800 text-xs font-bold rounded-full">
           {lesson.jlptLevel}
