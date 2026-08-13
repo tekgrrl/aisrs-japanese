@@ -222,8 +222,12 @@ export class ReviewsService {
                         });
                         // Crossing into a new SRS level (not just a stage bump) — surface an
                         // optional "practice this in a Scenario" opportunity in the daily plan.
-                        // Never touches SRS/facet state; purely a suggestion.
-                        if (getSrsLevelIndex(newStage) > getSrsLevelIndex(prevStage)) {
+                        // Never touches SRS/facet state; purely a suggestion. Grammar only:
+                        // Vocab's "Already Known" fast-track seeds facets at ALREADY_KNOWN_STAGE
+                        // (one stage below the first level boundary), so a bulk-marked Vocab
+                        // item's very first-ever review can cross a level immediately — surfacing
+                        // "go practice this!" before any real spaced-repetition has happened.
+                        if (ku.type === 'Grammar' && getSrsLevelIndex(newStage) > getSrsLevelIndex(prevStage)) {
                             await this.statsService.recordScenarioOpportunity(uid, {
                                 kuId,
                                 content: ku.content,
