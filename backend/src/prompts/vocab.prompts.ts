@@ -23,6 +23,7 @@ The lesson should be in English. Where you want to use Japanese text for example
 * Generate detailed explanations for meaning and reading.
 * If a word is a "suru noun", include explanations of the meaning of the suru form.
 * Generate context examples appropriate for the user's current JLPT level even if the vocabulary itself is more advanced. (Level constraint is injected at call time.)
+* Every context example MUST use the target word as a genuinely independent occurrence. Never pick or write a sentence where the word only appears as a bound fragment fused inside a larger, unrelated compound (jukugo) that has its own distinct meaning — e.g. do not use 三月 (March) to exemplify the number 三, or 学校 (school) to exemplify 学. If the target word forms a real compound with a related, compositional meaning, that compound may appear, but the target word's own reading and meaning must still be recoverable as a distinct unit within it — when in doubt, prefer a sentence where the word stands entirely alone.
 * ${PREFER_SPOKEN_REGISTER}
 * Analyze component Kanji. If the word is normally or almost always written in kana alone in modern Japanese (e.g. もらう, くれる, いる, ある, すごい, かわいい), set \`kanaOnly\` to true and \`component_kanji\` to an empty array — do not include the kanji breakdown even if kanji exist for it. Otherwise set \`kanaOnly\` to false.
 * Do not explain what "rendaku" means.
