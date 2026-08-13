@@ -93,12 +93,28 @@ export default function AdminKnowledgeUnitsPage() {
 
   // Filters persist across a round trip through Preview / the full-page lesson editor and
   // back (both navigate away from this page, which otherwise fully remounts on return).
-  const [filterType, setFilterType] = useState(() => (typeof window !== "undefined" ? sessionStorage.getItem("kuListFilterType") ?? "" : ""));
-  const [filterLevel, setFilterLevel] = useState(() => (typeof window !== "undefined" ? sessionStorage.getItem("kuListFilterLevel") ?? "" : ""));
-  const [searchQuery, setSearchQuery] = useState(() => (typeof window !== "undefined" ? sessionStorage.getItem("kuListSearchQuery") ?? "" : ""));
+  // Loaded/saved in effects rather than a useState lazy initializer — reading sessionStorage
+  // during the initial render would mismatch the server-rendered ("" on the server, since
+  // sessionStorage doesn't exist there) and client-hydrated output.
+  const [filterType, setFilterType] = useState("");
+  const [filterLevel, setFilterLevel] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
   const searchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
+    setFilterType(sessionStorage.getItem("kuListFilterType") ?? "");
+    setFilterLevel(sessionStorage.getItem("kuListFilterLevel") ?? "");
+    setSearchQuery(sessionStorage.getItem("kuListSearchQuery") ?? "");
+  }, []);
+
+  // Skip the first run — otherwise it fires before the load effect above has a chance to
+  // apply, clobbering sessionStorage with the pre-load "" defaults.
+  const skippedFirstPersist = useRef(false);
+  useEffect(() => {
+    if (!skippedFirstPersist.current) {
+      skippedFirstPersist.current = true;
+      return;
+    }
     sessionStorage.setItem("kuListFilterType", filterType);
     sessionStorage.setItem("kuListFilterLevel", filterLevel);
     sessionStorage.setItem("kuListSearchQuery", searchQuery);
