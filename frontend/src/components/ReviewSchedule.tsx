@@ -1,8 +1,9 @@
-import React from "react";
+import React, { useState } from "react";
 import { ChevronRight } from "lucide-react";
+import { apiFetch } from "@/lib/api-client";
 
 interface ReviewScheduleProps {
-  next24HoursCount: number;
+  nextReviewAt: string | null;
   schedule: {
     date: string;
     isToday: boolean;
@@ -10,47 +11,70 @@ interface ReviewScheduleProps {
     runningTotal: number;
     label: string;
   }[];
-  reviewForecast?: Record<string, number>;
   reviewsDue: number;
 }
 
+interface HourlyEntry {
+  hour: string;
+  count: number;
+}
+
+function formatTimeUntil(nextReviewAt: string | null): string {
+  if (!nextReviewAt) return "No reviews scheduled";
+
+  const diffMs = new Date(nextReviewAt).getTime() - Date.now();
+  const minutes = Math.round(diffMs / 60000);
+
+  if (minutes <= 0) return "Next reviews now";
+  if (minutes < 60) return `Next reviews in ${minutes}m`;
+
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) {
+    const remMinutes = minutes % 60;
+    return `Next reviews in ${hours}h${remMinutes > 0 ? ` ${remMinutes}m` : ""}`;
+  }
+
+  const days = Math.floor(hours / 24);
+  return `Next reviews in ${days}d`;
+}
+
 export default function ReviewSchedule({
-  next24HoursCount,
+  nextReviewAt,
   schedule,
-  reviewForecast = {},
   reviewsDue,
 }: ReviewScheduleProps) {
-  console.log(`schedule: ${JSON.stringify(schedule)}`);
+  const [expandedDay, setExpandedDay] = useState<string | null>(null);
+  const [hourlyCache, setHourlyCache] = useState<Record<string, HourlyEntry[] | "loading">>({});
 
-  // 2. Generate Next 5 Days Data
-  const generateDailyData = () => {
-    const days = [];
-    const now = new Date();
-    // Start from tomorrow for the list? Or today?
-    // Usually "Upcoming" implies future days. Let's show next 5 days including today if relevant,
-    // or just next 5 days. WaniKani usually shows "Next 24h" then a breakdown.
-    // Let's do next 5 days starting from today.
-
-    let cumulativeTotal = reviewsDue;
-
-    let maxCount = 0;
-
-    if (!schedule || schedule.length === 0) {
-      return [];
+  const toggleDay = async (dateKey: string) => {
+    if (expandedDay === dateKey) {
+      setExpandedDay(null);
+      return;
     }
+    setExpandedDay(dateKey);
 
-    // ... logic that assumes schedule has content ...
-    // Actually, looking at the code, the loop builds `days` array using `now` and `reviewForecast` BUT tries to READ from `schedule` at index `i`.
-    // The previous version CALCULATED the schedule. The NEW version expects it passed in.
-    // If the valid data isn't ready, we should arguably return empty or loading.
+    if (hourlyCache[dateKey]) return; // already fetched — just re-expand from cache
 
-    // First pass to calculate cumulative totals and find maxCount
-    const tempDays = [];
+    setHourlyCache((prev) => ({ ...prev, [dateKey]: "loading" }));
+    try {
+      const res = await apiFetch(`/api/stats/schedule/${dateKey}/hourly`);
+      const data: HourlyEntry[] = res.ok ? await res.json() : [];
+      setHourlyCache((prev) => ({ ...prev, [dateKey]: data }));
+    } catch {
+      setHourlyCache((prev) => ({ ...prev, [dateKey]: [] }));
+    }
+  };
+
+  // Generate the 5-day list, with cumulative totals and bar widths scaled to the max.
+  const generateDailyData = () => {
+    if (!schedule || schedule.length === 0) return [];
+
     let currentTotal = reviewsDue;
-
-    for (let i = 0; i < 5; i++) {
+    const tempDays = [];
+    for (let i = 0; i < schedule.length; i++) {
       currentTotal += schedule[i].count;
       tempDays.push({
+        date: schedule[i].date,
         day: schedule[i].label,
         added: schedule[i].count,
         total: currentTotal,
@@ -58,22 +82,11 @@ export default function ReviewSchedule({
       });
     }
 
-    // Find max value for scaling (using total since that's what the bar likely usually represents in this context,
-    // or if it represents added, use added. User implementation uses 'total' in the previous map, so let's stick to total for scaling logic
-    // or arguably added if it's a diff chart. But user text says "(+N) Total". Let's assume bar is total backlog size.
-    // Actually, typically forecast bars show the *added* amount per day.
-    // But WaniKani's forecast graph usually shows the backlog *accumulating*.
-    // Let's use the maximum total to scale the bars.
+    const maxCount = Math.max(...tempDays.map((d) => d.total), 1);
 
-    // Actually, looking at the previous user code `(day.total / maxCount)`, it seems they want the bar to represent the total.
-    maxCount = Math.max(...tempDays.map((d) => d.total), 1); // Avoid div by zero
-
-    days.push(...tempDays);
-
-    // Calculate bar widths relative to maxCount
-    return days.map((day) => ({
+    return tempDays.map((day) => ({
       ...day,
-      barWidth: maxCount > 0 ? `${(day.total / maxCount) * 100}%` : "0%",
+      barWidth: `${(day.total / maxCount) * 100}%`,
     }));
   };
 
@@ -86,61 +99,106 @@ export default function ReviewSchedule({
           <div className="bg-shodo-paper text-shodo-ink font-sans w-full max-w-[480px] relative flex flex-col overflow-hidden rounded-2xl border-2 border-shodo-ink/10 shadow-sm h-full">
             <div className="flex flex-col grow pb-3">
               {/* Header Section */}
-              <div className="bg-shodo-ink/5 flex flex-wrap items-center gap-3 mb-3 px-4 py-4 border-b border-shodo-ink/10">
-                <div className="text-shodo-ink/60 flex flex-col grow shrink-0 items-start gap-1">
-                  <div className="text-sm font-medium uppercase tracking-wide">
-                    Next 24 Hours
-                  </div>
-                  <div className="text-shodo-ink font-bold text-[24px] leading-none">
-                    {next24HoursCount === 0
-                      ? "No Reviews"
-                      : `${next24HoursCount} Reviews`}
-                  </div>
-                </div>
-                <div className="flex shrink-0 basis-[100px] justify-center">
-                  <img
-                    src="/chibi-meditates.png"
-                    alt="Forecast illustration"
-                    className="w-full max-w-[100px] object-contain"
-                  />
+              <div className="bg-shodo-ink/5 flex items-center px-4 py-4 border-b border-shodo-ink/10">
+                <div className="text-shodo-ink font-bold text-xl leading-none">
+                  {formatTimeUntil(nextReviewAt)}
                 </div>
               </div>
 
               {/* Daily Rows */}
-              <div className="flex flex-col gap-1 px-2">
-                {forecastData.map((day, index) => (
-                  <div
-                    key={index}
-                    className={`flex items-center gap-2 px-3 py-2 select-none rounded-md transition-colors duration-150 ${
-                      day.isActive
-                        ? "cursor-pointer hover:bg-gray-50"
-                        : "cursor-default"
-                    }`}
-                  >
-                    {/* Day Label */}
-                    <div className="text-right shrink-0 w-[40px] text-sm font-medium text-shodo-ink/80">
-                      {day.day}
-                    </div>
+              <div className="flex flex-col gap-1 px-2 pt-1">
+                {forecastData.map((day) => {
+                  const isExpanded = expandedDay === day.date;
+                  const hourly = hourlyCache[day.date];
+                  const dayStartOffset = day.total - day.added;
+                  const hourlyMax = Array.isArray(hourly)
+                    ? Math.max(...hourly.map((h) => h.count), 1)
+                    : 1;
+                  let cumulative = dayStartOffset;
 
-                    {/* Progress Bar Container */}
-                    <div className="flex grow justify-start items-center gap-1 h-full px-2">
-                      <div className="w-full bg-shodo-ink/10 rounded-full h-2 overflow-hidden">
-                        <div
-                          className={`h-full rounded-full ${day.isActive ? "bg-shodo-accent" : "bg-transparent"}`}
-                          style={{ width: day.barWidth }}
-                        />
+                  return (
+                    <div key={day.date}>
+                      <div
+                        onClick={() => day.isActive && toggleDay(day.date)}
+                        className={`flex items-center gap-2 px-3 py-2 select-none rounded-md transition-colors duration-150 ${
+                          day.isActive
+                            ? "cursor-pointer hover:bg-shodo-ink/5"
+                            : "cursor-default"
+                        }`}
+                      >
+                        {/* Day Label */}
+                        <div className="text-right shrink-0 w-[40px] text-sm font-medium text-shodo-ink/80">
+                          {day.day}
+                        </div>
+
+                        {/* Progress Bar Container */}
+                        <div className="flex grow justify-start items-center gap-1 h-full px-2">
+                          <div className="w-full bg-shodo-ink/10 rounded-full h-2 overflow-hidden">
+                            <div
+                              className={`h-full rounded-full ${day.isActive ? "bg-shodo-accent" : "bg-transparent"}`}
+                              style={{ width: day.barWidth }}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Count Stats */}
+                        <div className="text-shodo-ink/60 flex shrink-0 w-[70px] justify-end items-center text-sm font-bold whitespace-nowrap">
+                          <span className="text-xs font-normal mr-1 text-shodo-ink/80">
+                            (+{day.added})
+                          </span>{" "}
+                          {day.total}
+                        </div>
+
+                        {/* Drill-down chevron */}
+                        <div className="shrink-0 w-4 flex justify-center">
+                          {day.isActive && (
+                            <ChevronRight
+                              size={16}
+                              className={`text-shodo-ink/40 transition-transform duration-150 ${isExpanded ? "rotate-90" : ""}`}
+                            />
+                          )}
+                        </div>
                       </div>
-                    </div>
 
-                    {/* Count Stats - Increased width for (+N) Total format */}
-                    <div className="text-shodo-ink/60 flex shrink-0 w-[70px] justify-end items-center text-sm font-bold whitespace-nowrap">
-                      <span className="text-xs font-normal mr-1 text-shodo-ink/80">
-                        (+{day.added})
-                      </span>{" "}
-                      {day.total}
+                      {isExpanded && (
+                        <div className="pl-12 pr-3 pb-2 flex flex-col gap-1">
+                          {hourly === "loading" && (
+                            <div className="text-xs text-shodo-ink/50 py-2">Loading…</div>
+                          )}
+                          {Array.isArray(hourly) && hourly.length === 0 && (
+                            <div className="text-xs text-shodo-ink/50 py-2">No breakdown available</div>
+                          )}
+                          {Array.isArray(hourly) &&
+                            hourly.map((h) => {
+                              cumulative += h.count;
+                              return (
+                                <div key={h.hour} className="flex items-center gap-2 py-1">
+                                  <div className="text-right shrink-0 w-[40px] text-xs font-medium text-shodo-ink/60">
+                                    {h.hour}
+                                  </div>
+                                  <div className="flex grow justify-start items-center gap-1 h-full px-2">
+                                    <div className="w-full bg-shodo-ink/10 rounded-full h-1.5 overflow-hidden">
+                                      <div
+                                        className="h-full rounded-full bg-shodo-accent/70"
+                                        style={{ width: `${(h.count / hourlyMax) * 100}%` }}
+                                      />
+                                    </div>
+                                  </div>
+                                  <div className="text-shodo-ink/50 flex shrink-0 w-[70px] justify-end items-center text-xs font-bold whitespace-nowrap">
+                                    <span className="text-xs font-normal mr-1 text-shodo-ink/70">
+                                      (+{h.count})
+                                    </span>{" "}
+                                    {cumulative}
+                                  </div>
+                                  <div className="shrink-0 w-4" />
+                                </div>
+                              );
+                            })}
+                        </div>
+                      )}
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           </div>

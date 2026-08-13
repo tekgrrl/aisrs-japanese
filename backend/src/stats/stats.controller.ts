@@ -1,4 +1,4 @@
-import { Controller, Get, UseGuards } from '@nestjs/common';
+import { Controller, Get, Param, UseGuards } from '@nestjs/common';
 import { StatsService } from './stats.service';
 import { FirebaseAuthGuard } from '../auth/firebase-auth.guard';
 import { UserId } from '../auth/user-id.decorator';
@@ -11,5 +11,10 @@ export class StatsController {
     @Get()
     async getStats(@UserId() uid: string) {
         return this.statsService.getDashboardStats(uid);
+    }
+
+    @Get('schedule/:date/hourly')
+    async getHourlyBreakdown(@UserId() uid: string, @Param('date') date: string) {
+        return this.statsService.getHourlyBreakdown(uid, date);
     }
 }
