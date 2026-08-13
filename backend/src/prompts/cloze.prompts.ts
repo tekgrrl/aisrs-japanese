@@ -25,13 +25,14 @@ Given a target vocabulary word in dictionary form and a context sentence that us
    - Suru-verb nominals used verbally (勉強する → 勉強しました → replace the whole 勉強しました)
    - I-adjective conjugations (大きい → 大きかった, 大きくない → the whole conjugated form)
    - Na-adjective citation form WITHOUT the connector な (有名な歌手 → replace only 有名, leaving な intact: [_____]な歌手)
-3. Preserve ALL other characters in the sentence EXACTLY. Do NOT rewrite, paraphrase, reorder, simplify, or otherwise alter any part of the sentence outside the blank.
-4. If the target word appears more than once, replace ONLY the first occurrence.
-5. If the target word is embedded in a morphologically related compound that has a distinct meaning (e.g., target: 食べる but sentence contains 大食い), do NOT replace it — these are different lexical items. Scan only for direct inflectional derivatives.
-6. If no occurrence can be confidently identified even after morphological analysis, replace the longest token in the sentence that shares the most morphemes with the target word. Never return the sentence unchanged.
-7. The placeholder MUST be written as exactly: [_____] — one opening bracket, five underscores, one closing bracket. No other format is acceptable.
-8. Do NOT add Romaji, parenthetical notes, translations, or any annotation to the output.
-9. ${JSON_ONLY_OUTPUT}
+3. Nouns do not conjugate — the target appears in the sentence verbatim, as a single unbroken string. Replace that exact, complete string as one atomic unit. This matters most for multi-kanji compound nouns (熟語/jukugo — e.g. 三月, 図書館, 食べ物, 誕生日): NEVER blank out only part of the compound and leave the remaining kanji sitting outside the brackets. If the target is 三月, the blank must consume all of 三月, not just 三.
+4. Preserve ALL other characters in the sentence EXACTLY. Do NOT rewrite, paraphrase, reorder, simplify, or otherwise alter any part of the sentence outside the blank.
+5. If the target word appears more than once, replace ONLY the first occurrence.
+6. If the target word is embedded in a morphologically related compound that has a distinct meaning (e.g., target: 食べる but sentence contains 大食い), do NOT replace it — these are different lexical items. Scan only for direct inflectional derivatives.
+7. If no occurrence can be confidently identified even after morphological analysis, replace the longest token in the sentence that shares the most morphemes with the target word. Never return the sentence unchanged.
+8. The placeholder MUST be written as exactly: [_____] — one opening bracket, five underscores, one closing bracket. No other format is acceptable.
+9. Do NOT add Romaji, parenthetical notes, translations, or any annotation to the output.
+10. ${JSON_ONLY_OUTPUT}
 
 **Examples:**
 Vocabulary: "食べる"
@@ -56,7 +57,11 @@ Output: { "clozeSentence": "彼は[_____]な歌手です。" }
 
 Vocabulary: "大きい"
 Sentence: "その犬はとても大きかったです。"
-Output: { "clozeSentence": "その犬はとても[_____]。" }`;
+Output: { "clozeSentence": "その犬はとても[_____]。" }
+
+Vocabulary: "三月"
+Sentence: "三月は春です。"
+Output: { "clozeSentence": "[_____]は春です。" }`;
 
 /**
  * Builds the user message for cloze generation.
