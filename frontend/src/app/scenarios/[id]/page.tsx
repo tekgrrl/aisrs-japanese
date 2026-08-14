@@ -12,13 +12,13 @@ const API_BASE_URL = "http://localhost:3000/api";
 
 const ROLEPLAY_MIN_SRS_STAGE = 1; // at least one successful review per facet before role-playing
 
-function kuSrsBadge(maxSrsStage: number | null | undefined): { text: string; className: string } | null {
-  if (maxSrsStage === undefined) return null; // no kuId, no badge
-  if (maxSrsStage === null) return { text: 'Enrolled', className: 'bg-slate-100 text-slate-500' };
-  if (maxSrsStage === 0) return { text: 'New', className: 'bg-slate-100 text-slate-500' };
-  if (maxSrsStage <= 2) return { text: `Apprentice · ${maxSrsStage}`, className: 'bg-blue-100 text-blue-700' };
-  if (maxSrsStage <= 4) return { text: `Familiar · ${maxSrsStage}`, className: 'bg-amber-100 text-amber-700' };
-  if (maxSrsStage <= 6) return { text: `Proficient · ${maxSrsStage}`, className: 'bg-green-100 text-green-700' };
+function kuSrsBadge(srsStage: number | null | undefined): { text: string; className: string } | null {
+  if (srsStage === undefined) return null; // no kuId, no badge
+  if (srsStage === null) return { text: 'Enrolled', className: 'bg-slate-100 text-slate-500' };
+  if (srsStage === 0) return { text: 'New', className: 'bg-slate-100 text-slate-500' };
+  if (srsStage <= 2) return { text: `Apprentice · ${srsStage}`, className: 'bg-blue-100 text-blue-700' };
+  if (srsStage <= 4) return { text: `Familiar · ${srsStage}`, className: 'bg-amber-100 text-amber-700' };
+  if (srsStage <= 6) return { text: `Proficient · ${srsStage}`, className: 'bg-green-100 text-green-700' };
   return { text: 'Mastered', className: 'bg-purple-100 text-purple-700' };
 }
 
@@ -865,7 +865,10 @@ export default function ScenarioPage({
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
             {scenario.extractedKUs.map((ku, idx) => {
               const status = ku.kuId ? kuStatus[ku.kuId] : undefined;
-              const badge = kuSrsBadge(status?.maxSrsStage ?? (ku.kuId ? null : undefined));
+              // minSrsStage (not max) — this is the same value the roleplay-readiness
+              // gate checks, so a KU never shows "Familiar" while a different, unreviewed
+              // facet of the same word is what's actually still blocking roleplay.
+              const badge = kuSrsBadge(status?.minSrsStage ?? (ku.kuId ? null : undefined));
               return (
                 <div
                   key={idx}
@@ -950,7 +953,13 @@ export default function ScenarioPage({
                           : "Completed"}
                   </button>
                   {scenario.state === "drill" && !isReadyForRoleplay && !kuStatusLoading && (
-                    <span className="text-xs text-slate-400">Review vocab to unlock</span>
+                    <button
+                      onClick={handleAdvance}
+                      disabled={advancing}
+                      className="text-xs text-slate-400 underline underline-offset-2 hover:text-slate-600 transition-colors disabled:opacity-50"
+                    >
+                      Start anyway
+                    </button>
                   )}
                 </div>
               </div>

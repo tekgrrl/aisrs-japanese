@@ -20,6 +20,12 @@ export class TutorGenerateScenarioDto {
   pattern?: string;
   title?: string;
   corpusNotes?: string;
+  // When true, the dialogue's vocabulary/grammar is hard-constrained to what the tutor
+  // tools actually returned for this user (frontier/leech vocab, level seed, enrolled
+  // grammar pool) instead of anything the model judges level-appropriate. Used for
+  // sourceKuId-driven reinforcement scenarios, where introducing brand-new incidental
+  // vocabulary defeats the point and needlessly raises the roleplay-readiness bar.
+  strict?: boolean;
 }
 
 const MAX_ITERATIONS = 5;
@@ -97,9 +103,70 @@ export class TutorService {
     if (dto.sourceType) scenarioMeta.sourceType = dto.sourceType;
     if (dto.targetVocab) scenarioMeta.targetVocab = dto.targetVocab;
 
+    // Created here (not inside run()) so the strict-mode pre-fetch below and the agent's
+    // own later tool calls share one cache — no duplicate Firestore reads, and the model
+    // sees exactly the same tool results we're enforcing against.
+    const turnCache = new Map<string, unknown>();
+
+    if (dto.strict) {
+      const { allowedVocab, allowedGrammarKuIds } = await this.buildStrictConstraints(uid, dto, turnCache);
+      scenarioMeta.strictAllowedVocab = allowedVocab;
+      if (allowedGrammarKuIds) scenarioMeta.strictAllowedGrammarKuIds = allowedGrammarKuIds;
+      lines.push(
+        `STRICT MODE: The dialogue's content words (nouns, verbs, adjectives — not grammatical ` +
+        `particles/copula like は, が, を, に, で, です, ます) MUST be chosen only from this list: ` +
+        `${allowedVocab.join('、')}. Do not introduce any other vocabulary. If natural phrasing ` +
+        `would require a word outside this list, simplify the sentence instead — do not reach for it.` +
+        (allowedGrammarKuIds
+          ? ' Likewise, grammarMatches must only use kuIds from get_grammar_patterns — no exceptions.'
+          : ''),
+      );
+    }
+
     return this.run(uid, [
       { role: 'user', parts: [{ type: 'text', text: lines.join('\n') }] },
-    ], scenarioMeta, dto);
+    ], scenarioMeta, dto, turnCache);
+  }
+
+  /** Pre-fetches (via the same tool executor/cache the agent loop uses) the concrete
+   * vocab/grammar this user actually knows, for strict mode's prompt constraint and
+   * post-generation server-side filter. */
+  private async buildStrictConstraints(
+    uid: string,
+    dto: TutorGenerateScenarioDto,
+    cache: Map<string, unknown>,
+  ): Promise<{ allowedVocab: string[]; allowedGrammarKuIds?: string[] }> {
+    const profile = (await this.executor.execute(
+      uid,
+      { callId: 'strict-profile', name: 'get_user_profile', args: {} },
+      cache,
+    )) as { jlptLevel: string };
+    const jlptLevel = dto.difficulty ?? profile.jlptLevel;
+
+    const [frontier, leech, levelSeed] = await Promise.all([
+      this.executor.execute(uid, { callId: 'strict-frontier', name: 'get_frontier_vocab', args: {} }, cache) as Promise<{ content: string }[]>,
+      this.executor.execute(uid, { callId: 'strict-leech', name: 'get_leech_vocab', args: {} }, cache) as Promise<{ content: string }[]>,
+      this.executor.execute(uid, { callId: 'strict-seed', name: 'get_level_seed', args: { jlptLevel } }, cache) as Promise<{ grammar: string[]; vocab: string[] }>,
+    ]);
+
+    const vocabSet = new Set<string>([
+      ...frontier.map(e => e.content),
+      ...leech.map(e => e.content),
+      ...levelSeed.vocab,
+    ]);
+    if (dto.targetVocab) vocabSet.add(dto.targetVocab);
+
+    let allowedGrammarKuIds: string[] | undefined;
+    if (dto.sourceType === 'grammar-pattern') {
+      const { patterns } = (await this.executor.execute(
+        uid,
+        { callId: 'strict-grammar', name: 'get_grammar_patterns', args: { jlptLevel } },
+        cache,
+      )) as { patterns: { kuId: string }[] };
+      allowedGrammarKuIds = patterns.map(p => p.kuId);
+    }
+
+    return { allowedVocab: Array.from(vocabSet), allowedGrammarKuIds };
   }
 
   private async run(
@@ -107,6 +174,7 @@ export class TutorService {
     initialMessages: AiMessage[],
     scenarioMeta: Record<string, unknown> = {},
     dto: TutorGenerateScenarioDto = {},
+    turnCache: Map<string, unknown> = new Map(),
   ): Promise<string> {
     const start = performance.now();
     const iterationLog: { tools: string[]; results: Record<string, string>; costUsd?: number }[] = [];
@@ -124,7 +192,6 @@ export class TutorService {
       },
     });
 
-    const turnCache = new Map<string, unknown>();
     const messages: AiMessage[] = [...initialMessages];
     let scenarioId: string | null = null;
     let totalCostUsd = 0;

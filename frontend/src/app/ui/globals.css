@@ -8,6 +8,20 @@
   --shodo-paper: #f9f7f2;
   --shodo-ink: #2b2523;
   --shodo-accent: #cc0000;
+
+  /* Rest of the Shodo palette (was only ever defined in the now-inert
+     tailwind.config.ts — Tailwind v4 reads @theme, not that file, and it
+     was never wired up via @config, so these all compiled to nothing). */
+  --shodo-paper-dark: #ebe6dc;
+  --shodo-paper-warm: #f5ecdf;
+  --shodo-mist: #e8ecef;
+  --shodo-ink-light: #595048;
+  --shodo-ink-faint: #a69e96;
+  --shodo-stamp-red: #d64a38;
+  --shodo-indigo: #2e4b75;
+  --shodo-matcha: #7b8d42;
+  --shodo-persimmon: #e08a46;
+  --shodo-gold: #c7a04d;
 }
 
 @theme inline {
@@ -20,6 +34,16 @@
   --color-shodo-paper: var(--shodo-paper);
   --color-shodo-ink: var(--shodo-ink);
   --color-shodo-accent: var(--shodo-accent);
+  --color-shodo-paper-dark: var(--shodo-paper-dark);
+  --color-shodo-paper-warm: var(--shodo-paper-warm);
+  --color-shodo-mist: var(--shodo-mist);
+  --color-shodo-ink-light: var(--shodo-ink-light);
+  --color-shodo-ink-faint: var(--shodo-ink-faint);
+  --color-shodo-stamp-red: var(--shodo-stamp-red);
+  --color-shodo-indigo: var(--shodo-indigo);
+  --color-shodo-matcha: var(--shodo-matcha);
+  --color-shodo-persimmon: var(--shodo-persimmon);
+  --color-shodo-gold: var(--shodo-gold);
 
   --animate-fade-slide-up: fade-slide-up 0.5s ease-out forwards;
 

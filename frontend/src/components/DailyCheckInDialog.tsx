@@ -96,8 +96,8 @@ export default function DailyCheckInDialog({ plan, learnCount, onClose }: Props)
       if (existingRes.ok) {
         const existing = await existingRes.json();
         if (Array.isArray(existing) && existing.length > 0) {
+          dialogRef.current?.close();
           router.push(`/scenarios/${existing[0].id}`);
-          onClose();
           return;
         }
       }
@@ -108,14 +108,14 @@ export default function DailyCheckInDialog({ plan, learnCount, onClose }: Props)
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(
           isVocab
-            ? { sourceType: "context-example", targetVocab: opp.content, sourceKuId: opp.kuId }
-            : { sourceType: "grammar-pattern", pattern: opp.content, sourceKuId: opp.kuId },
+            ? { sourceType: "context-example", targetVocab: opp.content, sourceKuId: opp.kuId, strict: true }
+            : { sourceType: "grammar-pattern", pattern: opp.content, sourceKuId: opp.kuId, strict: true },
         ),
       });
       if (genRes.ok) {
         const { id } = await genRes.json();
+        dialogRef.current?.close();
         router.push(`/scenarios/${id}`);
-        onClose();
       }
     } catch (e) {
       console.error("Failed to start scenario practice", e);
@@ -258,22 +258,22 @@ export default function DailyCheckInDialog({ plan, learnCount, onClose }: Props)
                   <div className="min-w-0">
                     <span className="font-medium text-shodo-ink">{opp.content}</span>
                     <span className="ml-2 text-xs text-shodo-ink/60">
-                      reached {opp.newLevel} — use it in a scenario?
+                      reached {opp.newLevel}
                     </span>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
-                    <button
-                      onClick={() => handleDismissOpportunity(opp.kuId)}
-                      className="text-xs text-shodo-ink/50 hover:text-shodo-ink transition-colors px-1"
-                    >
-                      Not now
-                    </button>
                     <button
                       onClick={() => handlePractice(opp)}
                       disabled={practicingKuId === opp.kuId}
                       className="rounded-lg bg-shodo-indigo px-3 py-1.5 text-xs font-medium text-white hover:bg-shodo-indigo/80 transition-colors disabled:opacity-50 disabled:cursor-wait"
                     >
                       {practicingKuId === opp.kuId ? "Starting…" : "Practice in a Scenario"}
+                    </button>
+                    <button
+                      onClick={() => handleDismissOpportunity(opp.kuId)}
+                      className="rounded-lg border border-shodo-ink/10 bg-shodo-ink/5 px-2 py-1.5 text-xs text-shodo-ink/60 hover:bg-shodo-ink/10 hover:text-shodo-ink transition-colors"
+                    >
+                      Not now
                     </button>
                   </div>
                 </li>
