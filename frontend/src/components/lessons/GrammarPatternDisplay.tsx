@@ -177,14 +177,29 @@ export default function GrammarPatternDisplay({ pattern, className }: GrammarPat
     };
 
     fit();
-    const observers = viewports
-      .filter((v): v is HTMLDivElement => v !== null)
-      .map(v => {
-        const ro = new ResizeObserver(fit);
-        ro.observe(v);
-        return ro;
-      });
-    return () => observers.forEach(ro => ro.disconnect());
+
+    // fit() mutates each viewport's own height, which the observer below is watching —
+    // without a guard that's a feedback loop (height change → callback → height change
+    // → ...). Only re-fit on an actual *width* change, since that's the only dimension
+    // our own mutations never touch.
+    const lastWidths = new Map<Element, number>();
+    const observer = new ResizeObserver(entries => {
+      let widthChanged = false;
+      for (const entry of entries) {
+        const newWidth = entry.contentRect.width;
+        if (lastWidths.get(entry.target) !== newWidth) {
+          lastWidths.set(entry.target, newWidth);
+          widthChanged = true;
+        }
+      }
+      if (widthChanged) fit();
+    });
+    viewports.forEach(v => {
+      if (!v) return;
+      lastWidths.set(v, v.clientWidth);
+      observer.observe(v);
+    });
+    return () => observer.disconnect();
   });
 
   if (!usesNotation) {
