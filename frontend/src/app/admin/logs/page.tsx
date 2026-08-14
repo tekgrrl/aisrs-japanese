@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { ApiLog } from "@/types";
 import { JsonDisplay } from "@/components/JSONDisplay";
 import { apiFetch } from "@/lib/api-client";
@@ -181,9 +181,8 @@ export default function LogsPage() {
                   </tr>
                 ) : (
                   logs.map((log) => (
-                    <>
+                    <React.Fragment key={log.id}>
                       <tr
-                        key={log.id}
                         className={`hover:bg-gray-50 cursor-pointer ${expandedLogId === log.id ? "bg-blue-50" : ""}`}
                         onClick={() => toggleExpand(log.id!)}
                       >
@@ -250,7 +249,7 @@ export default function LogsPage() {
                           </td>
                         </tr>
                       )}
-                    </>
+                    </React.Fragment>
                   ))
                 )}
               </tbody>

@@ -276,6 +276,7 @@ export default function LearnItemPage() {
               sourceContextSentence: ex.sentence,
               targetVocab: ku.content,
               sourceKuId: ku.id,
+              strict: true,
             }),
           }).then(async (res) => {
             if (!res.ok) {

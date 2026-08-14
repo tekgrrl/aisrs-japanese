@@ -325,6 +325,38 @@ export class ScenariosService {
     const cleanMeaning = (str: string) =>
       str ? str.replace(/^-/, '').trim() : '';
 
+    let extractedKUs = (data.extractedKUs ?? []).map((ku: any) => ({
+      content: cleanContent(ku.content),
+      reading: cleanContent(ku.reading),
+      meaning: cleanMeaning(ku.meaning),
+      type: 'vocab' as const,
+      status: 'new' as const,
+      jlptLevel: ku.jlptLevel ?? null,
+    }));
+    let grammarMatches = Array.isArray(data.grammarMatches) ? data.grammarMatches : [];
+
+    // Strict mode: the prompt already asked the model to stay within the supplied
+    // vocab/grammar, but that's not guaranteed — this is the actual enforcement. Anything
+    // outside the allowed sets is dropped here rather than blocking generation: the
+    // dialogue prose itself can't be un-written, but nothing outside what we approved
+    // ever gets enrolled or counted toward the roleplay-readiness gate.
+    if (Array.isArray(data.strictAllowedVocab)) {
+      const allowedVocab = new Set<string>(data.strictAllowedVocab);
+      const before = extractedKUs.length;
+      extractedKUs = extractedKUs.filter((ku: { content: string }) => allowedVocab.has(ku.content));
+      if (extractedKUs.length < before) {
+        this.logger.warn(`saveFromTutor: strict mode dropped ${before - extractedKUs.length}/${before} extractedKUs outside allowed vocab for uid=${uid}`);
+      }
+    }
+    if (Array.isArray(data.strictAllowedGrammarKuIds)) {
+      const allowedGrammarKuIds = new Set<string>(data.strictAllowedGrammarKuIds);
+      const before = grammarMatches.length;
+      grammarMatches = grammarMatches.filter((m: { kuId: string }) => allowedGrammarKuIds.has(m.kuId));
+      if (grammarMatches.length < before) {
+        this.logger.warn(`saveFromTutor: strict mode dropped ${before - grammarMatches.length}/${before} grammarMatches outside allowed grammar pool for uid=${uid}`);
+      }
+    }
+
     const newScenario: Scenario = {
       id,
       userId: uid,
@@ -334,15 +366,8 @@ export class ScenariosService {
       setting: data.setting,
       roles: data.roles,
       dialogue: data.dialogue,
-      extractedKUs: (data.extractedKUs ?? []).map((ku: any) => ({
-        content: cleanContent(ku.content),
-        reading: cleanContent(ku.reading),
-        meaning: cleanMeaning(ku.meaning),
-        type: 'vocab' as const,
-        status: 'new' as const,
-        jlptLevel: ku.jlptLevel ?? null,
-      })),
-      grammarMatches: Array.isArray(data.grammarMatches) ? data.grammarMatches : [],
+      extractedKUs,
+      grammarMatches,
       ...(data.grammarNotes ? { grammarNotes: data.grammarNotes } : {}),
       state: 'encounter' as const,
       createdAt: Timestamp.now(),
@@ -499,6 +524,7 @@ export class ScenariosService {
 
     if (newState === 'completed') {
       updateData.completedAt = Timestamp.now();
+      updateData.isActive = false;
 
       // GENERATE EVALUATION
       if (scenario.chatHistory && scenario.chatHistory.length > 0) {

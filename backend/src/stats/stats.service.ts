@@ -90,8 +90,12 @@ export class StatsService {
         const scenariosCol = uid === ADMIN_USER_ID
             ? this.db.collection(SCENARIOS_COLLECTION)
             : this.db.collection('users').doc(uid).collection(SCENARIOS_COLLECTION);
+        // isActive (not state === 'simulate') is what actually means "still needs
+        // attention" — it already goes false on archive/reset and when a scenario is
+        // abandoned mid-conversation; state alone would only count scenarios currently
+        // mid-roleplay, missing ones still sitting in encounter/drill.
         const simulateScenariosQuery = scenariosCol
-            .where('state', '==', 'simulate')
+            .where('isActive', '==', true)
             .count()
             .get();
 
