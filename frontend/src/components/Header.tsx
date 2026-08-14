@@ -7,6 +7,7 @@ import { apiFetch } from "@/lib/api-client";
 import { useAuth } from "@/providers/AuthProvider";
 import { AvatarMenu } from "./AvatarMenu";
 import { applyFurigana, loadFurigana } from "@/lib/furigana";
+import DailyCheckInDialog from "./DailyCheckInDialog";
 
 /**
  * Global navigation header.
@@ -17,6 +18,29 @@ export default function Header() {
   const pathname = usePathname();
   const [stats, setStats] = useState({ learnCount: 0, reviewingCount: 0, reviewsDue: 0, simulateCount: 0 });
   const [showDailyNudge, setShowDailyNudge] = useState(false);
+  // Manual reopen for the daily check-in modal — /daily-plan/check is idempotent for the
+  // rest of the day (it just returns the already-cached plan), so this is safe to call as
+  // often as the user likes, from anywhere, e.g. after losing the auto-opened modal to a
+  // crash/refresh before they'd finished reading it.
+  const [checkInPlan, setCheckInPlan] = useState<any>(null);
+  const [checkInLoading, setCheckInLoading] = useState(false);
+
+  const openCheckIn = useCallback(async () => {
+    setCheckInLoading(true);
+    try {
+      const res = await apiFetch("/api/daily-plan/check", { method: "POST" });
+      if (res.ok) {
+        const { plan } = await res.json();
+        setCheckInPlan(plan);
+        localStorage.setItem("lastDailyPlanDate", plan.date);
+        window.dispatchEvent(new Event("dailyPlanChecked"));
+      }
+    } catch (error) {
+      console.error("Failed to fetch daily plan:", error);
+    } finally {
+      setCheckInLoading(false);
+    }
+  }, []);
 
   const fetchStats = useCallback(async () => {
     try {
@@ -97,6 +121,13 @@ export default function Header() {
 
   return (
     <header className="bg-shodo-paper border-b border-shodo-ink/10 shadow-sm sticky top-0 z-10">
+      {checkInPlan && (
+        <DailyCheckInDialog
+          plan={checkInPlan}
+          learnCount={stats.learnCount}
+          onClose={() => setCheckInPlan(null)}
+        />
+      )}
       <nav className="container mx-auto max-w-4xl px-8 py-4 flex items-center">
         <Link
           href="/"
@@ -150,6 +181,20 @@ export default function Header() {
             Concepts
           </Link>
         </div>
+
+        <button
+          onClick={openCheckIn}
+          disabled={checkInLoading}
+          title="Today's check-in"
+          aria-label="Today's check-in"
+          className="ml-2 p-2 rounded-md text-shodo-ink/60 hover:bg-shodo-ink/5 hover:text-shodo-ink transition-colors disabled:opacity-50"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="9" y="2" width="6" height="4" rx="1" />
+            <path d="M9 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-3" />
+            <path d="m9 14 2 2 4-4" />
+          </svg>
+        </button>
 
         {/* Avatar menu — profile, library, manage, sign out */}
         <div className="ml-4">
