@@ -89,7 +89,11 @@ export function useSpeechRecognition() {
         for (let i = 0; i < event.results.length; ++i) {
           currentText += event.results[i][0].transcript;
         }
-        setTranscript(currentText);
+        // Japanese text never uses spaces for word separation or punctuation, but the
+        // recognizer sometimes emits them (unclear whether they reflect real pauses) —
+        // strip them so downstream exact-match comparisons (e.g. review's local kana
+        // short-circuit) aren't defeated by whitespace the target text never has.
+        setTranscript(currentText.replace(/\s+/g, ""));
       };
 
       recognition.onend = () => {
