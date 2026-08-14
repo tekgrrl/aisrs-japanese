@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useLayoutEffect, useRef } from "react";
 
 // See aigenki-grammar-notation-spec.md for the {Token} notation this parses.
 export type PatternSegment =
@@ -65,7 +65,7 @@ export const PILL_TOKEN_MAP: Record<string, PillStyle> = (() => {
     // adjective type is valid); the typed forms get their own label like verb forms do.
     Adj: adjective,
     "Adj-i": adjI,
-    "Adj-i·stem": adjIStem,
+    "Adj-i-stem": adjIStem,
     "Adj-na": adjNa,
     // Clauses
     Cl: clause,
@@ -77,6 +77,12 @@ export const PILL_TOKEN_MAP: Record<string, PillStyle> = (() => {
 export type PillToken = keyof typeof PILL_TOKEN_MAP;
 
 const UNMAPPED_PILL_CLASSNAME = "bg-gray-100 text-gray-500";
+
+// Never shrink a line past half size — stays legible even when scaled down to fit.
+// If it still can't fit at this floor (pathological case), the overflow-hidden
+// viewport just clips the excess rather than shrinking further into illegibility.
+const MIN_SCALE = 0.5;
+
 
 function parsePattern(pattern: string): PatternSegment[] {
   const segments: PatternSegment[] = [];
@@ -129,31 +135,98 @@ interface GrammarPatternDisplayProps {
  */
 export default function GrammarPatternDisplay({ pattern, className }: GrammarPatternDisplayProps) {
   const usesNotation = /\{[^}]+\}/.test(pattern);
+  // "/" separates alternative forms (e.g. plain vs. polite negative-past) that are too
+  // long to share one line — force a line break there instead of letting the browser
+  // wrap mid-pill, and drop the "/" itself since the break already conveys it.
+  const lines = usesNotation ? pattern.split("/").map(s => s.trim()).filter(Boolean) : [];
+  const viewportRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const contentRefs = useRef<(HTMLDivElement | null)[]>([]);
+
+  // All lines share one scale (whichever line needs to shrink the most), computed
+  // together, so alternative forms of the same pattern stay visually consistent
+  // instead of each line shrinking independently to its own overflow.
+  useLayoutEffect(() => {
+    if (!usesNotation) return;
+    const viewports = viewportRefs.current;
+    const contents = contentRefs.current;
+
+    const fit = () => {
+      contents.forEach(c => { if (c) c.style.transform = ""; });
+      viewports.forEach(v => { if (v) v.style.height = ""; });
+
+      let scale = 1;
+      viewports.forEach((viewport, i) => {
+        const content = contents[i];
+        if (!viewport || !content) return;
+        const available = viewport.clientWidth;
+        const natural = content.scrollWidth;
+        if (available > 0 && natural > available) {
+          scale = Math.min(scale, available / natural);
+        }
+      });
+      scale = Math.max(scale, MIN_SCALE);
+
+      if (scale < 1) {
+        viewports.forEach((viewport, i) => {
+          const content = contents[i];
+          if (!viewport || !content) return;
+          content.style.transform = `scale(${scale})`;
+          viewport.style.height = `${content.scrollHeight * scale}px`;
+        });
+      }
+    };
+
+    fit();
+    const observers = viewports
+      .filter((v): v is HTMLDivElement => v !== null)
+      .map(v => {
+        const ro = new ResizeObserver(fit);
+        ro.observe(v);
+        return ro;
+      });
+    return () => observers.forEach(ro => ro.disconnect());
+  });
+
   if (!usesNotation) {
     return <div className={className}>{pattern}</div>;
   }
 
-  const groups = groupSegments(parsePattern(pattern));
   return (
-    <div className={className}>
-      {groups.map((group, gi) => (
-        <span key={gi} className="inline-block whitespace-nowrap">
-          {group.map((segment, i) => {
-            if (segment.type === "text") {
-              return <React.Fragment key={i}>{segment.value}</React.Fragment>;
-            }
-            const style = PILL_TOKEN_MAP[segment.value];
-            return (
-              <span
-                key={i}
-                className={`inline-block mx-1.5 px-5 py-2 rounded-full text-2xl align-middle font-bold ${style?.className ?? UNMAPPED_PILL_CLASSNAME}`}
-              >
-                {style?.label ?? segment.value}
-              </span>
-            );
-          })}
-        </span>
-      ))}
+    <div className={`${className ?? ""} w-full`}>
+      {lines.map((line, li) => {
+        const groups = groupSegments(parsePattern(line));
+        return (
+          <div
+            key={li}
+            ref={el => { viewportRefs.current[li] = el; }}
+            className="w-full flex justify-center overflow-hidden"
+          >
+            <div
+              ref={el => { contentRefs.current[li] = el; }}
+              className="inline-flex flex-nowrap items-center"
+            >
+              {groups.map((group, gi) => (
+                <span key={gi} className="inline-block whitespace-nowrap">
+                  {group.map((segment, i) => {
+                    if (segment.type === "text") {
+                      return <React.Fragment key={i}>{segment.value}</React.Fragment>;
+                    }
+                    const style = PILL_TOKEN_MAP[segment.value];
+                    return (
+                      <span
+                        key={i}
+                        className={`inline-block mx-1.5 px-5 py-2 rounded-full text-2xl align-middle font-bold ${style?.className ?? UNMAPPED_PILL_CLASSNAME}`}
+                      >
+                        {style?.label ?? segment.value}
+                      </span>
+                    );
+                  })}
+                </span>
+              ))}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }

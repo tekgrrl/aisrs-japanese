@@ -297,7 +297,7 @@ function KanjiVocabSlide({ loaded }: { loaded: LoadedItem }) {
 function GrammarPatternSlide({ loaded }: { loaded: LoadedItem }) {
   const gl = loaded.lesson as GrammarLesson;
   return (
-    <div className="w-full flex flex-col items-center justify-center gap-6 text-center">
+    <div className="w-full flex flex-col items-center justify-center gap-6 text-center max-w-2xl mx-auto">
       <span className="text-xs font-semibold uppercase tracking-widest text-shodo-ink-faint">Grammar Pattern</span>
       <GrammarPatternDisplay pattern={gl.pattern} className="text-5xl font-bold text-shodo-matcha leading-snug" />
       <div className="text-2xl text-shodo-ink-light">{gl.title}</div>
