@@ -122,6 +122,7 @@ export interface Scenario {
   sourceContextSentence?: string;
   targetVocab?: string;
   sourceKuId?: string;
+  sourceSectionId?: string;
   isActive?: boolean;
 
   progress?: Record<string, LevelProgress>;
@@ -190,6 +191,7 @@ export class GenerateScenarioDto {
   sourceContextSentence?: string;
   targetVocab?: string;
   sourceKuId?: string;
+  sourceSectionId?: string;
   userRole?: string;
   aiRole?: string;
 }

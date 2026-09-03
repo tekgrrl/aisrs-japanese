@@ -635,3 +635,17 @@ export interface ContentFlag {
   resolvedAt?: Timestamp;
   createdAt: Timestamp;
 }
+
+// ─── Guide to Japanese Verbs ────────────────────────────────────────────────
+
+export interface GrammarSection {
+  id: string;
+  sectionLabel: string;
+  pattern: string;
+  jlptLevel?: string | null;
+  explanation: string;
+  examples: { japanese: string; english: string }[];
+  vocab?: { term: string; reading?: string; meaning: string }[];
+  notes?: string;
+  createdAt: Timestamp;
+}

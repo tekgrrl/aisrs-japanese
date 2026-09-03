@@ -6,6 +6,7 @@ import { KnowledgeUnitsModule } from '../knowledge-units/knowledge-units.module'
 import { LessonsModule } from '../lessons/lessons.module';
 import { UserModule } from '../users/user.module';
 import { AuthModule } from '../auth/auth.module';
+import { GrammarSectionsModule } from '../grammar-sections/grammar-sections.module';
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { AuthModule } from '../auth/auth.module';
     LessonsModule,
     UserModule,
     AuthModule,
+    GrammarSectionsModule,
   ],
   controllers: [ScenariosController],
   providers: [ScenariosService],

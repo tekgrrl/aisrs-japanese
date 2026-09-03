@@ -746,3 +746,4 @@ export interface ContentFlag {
 }
 
 export * from './scenario';
+export * from './grammar-section';
