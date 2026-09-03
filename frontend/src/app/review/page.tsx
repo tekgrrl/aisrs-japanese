@@ -11,6 +11,7 @@ import { getSrsLevelName, getSrsLevelIndex } from "@/utils/srs";
 import { apiFetch } from "@/lib/api-client";
 import SentenceAssemblyCard from "@/components/review/SentenceAssemblyCard";
 import SentenceClozeCard from "@/components/review/SentenceClozeCard";
+import InputModeBadge from "@/components/review/InputModeBadge";
 import FacetDebugPanel from "@/components/review/FacetDebugPanel";
 import ReviewActionButtons from "@/components/review/ReviewActionButtons";
 import VocabLessonView from "@/components/lessons/VocabLessonView";
@@ -940,6 +941,9 @@ export default function ReviewPage() {
 
         {/* Answer Form */}
         <form onSubmit={handleEvaluateAnswer} className="relative">
+          <div className="flex justify-end mb-1">
+            <InputModeBadge mode={isJapaneseInput(currentItem) ? "kana" : "english"} />
+          </div>
           <div className="relative">
             <input
               ref={answerInputRef}

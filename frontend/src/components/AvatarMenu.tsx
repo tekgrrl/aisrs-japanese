@@ -89,6 +89,13 @@ export function AvatarMenu() {
           <div className="h-px bg-shodo-ink/10 my-1" />
 
           <Link
+            href="/pronounce"
+            className="block px-3 py-2 text-sm text-shodo-ink hover:bg-shodo-ink/5 transition-colors"
+            onClick={() => setOpen(false)}
+          >
+            Pronunciation
+          </Link>
+          <Link
             href="/library"
             className="block px-3 py-2 text-sm text-shodo-ink hover:bg-shodo-ink/5 transition-colors"
             onClick={() => setOpen(false)}

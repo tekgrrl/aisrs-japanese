@@ -24,6 +24,92 @@ export const ALLOWED_AI_ROLES = [
 ];
 
 // ---------------------------------------------------------------------------
+// Scenario generation response schema
+// ---------------------------------------------------------------------------
+
+/**
+ * Enforced via Gemini's `responseSchema` on both scenario-generation prompts
+ * (architect + import). `dialogue[].speakerRole` is `required` + `enum` here
+ * so the model can no longer omit it — the prompt text alone wasn't enough to
+ * guarantee it, which let scenarios reach the fuzzy speaker-name-matching
+ * fallback in `getInitialChatHistory` (the bug GitHub #213 was meant to retire).
+ */
+export const SCENARIO_RESPONSE_SCHEMA = {
+  type: 'OBJECT',
+  properties: {
+    title: { type: 'STRING' },
+    description: { type: 'STRING' },
+    setting: {
+      type: 'OBJECT',
+      properties: {
+        location: { type: 'STRING' },
+        participants: { type: 'ARRAY', items: { type: 'STRING' } },
+        goal: { type: 'STRING' },
+        timeOfDay: { type: 'STRING' },
+        visualPrompt: { type: 'STRING' },
+      },
+      required: ['location', 'participants', 'goal', 'timeOfDay', 'visualPrompt'],
+    },
+    roles: {
+      type: 'OBJECT',
+      properties: {
+        user: { type: 'STRING' },
+        ai: { type: 'STRING' },
+      },
+      required: ['user', 'ai'],
+    },
+    dialogue: {
+      type: 'ARRAY',
+      items: {
+        type: 'OBJECT',
+        properties: {
+          speaker: { type: 'STRING' },
+          speakerRole: { type: 'STRING', enum: ['user', 'ai'] },
+          text: { type: 'STRING' },
+          translation: { type: 'STRING' },
+        },
+        required: ['speaker', 'speakerRole', 'text', 'translation'],
+      },
+    },
+    extractedKUs: {
+      type: 'ARRAY',
+      items: {
+        type: 'OBJECT',
+        properties: {
+          content: { type: 'STRING' },
+          reading: { type: 'STRING' },
+          meaning: { type: 'STRING' },
+          type: { type: 'STRING', enum: ['vocab', 'kanji'] },
+          jlptLevel: { type: 'STRING', enum: ['N5', 'N4', 'N3', 'N2', 'N1'] },
+        },
+        required: ['content', 'reading', 'meaning', 'jlptLevel'],
+      },
+    },
+    grammarMatches: {
+      type: 'ARRAY',
+      items: {
+        type: 'OBJECT',
+        properties: {
+          kuId: { type: 'STRING' },
+          exampleFromConversation: {
+            type: 'OBJECT',
+            properties: {
+              japanese: { type: 'STRING' },
+              english: { type: 'STRING' },
+              fragments: { type: 'ARRAY', items: { type: 'STRING' } },
+              accepted_alternatives: { type: 'ARRAY', items: { type: 'STRING' } },
+            },
+            required: ['japanese', 'english', 'fragments', 'accepted_alternatives'],
+          },
+        },
+        required: ['kuId', 'exampleFromConversation'],
+      },
+    },
+  },
+  required: ['title', 'description', 'setting', 'roles', 'dialogue', 'extractedKUs', 'grammarMatches'],
+};
+
+// ---------------------------------------------------------------------------
 // Scenario architect prompt
 // ---------------------------------------------------------------------------
 

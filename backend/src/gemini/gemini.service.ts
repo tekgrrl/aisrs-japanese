@@ -13,6 +13,7 @@ import { performance } from "perf_hooks"; // For timing
 import { CLOZE_SYSTEM_PROMPT, buildClozeUserMessage } from '../prompts/cloze.prompts';
 import { buildKanjiDetailsSystemPrompt, buildKanjiDetailsUserMessage } from '../prompts/vocab.prompts';
 import { buildScenarioEvaluatorPrompt } from '../prompts/evaluation.prompts';
+import { buildSegmentationPrompt, SEGMENTATION_RESPONSE_SCHEMA } from '../prompts/pronunciation.prompts';
 
 @Injectable()
 export class GeminiService implements OnModuleInit {
@@ -345,6 +346,7 @@ export class GeminiService implements OnModuleInit {
     userMessage: string,
     toolDeclarations?: FunctionDeclaration[],
     toolHandlers?: Record<string, (args: Record<string, unknown>) => Promise<Record<string, unknown>>>,
+    responseSchema?: Record<string, unknown>,
   ): Promise<any> {
     if (toolDeclarations?.length && toolHandlers) {
       return this.generateWithTools<any>(
@@ -352,7 +354,7 @@ export class GeminiService implements OnModuleInit {
         '',
         toolDeclarations,
         toolHandlers,
-        undefined,
+        responseSchema,
         { route: '/scenarios/generate', topic: userMessage.slice(0, 60) },
       );
     }
@@ -378,6 +380,7 @@ export class GeminiService implements OnModuleInit {
         config: {
           responseMimeType: "application/json",
           temperature: 0.4,
+          ...(responseSchema ? { responseSchema: responseSchema as any } : {}),
         }
       });
 
@@ -420,6 +423,28 @@ export class GeminiService implements OnModuleInit {
         }
       }
     }
+  }
+
+  /**
+   * Splits a Japanese sentence into word-level segments for SSML `<break>`
+   * placement (pronunciation-practice "paced" mode). High-frequency,
+   * per-click, low-value-to-persist — unlike other Gemini calls in this
+   * service, deliberately skips apilogService logging.
+   */
+  async segmentJapaneseSentence(text: string): Promise<string[]> {
+    const response = await this.client.models.generateContent({
+      model: this.modelName,
+      contents: [{ parts: [{ text: buildSegmentationPrompt(text) }] }],
+      config: {
+        responseMimeType: 'application/json',
+        responseSchema: SEGMENTATION_RESPONSE_SCHEMA as any,
+      },
+    });
+
+    if (!response.text) throw new Error('Empty response from Gemini during segmentation');
+
+    const parsed = JSON.parse(response.text) as { segments: string[] };
+    return parsed.segments;
   }
 
   async generateQuestionAI(

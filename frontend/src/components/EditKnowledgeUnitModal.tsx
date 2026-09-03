@@ -329,7 +329,13 @@ export default function EditKnowledgeUnitModal({
               <span className="text-shodo-mist">·</span>
               <Link
                 href={`/admin/knowledge-units/${knowledgeUnit.id}/preview?from=${encodeURIComponent(`/admin/knowledge-units?openEdit=${knowledgeUnit.id}`)}`}
-                onClick={onClose}
+                onClick={(e) => {
+                  if (hasChanges() && !confirm("You have unsaved changes that will be lost. Preview anyway?")) {
+                    e.preventDefault();
+                    return;
+                  }
+                  onClose();
+                }}
                 className="text-sm text-shodo-indigo hover:text-shodo-indigo/70 transition-colors font-medium"
               >
                 Preview
