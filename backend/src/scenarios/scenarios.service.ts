@@ -18,6 +18,7 @@ import { ValidationService } from '../validation/validation.service';
 import { ALLOWED_USER_ROLES, ALLOWED_AI_ROLES, buildArchitectPrompt, buildImportPrompt, buildChatSystemPrompt, buildLiveExtractionPrompt, SCENARIO_RESPONSE_SCHEMA } from '../prompts/scenario.prompts';
 import { GET_GRAMMAR_PATTERNS_DECLARATION } from '../prompts/curriculum';
 import { GrammarMatch } from '../types/scenario';
+import { GrammarSectionsService } from '../grammar-sections/grammar-sections.service';
 
 import { ScenarioTemplate, SCENARIO_TEMPLATES } from './templates';
 
@@ -35,6 +36,7 @@ export class ScenariosService {
     private readonly lessonsService: LessonsService,
     private readonly userService: UserService,
     private readonly validationService: ValidationService,
+    private readonly grammarSectionsService: GrammarSectionsService,
   ) {}
 
   private scenariosColRef(uid: string): CollectionReference {
@@ -188,6 +190,19 @@ export class ScenariosService {
     });
   }
 
+  async getScenariosBySourceSectionId(userId: string, sourceSectionId: string): Promise<Pick<Scenario, 'id' | 'title' | 'createdAt'>[]> {
+    // NOTE: Requires Firestore composite index on (sourceSectionId ASC, createdAt DESC)
+    // for the 'scenarios' collection group (covers both root and users/{uid}/scenarios).
+    const snapshot = await this.scenariosColRef(userId)
+      .where('sourceSectionId', '==', sourceSectionId)
+      .orderBy('createdAt', 'desc')
+      .get();
+    return snapshot.docs.map(doc => {
+      const d = doc.data() as Scenario;
+      return { id: doc.id, title: d.title, createdAt: d.createdAt };
+    });
+  }
+
   getTemplates(): ScenarioTemplate[] {
     return SCENARIO_TEMPLATES;
   }
@@ -209,10 +224,18 @@ export class ScenariosService {
       sourceContextSentence: dto.sourceContextSentence?.replace(/\[[^\]]*\]/g, '').trim(),
     };
 
+    const grammarSection = resolvedDto.sourceType === 'grammar-pattern' && resolvedDto.sourceSectionId
+      ? await this.grammarSectionsService.findById(resolvedDto.sourceSectionId)
+      : null;
+    if (resolvedDto.sourceType === 'grammar-pattern' && resolvedDto.sourceSectionId && !grammarSection) {
+      this.logger.warn(`generateScenario: sourceSectionId=${resolvedDto.sourceSectionId} not found — generating without the grammar-pattern directive`);
+    }
+
     const prompt = buildArchitectPrompt(
       resolvedDto,
       user?.tutorContext?.excludedVocab ?? [],
       user?.tutorContext?.excludedGrammar ?? [],
+      grammarSection,
     );
 
     try {
@@ -262,7 +285,8 @@ export class ScenariosService {
         sourceType: resolvedDto.sourceType,
         sourceContextSentence: resolvedDto.sourceContextSentence,
         targetVocab: resolvedDto.targetVocab,
-        sourceKuId: resolvedDto.sourceKuId
+        sourceKuId: resolvedDto.sourceKuId,
+        sourceSectionId: resolvedDto.sourceSectionId,
       };
 
       const cleanData = Object.fromEntries(

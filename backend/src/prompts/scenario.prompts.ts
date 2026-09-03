@@ -4,6 +4,7 @@
  */
 
 import { GenerateScenarioDto, ImportScenarioDto, Scenario } from '../types/scenario';
+import { GrammarSection } from '../types/grammar-section';
 import { FRAGMENT_CONTRACT, ACCEPTED_ALTERNATIVES_DEF } from './fragments';
 
 // ---------------------------------------------------------------------------
@@ -121,9 +122,14 @@ export function buildArchitectPrompt(
   dto: GenerateScenarioDto,
   excludedVocab: string[] = [],
   excludedGrammar: string[] = [],
+  grammarSection: GrammarSection | null = null,
 ): string {
   const contextExampleDirective = dto.sourceType === 'context-example' && dto.sourceContextSentence && dto.targetVocab
     ? `\n**Context Example Constraints:**\n- You MUST create a roleplay scenario where the user MUST use the target vocab ('${dto.targetVocab}') in a situation matching the following sentence: '${dto.sourceContextSentence}'.\n- The scenario goal MUST involve using this word in context.\n`
+    : '';
+
+  const grammarPatternDirective = dto.sourceType === 'grammar-pattern' && grammarSection
+    ? `\n**Grammar Pattern Constraints (critical):**\n- This scenario exists to give the learner practice with the pattern "${grammarSection.pattern}". Rule: ${grammarSection.explanation}\n- The dialogue MUST naturally demonstrate this pattern at least once — a real, idiomatic use in context, not a token mention. Do not force it into an awkward line just to check a box; build the scene so it's the natural thing to say.\n- Reference examples written by the learner's own tutor, for tone/register only — do NOT copy them verbatim into the dialogue:\n${grammarSection.examples.slice(0, 3).map(ex => `  - ${ex.japanese} (${ex.english})`).join('\n')}\n`
     : '';
 
   const exclusionDirective = (excludedVocab.length > 0 || excludedGrammar.length > 0)
@@ -136,7 +142,7 @@ Create a "Genki-style" learning scenario for an ADULT traveler/expat (not a stud
 
 **Parameters:**
 - Target Level: ${dto.difficulty}
-- Theme/Setting: ${dto.theme || 'A common situation for an adult living in Japan'}${contextExampleDirective}${exclusionDirective}
+- Theme/Setting: ${dto.theme || 'A common situation for an adult living in Japan'}${contextExampleDirective}${grammarPatternDirective}${exclusionDirective}
 
 **Requirements:**
 1. **Dialogue:** Create a natural, realistic dialogue (6-12 lines). Use a mix of polite and casual forms appropriate for the setting.

@@ -96,6 +96,13 @@ export function AvatarMenu() {
             Pronunciation
           </Link>
           <Link
+            href="/verb-guide"
+            className="block px-3 py-2 text-sm text-shodo-ink hover:bg-shodo-ink/5 transition-colors"
+            onClick={() => setOpen(false)}
+          >
+            Guide to Japanese Verbs
+          </Link>
+          <Link
             href="/library"
             className="block px-3 py-2 text-sm text-shodo-ink hover:bg-shodo-ink/5 transition-colors"
             onClick={() => setOpen(false)}

@@ -137,6 +137,8 @@ export interface Scenario {
     sourceContextSentence?: string;
     targetVocab?: string;
     sourceKuId?: string;
+    /** Set with sourceType 'grammar-pattern' — references a GrammarSection, not a Grammar KU. */
+    sourceSectionId?: string;
     isActive?: boolean;
 
     progress?: Record<string, LevelProgress>;
@@ -189,6 +191,8 @@ export class GenerateScenarioDto {
     sourceContextSentence?: string;
     targetVocab?: string;
     sourceKuId?: string;
+    /** Set with sourceType 'grammar-pattern' — references a GrammarSection, not a Grammar KU. See types/grammar-section.ts. */
+    sourceSectionId?: string;
     userRole?: string;
     aiRole?: string;
 }

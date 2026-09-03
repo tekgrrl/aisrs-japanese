@@ -60,10 +60,14 @@ export class ScenariosController {
     @UserId() uid: string,
     @Query('days') days?: string,
     @Query('sourceKuId') sourceKuId?: string,
+    @Query('sourceSectionId') sourceSectionId?: string,
     @Query('state') state?: string,
   ) {
     if (sourceKuId) {
       return this.scenariosService.getScenariosBySourceKuId(uid, sourceKuId);
+    }
+    if (sourceSectionId) {
+      return this.scenariosService.getScenariosBySourceSectionId(uid, sourceSectionId);
     }
     const limitDays = days ? parseInt(days, 10) : undefined;
     if (limitDays !== undefined && isNaN(limitDays)) {

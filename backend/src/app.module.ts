@@ -25,9 +25,10 @@ import { TutorModule } from './tutor/tutor.module';
 import { DailyPlanModule } from './daily-plan/daily-plan.module';
 import { ValidationModule } from './validation/validation.module';
 import { LearnerFlagsModule } from './learner-flags/learner-flags.module';
+import { GrammarSectionsModule } from './grammar-sections/grammar-sections.module';
 
 @Module({
-  imports: [ValidationModule, ReviewsModule, FirebaseModule, GeminiModule, ClaudeModule, ConfigModule.forRoot(), QuestionsModule, ApilogModule, LessonsModule, KnowledgeUnitsModule, StatsModule, KanjiModule, ScenariosModule, AudioModule, AuthModule, UserModule, UserKnowledgeUnitsModule, ConceptsModule, LearningProgressModule, ReviewProgressModule, TutorModule, DailyPlanModule, LearnerFlagsModule],
+  imports: [ValidationModule, ReviewsModule, FirebaseModule, GeminiModule, ClaudeModule, ConfigModule.forRoot(), QuestionsModule, ApilogModule, LessonsModule, KnowledgeUnitsModule, StatsModule, KanjiModule, ScenariosModule, AudioModule, AuthModule, UserModule, UserKnowledgeUnitsModule, ConceptsModule, LearningProgressModule, ReviewProgressModule, TutorModule, DailyPlanModule, LearnerFlagsModule, GrammarSectionsModule],
   controllers: [AppController],
   providers: [AppService, QuestionsService],
 })
