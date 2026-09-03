@@ -43,12 +43,12 @@ export const PILL_TOKEN_MAP: Record<string, PillStyle> = (() => {
 
   return {
     // Nouns — role-named (both spellings from the open naming question map to the same style)
-    N_group: category,
-    N_category: category,
-    N_target: item,
-    N_item: item,
-    N_A: itemA,
-    N_B: itemB,
+    "N-group": category,
+    "N-category": category,
+    "N-target": item,
+    "N-item": item,
+    "N-A": itemA,
+    "N-B": itemB,
     "N-place": place,
     // Nouns — bare, single-slot patterns only
     N: noun,

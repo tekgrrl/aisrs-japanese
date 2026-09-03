@@ -15,7 +15,7 @@ import { FIRESTORE_CONNECTION, SCENARIOS_COLLECTION, REVIEW_FACETS_COLLECTION } 
 import { ADMIN_USER_ID } from '../lib/constants';
 import { GeminiService } from '../gemini/gemini.service';
 import { ValidationService } from '../validation/validation.service';
-import { ALLOWED_USER_ROLES, ALLOWED_AI_ROLES, buildArchitectPrompt, buildImportPrompt, buildChatSystemPrompt, buildLiveExtractionPrompt } from '../prompts/scenario.prompts';
+import { ALLOWED_USER_ROLES, ALLOWED_AI_ROLES, buildArchitectPrompt, buildImportPrompt, buildChatSystemPrompt, buildLiveExtractionPrompt, SCENARIO_RESPONSE_SCHEMA } from '../prompts/scenario.prompts';
 import { GET_GRAMMAR_PATTERNS_DECLARATION } from '../prompts/curriculum';
 import { GrammarMatch } from '../types/scenario';
 
@@ -220,6 +220,7 @@ export class ScenariosService {
         prompt,
         [GET_GRAMMAR_PATTERNS_DECLARATION],
         this.buildGrammarToolHandlers(userId),
+        SCENARIO_RESPONSE_SCHEMA,
       );
 
       const docRef = this.scenariosColRef(userId).doc();
@@ -407,6 +408,7 @@ export class ScenariosService {
         prompt,
         [GET_GRAMMAR_PATTERNS_DECLARATION],
         this.buildGrammarToolHandlers(uid),
+        SCENARIO_RESPONSE_SCHEMA,
       );
 
       const docRef = this.scenariosColRef(uid).doc();

@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, FormEvent } from "react";
 import * as wanakana from "wanakana";
 import { ReviewFacet } from "@/types";
+import InputModeBadge from "@/components/review/InputModeBadge";
 
 interface ClozeData {
   front: {
@@ -83,6 +84,9 @@ export default function SentenceClozeCard({ facet, onResult, onAdvance, onSkip }
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="flex justify-end">
+          <InputModeBadge mode="kana" />
+        </div>
         <input
           key={facet.id}
           type="text"
